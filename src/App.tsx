@@ -155,6 +155,10 @@ const useHashRoute = () => {
     return { page: "qr" as const };
   }
 
+  if (hash === "#/report") {
+    return { page: "report" as const };
+  }
+
   return { page: "dashboard" as const };
 };
 
@@ -531,6 +535,90 @@ export const App = () => {
     );
   }
 
+  if (route.page === "report") {
+    return (
+      <main className="app-shell report-shell">
+        <header className="topbar">
+          <a className="icon-link" href="#/" aria-label="Späť na prehľad">
+            <ArrowLeft size={22} aria-hidden="true" />
+          </a>
+          <div>
+            <p className="eyebrow">Automatický email</p>
+            <h1>Denný report</h1>
+          </div>
+        </header>
+
+        <section className="report-panel" aria-labelledby="report-title">
+          <div className="report-panel-header">
+            <div className="section-title">
+              <Mail size={18} aria-hidden="true" />
+              <h2 id="report-title">Denný email report</h2>
+            </div>
+            <span className={cloudSyncEnabled ? "sync-pill sync-pill-ok" : "sync-pill"}>
+              {cloudSyncEnabled ? "cloud aktívny" : "lokálny režim"}
+            </span>
+          </div>
+          <p>
+            Každý deň o 19:00 sa majú poslať iba rastliny pod {reportThresholdPercent} % zálievky.
+            Rastliny nad {reportThresholdPercent} % sa do reportu nezahrnú.
+          </p>
+          <div className="report-settings">
+            <label className="field">
+              <span>Príjemca emailu</span>
+              <input
+                type="email"
+                value={reportRecipient}
+                placeholder="napr. meno@example.com"
+                onChange={(event) => setReportRecipient(event.target.value)}
+              />
+            </label>
+            <button type="button" onClick={saveReportRecipient}>
+              Uložiť príjemcu
+            </button>
+            <a
+              className={`report-mailto ${reportRecipient.trim() ? "" : "report-mailto-disabled"}`}
+              href={reportRecipient.trim() ? createMailtoReportUrl(reportRecipient.trim(), records) : undefined}
+              aria-disabled={!reportRecipient.trim()}
+            >
+              <Send size={17} aria-hidden="true" />
+              Otvoriť email
+            </a>
+          </div>
+          <div className="report-status">{reportStatus}</div>
+          <div className="report-preview" aria-label="Náhľad reportu">
+            <div className="report-preview-head">
+              <strong>Rastliny v reporte</strong>
+              <span>{reportRows.length}</span>
+            </div>
+            {reportRows.length > 0 ? (
+              <div className="report-table" role="table" aria-label="Rastliny pod 20 percent zálievky">
+                <div className="report-table-row report-table-row-head" role="row">
+                  <span>Rastlina</span>
+                  <span>Zálievka</span>
+                  <span>Posledná zálievka</span>
+                  <span>Stav</span>
+                </div>
+                {reportRows.map((row) => (
+                  <div className="report-table-row" role="row" key={row.flower.id}>
+                    <span>
+                      <strong>{row.flower.displayName}</strong>
+                      <small>{row.flower.likelyName}</small>
+                    </span>
+                    <span>{Math.round(row.progress.percent)} %</span>
+                    <span>{row.lastWateredLabel}</span>
+                    <span>{row.progress.statusText}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="report-empty">Žiadna rastlina nie je pod {reportThresholdPercent} % zálievky.</p>
+            )}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -539,10 +627,16 @@ export const App = () => {
           <h1>Prehľad starostlivosti o rastliny</h1>
           <p className="hero-copy">Otvor rastlinu, aktualizuj zálievku alebo presadenie, pridaj poznámku a vytlač QR štítky na kvetináče.</p>
         </div>
-        <a className="qr-action" href="#/qr">
-          <QrCodeIcon size={20} aria-hidden="true" />
-          QR štítky
-        </a>
+        <div className="hero-actions">
+          <a className="qr-action secondary-action-link" href="#/report">
+            <Mail size={20} aria-hidden="true" />
+            Report
+          </a>
+          <a className="qr-action" href="#/qr">
+            <QrCodeIcon size={20} aria-hidden="true" />
+            QR štítky
+          </a>
+        </div>
       </header>
 
       <section className="toolbar" aria-label="Nástroje prehľadu">
@@ -556,74 +650,6 @@ export const App = () => {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-      </section>
-
-      <section className="report-panel" aria-labelledby="report-title">
-        <div className="report-panel-header">
-          <div className="section-title">
-            <Mail size={18} aria-hidden="true" />
-            <h2 id="report-title">Denný email report</h2>
-          </div>
-          <span className={cloudSyncEnabled ? "sync-pill sync-pill-ok" : "sync-pill"}>
-            {cloudSyncEnabled ? "cloud aktívny" : "lokálny režim"}
-          </span>
-        </div>
-        <p>
-          Každý deň o 19:00 sa majú poslať iba rastliny pod {reportThresholdPercent} % zálievky.
-          Rastliny nad {reportThresholdPercent} % sa do reportu nezahrnú.
-        </p>
-        <div className="report-settings">
-          <label className="field">
-            <span>Príjemca emailu</span>
-            <input
-              type="email"
-              value={reportRecipient}
-              placeholder="napr. meno@example.com"
-              onChange={(event) => setReportRecipient(event.target.value)}
-            />
-          </label>
-          <button type="button" onClick={saveReportRecipient}>
-            Uložiť príjemcu
-          </button>
-          <a
-            className={`report-mailto ${reportRecipient.trim() ? "" : "report-mailto-disabled"}`}
-            href={reportRecipient.trim() ? createMailtoReportUrl(reportRecipient.trim(), records) : undefined}
-            aria-disabled={!reportRecipient.trim()}
-          >
-            <Send size={17} aria-hidden="true" />
-            Otvoriť email
-          </a>
-        </div>
-        <div className="report-status">{reportStatus}</div>
-        <div className="report-preview" aria-label="Náhľad reportu">
-          <div className="report-preview-head">
-            <strong>Rastliny v reporte</strong>
-            <span>{reportRows.length}</span>
-          </div>
-          {reportRows.length > 0 ? (
-            <div className="report-table" role="table" aria-label="Rastliny pod 20 percent zálievky">
-              <div className="report-table-row report-table-row-head" role="row">
-                <span>Rastlina</span>
-                <span>Zálievka</span>
-                <span>Posledná zálievka</span>
-                <span>Stav</span>
-              </div>
-              {reportRows.map((row) => (
-                <div className="report-table-row" role="row" key={row.flower.id}>
-                  <span>
-                    <strong>{row.flower.displayName}</strong>
-                    <small>{row.flower.likelyName}</small>
-                  </span>
-                  <span>{Math.round(row.progress.percent)} %</span>
-                  <span>{row.lastWateredLabel}</span>
-                  <span>{row.progress.statusText}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="report-empty">Žiadna rastlina nie je pod {reportThresholdPercent} % zálievky.</p>
-          )}
-        </div>
       </section>
 
       <section className="flower-grid" aria-label="Prehľad rastlín">

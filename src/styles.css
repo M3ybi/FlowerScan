@@ -172,6 +172,22 @@ button {
   white-space: nowrap;
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.secondary-action-link {
+  border-color: rgba(183, 103, 42, 0.2);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38), rgba(255, 250, 239, 0.72)),
+    #fff;
+  color: #5b3b1e;
+  box-shadow: 0 14px 28px rgba(121, 77, 32, 0.12);
+}
+
 .nav-link {
   padding: 0 14px;
 }
@@ -465,7 +481,8 @@ textarea:focus-visible {
 }
 
 .detail-shell,
-.qr-shell {
+.qr-shell,
+.report-shell {
   max-width: 980px;
 }
 
@@ -1377,6 +1394,10 @@ textarea:focus-visible {
   }
 
   .qr-action {
+    width: 100%;
+  }
+
+  .hero-actions {
     width: 100%;
   }
 
