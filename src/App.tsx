@@ -6,18 +6,24 @@ import {
   Droplets,
   Home,
   Leaf,
+  Mail,
   Pencil,
   Printer,
   QrCodeIcon,
   Search,
+  Send,
   Sprout,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { QrCode } from "./components/QrCode";
 import { flowerById, flowers } from "./data/flowers";
+import { wateringIntervalsDays } from "./data/wateringIntervals";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
-import { addDays, daysSince, formatDate, formatElapsedDays, isIsoDate } from "./utils/dates";
+import type { FlowerRecords } from "./hooks/useFlowerRecords";
+import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
 import { flowerPath } from "./utils/links";
+import { createMailtoReportUrl, getWateringReportRows, reportThresholdPercent } from "./utils/report";
+import { getWateringProgress } from "./utils/watering";
 
 const todayIsoDate = () => {
   const today = new Date();
@@ -48,84 +54,6 @@ const identificationLabel = {
   confident: "ID overené z fotky",
   likely: "Pravdepodobné ID",
   "needs-confirmation": "ID treba potvrdiť",
-};
-
-const wateringIntervalsDays: Record<string, number> = {
-  "flower-01": 7,
-  "flower-02": 3,
-  "flower-03": 5,
-  "flower-04": 21,
-  "flower-05": 14,
-  "flower-06": 30,
-  "flower-07": 30,
-  "flower-08": 7,
-  "flower-09": 30,
-  "flower-10": 5,
-  "flower-11": 10,
-  "flower-12": 7,
-  "flower-13": 7,
-  "flower-14": 10,
-  "flower-15": 5,
-  "flower-16": 7,
-  "flower-17": 4,
-  "flower-18": 5,
-  "flower-19": 5,
-};
-
-const getWateringProgress = (lastWatered: string, intervalDays: number) => {
-  if (!isIsoDate(lastWatered)) {
-    return {
-      daysLeft: null,
-      nextWatering: "",
-      percent: 0,
-      state: "unknown" as const,
-      statusText: "Zálievka nezadaná",
-    };
-  }
-
-  const elapsed = daysSince(lastWatered) ?? 0;
-  const rawPercent = 100 - (elapsed / intervalDays) * 100;
-  const percent = Math.max(0, Math.min(100, rawPercent));
-  const daysLeft = intervalDays - elapsed;
-  const nextWatering = addDays(lastWatered, intervalDays);
-
-  if (daysLeft < 0) {
-    return {
-      daysLeft,
-      nextWatering,
-      percent,
-      state: "overdue" as const,
-      statusText: `mešká ${Math.abs(daysLeft)} d.`,
-    };
-  }
-
-  if (daysLeft === 0) {
-    return {
-      daysLeft,
-      nextWatering,
-      percent,
-      state: "due" as const,
-      statusText: "zaliať dnes",
-    };
-  }
-
-  if (percent <= 35) {
-    return {
-      daysLeft,
-      nextWatering,
-      percent,
-      state: "soon" as const,
-      statusText: `zaliať o ${daysLeft} d.`,
-    };
-  }
-
-  return {
-    daysLeft,
-    nextWatering,
-    percent,
-    state: "ok" as const,
-    statusText: `zaliať o ${daysLeft} d.`,
-  };
 };
 
 const getWaterIconLevel = (flowerId: string) => {
@@ -232,13 +160,110 @@ const useHashRoute = () => {
 
 export const App = () => {
   const route = useHashRoute();
-  const { records, updateRecord } = useFlowerRecords();
+  const { records, replaceRecords, updateRecord } = useFlowerRecords();
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
+  const [reportRecipient, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
+  const [reportStatus, setReportStatus] = useState("Denný report sa odosiela o 19:00, keď je aplikácia nasadená cez Netlify.");
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+  const [cloudSyncReady, setCloudSyncReady] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [route.page, "flowerId" in route ? route.flowerId : ""]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCloudState = async () => {
+      try {
+        const [settingsResponse, recordsResponse] = await Promise.all([
+          fetch("/.netlify/functions/report-settings"),
+          fetch("/.netlify/functions/plant-records"),
+        ]);
+
+        if (!settingsResponse.ok || !recordsResponse.ok) {
+          throw new Error("Cloud sync is not available on this host.");
+        }
+
+        const settings = (await settingsResponse.json()) as { recipient?: string };
+        const cloudRecords = (await recordsResponse.json()) as { records?: FlowerRecords };
+
+        if (cancelled) {
+          return;
+        }
+
+        setReportRecipient(typeof settings.recipient === "string" ? settings.recipient : "");
+        if (cloudRecords.records) {
+          replaceRecords(cloudRecords.records);
+        }
+        setCloudSyncEnabled(true);
+        setReportStatus("Cloud sync je aktívny. Denný email sa odošle o 19:00.");
+      } catch {
+        if (!cancelled) {
+          setCloudSyncEnabled(false);
+          setReportStatus("Na tomto hostingu nie je aktívny backend. Report si vieš pozrieť a otvoriť ako email ručne.");
+        }
+      } finally {
+        if (!cancelled) {
+          setCloudSyncReady(true);
+        }
+      }
+    };
+
+    void loadCloudState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!cloudSyncReady || !cloudSyncEnabled) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void fetch("/.netlify/functions/plant-records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records }),
+      }).catch(() => {
+        setReportStatus("Cloud sync sa nepodaril. Lokálne zmeny sú uložené v tomto zariadení.");
+      });
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [cloudSyncEnabled, cloudSyncReady, records]);
+
+  const reportRows = useMemo(() => getWateringReportRows(records), [records]);
+
+  const saveReportRecipient = async () => {
+    const recipient = reportRecipient.trim();
+    if (!recipient) {
+      setReportStatus("Najprv zadaj email príjemcu reportu.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/.netlify/functions/report-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Recipient could not be saved.");
+      }
+
+      setCloudSyncEnabled(true);
+      setReportStatus("Príjemca je uložený. Denný report sa odošle každý deň o 19:00.");
+    } catch {
+      window.localStorage.setItem("flowscan-report-recipient-v1", recipient);
+      setReportStatus("Príjemca je uložený lokálne. Automatické odosielanie potrebuje Netlify backend.");
+    }
+  };
+
 
   const filteredFlowers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -531,6 +556,74 @@ export const App = () => {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+      </section>
+
+      <section className="report-panel" aria-labelledby="report-title">
+        <div className="report-panel-header">
+          <div className="section-title">
+            <Mail size={18} aria-hidden="true" />
+            <h2 id="report-title">Denný email report</h2>
+          </div>
+          <span className={cloudSyncEnabled ? "sync-pill sync-pill-ok" : "sync-pill"}>
+            {cloudSyncEnabled ? "cloud aktívny" : "lokálny režim"}
+          </span>
+        </div>
+        <p>
+          Každý deň o 19:00 sa majú poslať iba rastliny pod {reportThresholdPercent} % zálievky.
+          Rastliny nad {reportThresholdPercent} % sa do reportu nezahrnú.
+        </p>
+        <div className="report-settings">
+          <label className="field">
+            <span>Príjemca emailu</span>
+            <input
+              type="email"
+              value={reportRecipient}
+              placeholder="napr. meno@example.com"
+              onChange={(event) => setReportRecipient(event.target.value)}
+            />
+          </label>
+          <button type="button" onClick={saveReportRecipient}>
+            Uložiť príjemcu
+          </button>
+          <a
+            className={`report-mailto ${reportRecipient.trim() ? "" : "report-mailto-disabled"}`}
+            href={reportRecipient.trim() ? createMailtoReportUrl(reportRecipient.trim(), records) : undefined}
+            aria-disabled={!reportRecipient.trim()}
+          >
+            <Send size={17} aria-hidden="true" />
+            Otvoriť email
+          </a>
+        </div>
+        <div className="report-status">{reportStatus}</div>
+        <div className="report-preview" aria-label="Náhľad reportu">
+          <div className="report-preview-head">
+            <strong>Rastliny v reporte</strong>
+            <span>{reportRows.length}</span>
+          </div>
+          {reportRows.length > 0 ? (
+            <div className="report-table" role="table" aria-label="Rastliny pod 20 percent zálievky">
+              <div className="report-table-row report-table-row-head" role="row">
+                <span>Rastlina</span>
+                <span>Zálievka</span>
+                <span>Posledná zálievka</span>
+                <span>Stav</span>
+              </div>
+              {reportRows.map((row) => (
+                <div className="report-table-row" role="row" key={row.flower.id}>
+                  <span>
+                    <strong>{row.flower.displayName}</strong>
+                    <small>{row.flower.likelyName}</small>
+                  </span>
+                  <span>{Math.round(row.progress.percent)} %</span>
+                  <span>{row.lastWateredLabel}</span>
+                  <span>{row.progress.statusText}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="report-empty">Žiadna rastlina nie je pod {reportThresholdPercent} % zálievky.</p>
+          )}
+        </div>
       </section>
 
       <section className="flower-grid" aria-label="Prehľad rastlín">

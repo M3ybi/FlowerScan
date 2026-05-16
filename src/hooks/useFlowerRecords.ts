@@ -66,5 +66,24 @@ export const useFlowerRecords = () => {
     }));
   };
 
-  return { records, updateRecord };
+  const replaceRecords = (nextRecords: FlowerRecords) => {
+    setRecords(
+      Object.fromEntries(
+        flowers.map((flower) => [
+          flower.id,
+          {
+            note: typeof nextRecords[flower.id]?.note === "string" ? nextRecords[flower.id].note : "",
+            lastWatered:
+              typeof nextRecords[flower.id]?.lastWatered === "string" ? nextRecords[flower.id].lastWatered : "",
+            lastTransplanted:
+              typeof nextRecords[flower.id]?.lastTransplanted === "string"
+                ? nextRecords[flower.id].lastTransplanted
+                : "",
+          },
+        ]),
+      ),
+    );
+  };
+
+  return { records, replaceRecords, updateRecord };
 };
