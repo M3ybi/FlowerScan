@@ -324,6 +324,8 @@ export const App = () => {
   const [carePreview, setCarePreview] = useState<CarePreview | null>(null);
   const [carePreviewStatus, setCarePreviewStatus] = useState("");
   const [isGeneratingCarePreview, setIsGeneratingCarePreview] = useState(false);
+  const [editingNameFlowerId, setEditingNameFlowerId] = useState("");
+  const [draftFlowerName, setDraftFlowerName] = useState("");
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -528,6 +530,26 @@ export const App = () => {
     setCarePreviewStatus("Starostlivosť bola aktualizovaná podľa AI návrhu.");
   };
 
+  const startNameEdit = (flower: Flower) => {
+    setEditingNameFlowerId(flower.id);
+    setDraftFlowerName(flower.displayName);
+  };
+
+  const cancelNameEdit = () => {
+    setEditingNameFlowerId("");
+    setDraftFlowerName("");
+  };
+
+  const confirmNameEdit = (flower: Flower) => {
+    const nextName = draftFlowerName.trim();
+    if (!nextName) {
+      return;
+    }
+
+    updateFlower({ ...flower, displayName: nextName, source: "custom" });
+    cancelNameEdit();
+  };
+
   const confirmRemoveCustomFlower = () => {
     if (!deleteFlowerId) {
       return;
@@ -564,6 +586,7 @@ export const App = () => {
     const quickActionLabel = route.scan ? "Naskenovaná rastlina" : "Rýchly záznam";
     const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
     const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays) : [];
+    const isEditingName = editingNameFlowerId === flower.id;
 
     return (
       <main className="app-shell detail-shell">
@@ -573,7 +596,44 @@ export const App = () => {
           </a>
           <div>
             <p className="eyebrow">{flower.likelyName}</p>
-            <h1>{flower.displayName}</h1>
+            {isEditingName ? (
+              <div className="plant-name-editor">
+                <input
+                  type="text"
+                  value={draftFlowerName}
+                  maxLength={70}
+                  aria-label="Názov rastliny"
+                  onChange={(event) => setDraftFlowerName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      confirmNameEdit(flower);
+                    }
+                    if (event.key === "Escape") {
+                      cancelNameEdit();
+                    }
+                  }}
+                />
+                <button
+                  className="name-edit-action name-edit-save"
+                  type="button"
+                  onClick={() => confirmNameEdit(flower)}
+                  disabled={!draftFlowerName.trim()}
+                  aria-label="Uložiť názov rastliny"
+                >
+                  <Check size={18} aria-hidden="true" />
+                </button>
+                <button className="name-edit-action" type="button" onClick={cancelNameEdit} aria-label="Zrušiť úpravu názvu">
+                  <X size={18} aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <div className="plant-title-row">
+                <h1>{flower.displayName}</h1>
+                <button className="name-edit-button" type="button" onClick={() => startNameEdit(flower)} aria-label="Upraviť názov rastliny">
+                  <Pencil size={18} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
         </header>
 

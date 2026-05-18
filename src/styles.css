@@ -117,6 +117,83 @@ button {
   font-size: clamp(1.9rem, 8vw, 3.2rem);
 }
 
+.plant-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plant-title-row h1 {
+  min-width: 0;
+}
+
+.name-edit-button,
+.name-edit-action {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(18, 61, 49, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--brand);
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(39, 33, 23, 0.08);
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.name-edit-button:hover,
+.name-edit-action:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(39, 33, 23, 0.12);
+}
+
+.plant-name-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  max-width: min(760px, 100%);
+}
+
+.plant-name-editor input {
+  width: 100%;
+  min-height: 56px;
+  border: 1px solid rgba(18, 61, 49, 0.18);
+  border-radius: 18px;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #10271f;
+  font-size: clamp(1.7rem, 7vw, 3rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  box-shadow: 0 12px 28px rgba(39, 33, 23, 0.08);
+}
+
+.plant-name-editor input:focus {
+  outline: none;
+  border-color: var(--brand-2);
+  box-shadow: 0 0 0 4px rgba(47, 106, 81, 0.14);
+}
+
+.name-edit-save {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff;
+}
+
+.name-edit-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: var(--accent);
@@ -1931,6 +2008,26 @@ textarea:focus-visible {
   .detail-header,
   .topbar {
     grid-template-columns: auto 1fr auto;
+  }
+
+  .plant-title-row {
+    align-items: flex-start;
+  }
+
+  .name-edit-button {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+    margin-top: 2px;
+  }
+
+  .plant-name-editor {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .plant-name-editor input {
+    min-height: 50px;
+    padding: 0 12px;
   }
 
   .topbar-actions {
