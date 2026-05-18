@@ -495,6 +495,11 @@ textarea:focus-visible {
   margin-bottom: 18px;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .detail-photo {
   display: block;
   width: 100%;
@@ -758,6 +763,7 @@ textarea:focus-visible {
 .care-panel,
 .qr-panel,
 .report-panel,
+.pdf-export-panel,
 .base-url-panel,
 .empty-state {
   margin-top: 14px;
@@ -1039,6 +1045,7 @@ textarea:focus-visible {
 
 .care-panel p,
 .qr-panel p,
+.pdf-export-panel p,
 .base-url-panel p,
 .empty-state p {
   margin: 0;
@@ -1329,6 +1336,63 @@ textarea:focus-visible {
   margin-bottom: 14px;
 }
 
+.pdf-export-panel {
+  margin-bottom: 14px;
+  border-color: rgba(61, 103, 128, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(127, 185, 205, 0.16), transparent 14rem),
+    linear-gradient(180deg, rgba(249, 253, 253, 0.92), rgba(255, 253, 248, 0.98)),
+    var(--surface);
+}
+
+.print-note {
+  margin-top: 10px !important;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #fff7df;
+  color: #6b461c !important;
+  font-weight: 800;
+}
+
+.pdf-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.pdf-export-actions button {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 0 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent),
+    linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff;
+  cursor: pointer;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(23, 59, 47, 0.16);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.pdf-export-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(23, 59, 47, 0.2);
+}
+
+.pdf-export-actions span {
+  color: #53635a;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
 .qr-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
@@ -1432,6 +1496,10 @@ textarea:focus-visible {
   .detail-header,
   .topbar {
     grid-template-columns: auto 1fr auto;
+  }
+
+  .topbar-actions {
+    flex-direction: column;
   }
 
   .qr-panel {

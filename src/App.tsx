@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   Droplets,
+  FileDown,
   Home,
   Leaf,
   Mail,
@@ -22,6 +23,7 @@ import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
 import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
 import { flowerPath } from "./utils/links";
+import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
 import { createMailtoReportUrl, getWateringReportRows, reportThresholdPercent } from "./utils/report";
 import { getWateringProgress } from "./utils/watering";
 
@@ -171,6 +173,7 @@ export const App = () => {
   const [reportStatus, setReportStatus] = useState("Denný report sa odosiela o 19:00, keď je aplikácia nasadená cez Netlify.");
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
+  const [qrExportStatus, setQrExportStatus] = useState("");
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -241,6 +244,10 @@ export const App = () => {
   }, [cloudSyncEnabled, cloudSyncReady, records]);
 
   const reportRows = useMemo(() => getWateringReportRows(records), [records]);
+  const qrLabelValidation = useMemo(
+    () => validateQrLabelLayout(createQrLabelLayout(flowers, baseUrl)),
+    [baseUrl],
+  );
 
   const saveReportRecipient = async () => {
     const recipient = reportRecipient.trim();
@@ -265,6 +272,21 @@ export const App = () => {
     } catch {
       window.localStorage.setItem("flowscan-report-recipient-v1", recipient);
       setReportStatus("Príjemca je uložený lokálne. Automatické odosielanie potrebuje Netlify backend.");
+    }
+  };
+
+  const handleQrPdfExport = async () => {
+    if (flowers.length === 0) {
+      setQrExportStatus("Nie sú dostupné žiadne rastliny na export.");
+      return;
+    }
+
+    try {
+      setQrExportStatus("Generujem PDF hárok...");
+      await exportQrLabelsPdf(flowers, baseUrl);
+      setQrExportStatus("PDF je pripravené. Pri tlači zvoľ 100 % veľkosť / Actual size.");
+    } catch (error) {
+      setQrExportStatus(error instanceof Error ? error.message : "PDF export zlyhal.");
     }
   };
 
@@ -502,9 +524,14 @@ export const App = () => {
             <p className="eyebrow">Tlačiteľné štítky</p>
             <h1>QR kódy</h1>
           </div>
-          <button className="icon-button" type="button" onClick={() => window.print()} aria-label="Vytlačiť QR kódy">
-            <Printer size={21} aria-hidden="true" />
-          </button>
+          <div className="topbar-actions">
+            <button className="icon-button" type="button" onClick={handleQrPdfExport} aria-label="Exportovať PDF QR štítky">
+              <FileDown size={21} aria-hidden="true" />
+            </button>
+            <button className="icon-button" type="button" onClick={() => window.print()} aria-label="Vytlačiť QR kódy">
+              <Printer size={21} aria-hidden="true" />
+            </button>
+          </div>
         </header>
 
         <section className="base-url-panel">
@@ -518,6 +545,32 @@ export const App = () => {
             />
           </label>
           <p>Pred tlačou zadaj finálnu cloud URL aplikácie. Každý QR kód otvorí správnu rastlinu.</p>
+        </section>
+
+        <section className="pdf-export-panel" aria-labelledby="pdf-export-title">
+          <div className="section-title">
+            <FileDown size={18} aria-hidden="true" />
+            <h2 id="pdf-export-title">Print QR labels</h2>
+          </div>
+          {flowers.length > 0 ? (
+            <>
+              <p>
+                PDF hárok A4 vytvorí čisté QR štítky {qrLabelSpec.labelSizeMm} × {qrLabelSpec.labelSizeMm} mm.
+                Samotný QR kód má {qrLabelSpec.qrSizeMm} × {qrLabelSpec.qrSizeMm} mm a biely okraj aspoň {qrLabelSpec.quietZoneMm} mm.
+              </p>
+              <p className="print-note">Tlačte na 100 % veľkosť, bez prispôsobenia strane.</p>
+              <div className="pdf-export-actions">
+                <button type="button" onClick={handleQrPdfExport}>
+                  <FileDown size={18} aria-hidden="true" />
+                  Exportovať PDF
+                </button>
+                <span>{qrLabelValidation.message}</span>
+              </div>
+              {qrExportStatus ? <div className="report-status">{qrExportStatus}</div> : null}
+            </>
+          ) : (
+            <p>Nie sú dostupné žiadne rastliny na export.</p>
+          )}
         </section>
 
         <section className="qr-grid" aria-label="QR kódy pre všetky rastliny">
