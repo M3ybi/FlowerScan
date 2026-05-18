@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { flowers } from "../data/flowers";
+import type { Flower } from "../data/flowers";
 
 export type FlowerRecord = {
   note: string;
@@ -17,18 +17,18 @@ const emptyRecord: FlowerRecord = {
   lastTransplanted: "",
 };
 
-const createInitialRecords = (): FlowerRecords =>
+const createInitialRecords = (flowers: Flower[]): FlowerRecords =>
   Object.fromEntries(flowers.map((flower) => [flower.id, { ...emptyRecord }]));
 
-const readRecords = (): FlowerRecords => {
+const readRecords = (flowers: Flower[]): FlowerRecords => {
   if (typeof window === "undefined") {
-    return createInitialRecords();
+    return createInitialRecords(flowers);
   }
 
   try {
     const rawValue = window.localStorage.getItem(storageKey);
     if (!rawValue) {
-      return createInitialRecords();
+      return createInitialRecords(flowers);
     }
 
     const parsed = JSON.parse(rawValue) as Partial<FlowerRecords>;
@@ -45,16 +45,22 @@ const readRecords = (): FlowerRecords => {
       ]),
     );
   } catch {
-    return createInitialRecords();
+    return createInitialRecords(flowers);
   }
 };
 
-export const useFlowerRecords = () => {
-  const [records, setRecords] = useState<FlowerRecords>(() => readRecords());
+export const useFlowerRecords = (flowers: Flower[]) => {
+  const [records, setRecords] = useState<FlowerRecords>(() => readRecords(flowers));
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(records));
   }, [records]);
+
+  useEffect(() => {
+    setRecords((current) => ({
+      ...Object.fromEntries(flowers.map((flower) => [flower.id, current[flower.id] ?? { ...emptyRecord }])),
+    }));
+  }, [flowers]);
 
   const updateRecord = (flowerId: string, patch: Partial<FlowerRecord>) => {
     setRecords((current) => ({

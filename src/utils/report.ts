@@ -1,16 +1,16 @@
-import { flowers } from "../data/flowers";
 import { wateringIntervalsDays } from "../data/wateringIntervals";
+import type { Flower } from "../data/flowers";
 import type { FlowerRecords } from "../hooks/useFlowerRecords";
 import { formatDate } from "./dates";
 import { getWateringProgress } from "./watering";
 
 export const reportThresholdPercent = 20;
 
-export const getWateringReportRows = (records: FlowerRecords) =>
+export const getWateringReportRows = (records: FlowerRecords, flowers: Flower[]) =>
   flowers
     .map((flower) => {
       const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
-      const intervalDays = wateringIntervalsDays[flower.id] ?? 7;
+      const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
       const progress = getWateringProgress(record.lastWatered, intervalDays);
 
       return {
@@ -26,8 +26,8 @@ export const getWateringReportRows = (records: FlowerRecords) =>
     .filter((row) => row.progress.percent < reportThresholdPercent)
     .sort((left, right) => left.progress.percent - right.progress.percent);
 
-export const createMailtoReportUrl = (recipient: string, records: FlowerRecords) => {
-  const rows = getWateringReportRows(records);
+export const createMailtoReportUrl = (recipient: string, records: FlowerRecords, flowers: Flower[]) => {
+  const rows = getWateringReportRows(records, flowers);
   const lines = rows.length
     ? rows.flatMap((row, index) => [
         `${index + 1}. ${row.flower.displayName} (${row.flower.likelyName})`,

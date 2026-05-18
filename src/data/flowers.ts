@@ -5,6 +5,7 @@ export type Flower = {
   identification: "confident" | "likely" | "needs-confirmation";
   identificationNote: string;
   image: string;
+  source?: "built-in" | "custom";
   shortCare: string;
   carePills: {
     label: string;
@@ -13,6 +14,7 @@ export type Flower = {
   }[];
   light: string;
   watering: string;
+  wateringIntervalDays?: number;
   soil: string;
   careTips: string[];
 };

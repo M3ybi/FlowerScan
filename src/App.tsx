@@ -9,6 +9,7 @@ import {
   Leaf,
   Mail,
   Pencil,
+  Plus,
   Printer,
   QrCodeIcon,
   Search,
@@ -16,11 +17,15 @@ import {
   Sprout,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { QrCode } from "./components/QrCode";
-import { flowerById, flowers } from "./data/flowers";
+import { flowers as builtInFlowers } from "./data/flowers";
+import type { Flower } from "./data/flowers";
 import { wateringIntervalsDays } from "./data/wateringIntervals";
+import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
+import { createCustomFlowerId, createFallbackCare, fetchGeneratedCare, resizeImageFileToDataUrl } from "./utils/customFlower";
 import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
 import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
@@ -166,7 +171,10 @@ const useHashRoute = () => {
 
 export const App = () => {
   const route = useHashRoute();
-  const { records, replaceRecords, updateRecord } = useFlowerRecords();
+  const { addCustomFlower, customFlowers } = useCustomFlowers();
+  const allFlowers = useMemo(() => [...customFlowers, ...builtInFlowers], [customFlowers]);
+  const flowerById = useMemo(() => new Map(allFlowers.map((flower) => [flower.id, flower])), [allFlowers]);
+  const { records, replaceRecords, updateRecord } = useFlowerRecords(allFlowers);
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
   const [reportRecipient, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
@@ -174,6 +182,10 @@ export const App = () => {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [qrExportStatus, setQrExportStatus] = useState("");
+  const [newPlantName, setNewPlantName] = useState("");
+  const [newPlantImageFile, setNewPlantImageFile] = useState<File | null>(null);
+  const [newPlantStatus, setNewPlantStatus] = useState("");
+  const [isAddingPlant, setIsAddingPlant] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -243,10 +255,10 @@ export const App = () => {
     return () => window.clearTimeout(timeoutId);
   }, [cloudSyncEnabled, cloudSyncReady, records]);
 
-  const reportRows = useMemo(() => getWateringReportRows(records), [records]);
+  const reportRows = useMemo(() => getWateringReportRows(records, allFlowers), [allFlowers, records]);
   const qrLabelValidation = useMemo(
-    () => validateQrLabelLayout(createQrLabelLayout(flowers, baseUrl)),
-    [baseUrl],
+    () => validateQrLabelLayout(createQrLabelLayout(allFlowers, baseUrl)),
+    [allFlowers, baseUrl],
   );
 
   const saveReportRecipient = async () => {
@@ -276,14 +288,14 @@ export const App = () => {
   };
 
   const handleQrPdfExport = async () => {
-    if (flowers.length === 0) {
+    if (allFlowers.length === 0) {
       setQrExportStatus("Nie sú dostupné žiadne rastliny na export.");
       return;
     }
 
     try {
       setQrExportStatus("Generujem PDF hárok...");
-      await exportQrLabelsPdf(flowers, baseUrl);
+      await exportQrLabelsPdf(allFlowers, baseUrl);
       setQrExportStatus("PDF je pripravené. Pri tlači zvoľ 100 % veľkosť / Actual size.");
     } catch (error) {
       setQrExportStatus(error instanceof Error ? error.message : "PDF export zlyhal.");
@@ -294,15 +306,57 @@ export const App = () => {
   const filteredFlowers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
-      return flowers;
+      return allFlowers;
     }
 
-    return flowers.filter((flower) =>
+    return allFlowers.filter((flower) =>
       [flower.displayName, flower.likelyName, flower.shortCare].some((value) =>
         value.toLowerCase().includes(normalizedQuery),
       ),
     );
-  }, [query]);
+  }, [allFlowers, query]);
+
+  const handleAddCustomFlower = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const plantName = newPlantName.trim();
+
+    if (!plantName || !newPlantImageFile) {
+      setNewPlantStatus("Zadaj názov rastliny a pridaj obrázok.");
+      return;
+    }
+
+    setIsAddingPlant(true);
+    setNewPlantStatus("Spracúvam obrázok a generujem starostlivosť cez AI...");
+
+    try {
+      const imageDataUrl = await resizeImageFileToDataUrl(newPlantImageFile);
+      let care = createFallbackCare(plantName);
+
+      try {
+        care = await fetchGeneratedCare(plantName, imageDataUrl);
+        setNewPlantStatus("AI starostlivosť bola vygenerovaná. Rastlina je pridaná.");
+      } catch {
+        setNewPlantStatus("AI backend nie je dostupný. Rastlina je pridaná so všeobecným profilom.");
+      }
+
+      const customFlower: Flower = {
+        ...care,
+        displayName: plantName,
+        id: createCustomFlowerId(),
+        identification: "likely",
+        image: imageDataUrl,
+        source: "custom",
+      };
+
+      addCustomFlower(customFlower);
+      setNewPlantName("");
+      setNewPlantImageFile(null);
+    } catch (error) {
+      setNewPlantStatus(error instanceof Error ? error.message : "Rastlinu sa nepodarilo pridať.");
+    } finally {
+      setIsAddingPlant(false);
+    }
+  };
 
   if (route.page === "detail") {
     const flower = flowerById.get(route.flowerId);
@@ -325,7 +379,7 @@ export const App = () => {
     const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
     const elapsedDays = daysSince(record.lastWatered);
     const detailUrl = publicFlowerUrl(baseUrl, flower.id);
-    const intervalDays = wateringIntervalsDays[flower.id] ?? 7;
+    const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
     const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
     const quickActionLabel = route.scan ? "Naskenovaná rastlina" : "Rýchly záznam";
 
@@ -552,7 +606,7 @@ export const App = () => {
             <FileDown size={18} aria-hidden="true" />
             <h2 id="pdf-export-title">Print QR labels</h2>
           </div>
-          {flowers.length > 0 ? (
+          {allFlowers.length > 0 ? (
             <>
               <p>
                 PDF hárok A4 vytvorí čisté QR štítky {qrLabelSpec.labelSizeMm} × {qrLabelSpec.labelSizeMm} mm.
@@ -574,7 +628,7 @@ export const App = () => {
         </section>
 
         <section className="qr-grid" aria-label="QR kódy pre všetky rastliny">
-          {flowers.map((flower) => (
+          {allFlowers.map((flower) => (
             <article className="qr-label" key={flower.id}>
               <QrCode value={publicFlowerUrl(baseUrl, flower.id)} label={flower.displayName} size={148} />
               <div>
@@ -630,7 +684,7 @@ export const App = () => {
             </button>
             <a
               className={`report-mailto ${reportRecipient.trim() ? "" : "report-mailto-disabled"}`}
-              href={reportRecipient.trim() ? createMailtoReportUrl(reportRecipient.trim(), records) : undefined}
+              href={reportRecipient.trim() ? createMailtoReportUrl(reportRecipient.trim(), records, allFlowers) : undefined}
               aria-disabled={!reportRecipient.trim()}
             >
               <Send size={17} aria-hidden="true" />
@@ -676,7 +730,7 @@ export const App = () => {
     <main className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">19 sledovaných rastlín</p>
+          <p className="eyebrow">{allFlowers.length} sledovaných rastlín</p>
           <h1>Prehľad starostlivosti o rastliny</h1>
           <p className="hero-copy">Otvor rastlinu, aktualizuj zálievku alebo presadenie, pridaj poznámku a vytlač QR štítky na kvetináče.</p>
         </div>
@@ -705,11 +759,49 @@ export const App = () => {
         </label>
       </section>
 
+      <section className="add-plant-panel" aria-labelledby="add-plant-title">
+        <div>
+          <div className="section-title">
+            <Plus size={18} aria-hidden="true" />
+            <h2 id="add-plant-title">Pridať novú rastlinu</h2>
+          </div>
+          <p>
+            Zadaj názov a pridaj fotku. AI starostlivosť sa vygeneruje iba pre túto novú rastlinu;
+            existujúce rastliny sa tým nemenia.
+          </p>
+        </div>
+        <form className="add-plant-form" onSubmit={handleAddCustomFlower}>
+          <label className="field">
+            <span>Názov rastliny</span>
+            <input
+              type="text"
+              value={newPlantName}
+              maxLength={80}
+              placeholder="napr. Monstera"
+              onChange={(event) => setNewPlantName(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Obrázok rastliny</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setNewPlantImageFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <button type="submit" disabled={isAddingPlant}>
+            <Plus size={18} aria-hidden="true" />
+            {isAddingPlant ? "Pridávam..." : "Pridať rastlinu"}
+          </button>
+        </form>
+        {newPlantStatus ? <div className="report-status">{newPlantStatus}</div> : null}
+      </section>
+
       <section className="flower-grid" aria-label="Prehľad rastlín">
         {filteredFlowers.map((flower) => {
           const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
           const elapsedDays = daysSince(record.lastWatered);
-          const intervalDays = wateringIntervalsDays[flower.id] ?? 7;
+          const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
           const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
 
           return (

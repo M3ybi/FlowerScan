@@ -760,6 +760,7 @@ textarea:focus-visible {
 }
 
 .editor-panel,
+.add-plant-panel,
 .care-panel,
 .qr-panel,
 .report-panel,
@@ -783,6 +784,65 @@ textarea:focus-visible {
     radial-gradient(circle at 100% 0%, rgba(127, 185, 205, 0.18), transparent 15rem),
     linear-gradient(180deg, rgba(249, 253, 253, 0.9), rgba(255, 253, 248, 0.96)),
     var(--surface);
+}
+
+.add-plant-panel {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 18px;
+  border-color: rgba(183, 103, 42, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(231, 168, 79, 0.18), transparent 14rem),
+    linear-gradient(180deg, rgba(255, 250, 239, 0.86), rgba(255, 253, 248, 0.96)),
+    var(--surface);
+}
+
+.add-plant-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.add-plant-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.add-plant-form .field {
+  margin-top: 0;
+}
+
+.add-plant-form button {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 0 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent),
+    linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  cursor: pointer;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(121, 77, 32, 0.16);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+.add-plant-form button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(121, 77, 32, 0.2);
+}
+
+.add-plant-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .report-panel-header,
@@ -1543,6 +1603,10 @@ textarea:focus-visible {
   }
 
   .report-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .add-plant-form {
     grid-template-columns: 1fr;
   }
 

@@ -31,5 +31,9 @@ Potrebné environment variables v Netlify:
 
 - `RESEND_API_KEY` - API kľúč pre odosielanie emailov cez Resend
 - `REPORT_FROM_EMAIL` - overený odosielateľ, napr. `FlowerScan <report@tvoja-domena.sk>`
+- `OPENAI_API_KEY` - API kľúč na AI generovanie starostlivosti pri pridávaní novej rastliny
+- `OPENAI_MODEL` - voliteľné, predvolená hodnota je `gpt-4o-mini`
 
 Report sa kontroluje každú hodinu a odošle sa iba raz denne, keď je v časovej zóne `Europe/Bratislava` 19:00. Do emailu idú iba rastliny so stavom zálievky pod 20 %.
+
+AI generovanie sa používa iba pri vložení novej rastliny. Existujúci katalóg rastlín sa tým nemení.
