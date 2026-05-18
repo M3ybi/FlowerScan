@@ -28,7 +28,7 @@ import { wateringIntervalsDays } from "./data/wateringIntervals";
 import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
-import { createCustomFlowerId, createFallbackCare, fetchGeneratedCare, resizeImageFileToDataUrl } from "./utils/customFlower";
+import { createCustomFlowerId, fetchGeneratedCare, resizeImageFileToDataUrl } from "./utils/customFlower";
 import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
 import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
@@ -342,31 +342,27 @@ export const App = () => {
 
     try {
       const imageDataUrl = await resizeImageFileToDataUrl(newPlantImageFile);
-      let care = createFallbackCare(plantName);
-
-      try {
-        care = await fetchGeneratedCare(plantName, imageDataUrl);
-        setNewPlantStatus("AI starostlivosť bola vygenerovaná. Rastlina je pridaná.");
-      } catch (error) {
-        const reason = error instanceof Error ? ` ${error.message}` : "";
-        setNewPlantStatus(`AI backend nie je dostupný alebo vrátil chybu. Rastlina je pridaná so všeobecným profilom.${reason}`);
-      }
+      const care = await fetchGeneratedCare(plantName, imageDataUrl);
+      const { displayName: aiCareDisplayName, identificationConfidence, ...careProfile } = care;
+      const aiDisplayName = aiCareDisplayName.trim();
 
       const customFlower: Flower = {
-        ...care,
-        displayName: plantName,
+        ...careProfile,
+        displayName: aiDisplayName || plantName,
         id: createCustomFlowerId(),
-        identification: "likely",
+        identification: identificationConfidence,
         image: imageDataUrl,
         source: "custom",
       };
 
       addCustomFlower(customFlower);
+      setNewPlantStatus(`AI identifikovala rastlinu ako ${customFlower.displayName}. Rastlina je pridaná.`);
       setNewPlantName("");
       setNewPlantImageFile(null);
       setIsAddPlantModalOpen(false);
     } catch (error) {
-      setNewPlantStatus(error instanceof Error ? error.message : "Rastlinu sa nepodarilo pridať.");
+      const reason = error instanceof Error ? error.message : "Rastlinu sa nepodarilo pridať.";
+      setNewPlantStatus(`AI identifikácia zlyhala. Rastlina nebola pridaná. ${reason}`);
     } finally {
       setIsAddingPlant(false);
     }

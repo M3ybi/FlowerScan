@@ -1,5 +1,26 @@
 import type { Handler } from "@netlify/functions";
 
+type CareTone = "green" | "amber" | "blue" | "rose";
+type IdentificationConfidence = "confident" | "likely" | "needs-confirmation";
+
+type AiCareProfile = {
+  displayName: string;
+  likelyName: string;
+  identificationConfidence: IdentificationConfidence;
+  shortCare: string;
+  carePills: {
+    label: "Svetlo" | "Zálievka" | "Vlhkosť" | "Náročnosť" | "Presádzanie";
+    value: string;
+    tone: CareTone;
+  }[];
+  light: string;
+  watering: string;
+  wateringIntervalDays: number;
+  soil: string;
+  careTips: string[];
+  identificationNote: string;
+};
+
 const headers = {
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
@@ -10,7 +31,18 @@ const headers = {
 const careSchema = {
   additionalProperties: false,
   properties: {
-    likelyName: { type: "string" },
+    displayName: {
+      description: "Finálny krátky slovenský názov rastliny pre UI, podľa AI identifikácie z fotky a vstupného názvu.",
+      type: "string",
+    },
+    likelyName: {
+      description: "Najpravdepodobnejší botanický alebo kultivarový názov. Ak kultivar nie je istý, uveď bezpečnejší druh/rod.",
+      type: "string",
+    },
+    identificationConfidence: {
+      enum: ["confident", "likely", "needs-confirmation"],
+      type: "string",
+    },
     shortCare: { type: "string" },
     carePills: {
       items: {
@@ -27,7 +59,7 @@ const careSchema = {
     },
     light: { type: "string" },
     watering: { type: "string" },
-    wateringIntervalDays: { maximum: 45, minimum: 2, type: "integer" },
+    wateringIntervalDays: { maximum: 60, minimum: 2, type: "integer" },
     soil: { type: "string" },
     careTips: {
       items: { type: "string" },
@@ -36,7 +68,9 @@ const careSchema = {
     identificationNote: { type: "string" },
   },
   required: [
+    "displayName",
     "likelyName",
+    "identificationConfidence",
     "shortCare",
     "carePills",
     "light",
@@ -48,6 +82,8 @@ const careSchema = {
   ],
   type: "object",
 };
+
+const requiredPillLabels = ["Svetlo", "Zálievka", "Vlhkosť", "Náročnosť", "Presádzanie"];
 
 const extractOutputText = (response: unknown) => {
   const outputText = (response as { output_text?: unknown }).output_text;
@@ -75,6 +111,76 @@ const extractOutputText = (response: unknown) => {
   }
 
   return "";
+};
+
+const sanitizeText = (value: unknown, maxLength: number) =>
+  typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : "";
+
+const parseCareProfile = (outputText: string): AiCareProfile | null => {
+  const parsed = JSON.parse(outputText) as Partial<AiCareProfile>;
+  const displayName = sanitizeText(parsed.displayName, 70);
+  const likelyName = sanitizeText(parsed.likelyName, 100);
+  const shortCare = sanitizeText(parsed.shortCare, 240);
+  const light = sanitizeText(parsed.light, 260);
+  const watering = sanitizeText(parsed.watering, 260);
+  const soil = sanitizeText(parsed.soil, 240);
+  const identificationNote = sanitizeText(parsed.identificationNote, 260);
+  const wateringIntervalDays = Number(parsed.wateringIntervalDays);
+  const confidence = parsed.identificationConfidence;
+
+  if (
+    !displayName ||
+    !likelyName ||
+    !shortCare ||
+    !light ||
+    !watering ||
+    !soil ||
+    !identificationNote ||
+    !Number.isInteger(wateringIntervalDays) ||
+    wateringIntervalDays < 2 ||
+    wateringIntervalDays > 60 ||
+    (confidence !== "confident" && confidence !== "likely" && confidence !== "needs-confirmation")
+  ) {
+    return null;
+  }
+
+  if (!Array.isArray(parsed.carePills) || parsed.carePills.length !== 5) {
+    return null;
+  }
+
+  const carePills = parsed.carePills.map((pill) => ({
+    label: pill.label,
+    value: sanitizeText(pill.value, 55),
+    tone: pill.tone,
+  }));
+
+  const hasRequiredPills = requiredPillLabels.every((label) => carePills.some((pill) => pill.label === label));
+  const hasValidPills = carePills.every(
+    (pill) =>
+      requiredPillLabels.includes(pill.label) &&
+      pill.value &&
+      (pill.tone === "green" || pill.tone === "amber" || pill.tone === "blue" || pill.tone === "rose"),
+  );
+
+  const careTips = Array.isArray(parsed.careTips) ? parsed.careTips.map((tip) => sanitizeText(tip, 150)).filter(Boolean) : [];
+
+  if (!hasRequiredPills || !hasValidPills || careTips.length !== 3) {
+    return null;
+  }
+
+  return {
+    carePills,
+    careTips,
+    displayName,
+    identificationConfidence: confidence,
+    identificationNote,
+    light,
+    likelyName,
+    shortCare,
+    soil,
+    watering,
+    wateringIntervalDays,
+  };
 };
 
 export const handler: Handler = async (event) => {
@@ -118,17 +224,17 @@ export const handler: Handler = async (event) => {
           content: [
             {
               text:
-                "Vygeneruj starostlivosť o izbovú rastlinu po slovensky. Použi zadaný názov ako hlavný názov používateľa, z fotky a názvu odhadni botanický/pravdepodobný názov. Vráť len JSON podľa schémy. carePills musí obsahovať presne položky Svetlo, Zálievka, Vlhkosť, Náročnosť a Presádzanie. careTips musí obsahovať presne 3 krátke tipy. Existujúce rastliny v aplikácii neupravuj.",
+                "Identifikuj izbovú rastlinu z fotografie a vstupného názvu. Vráť len JSON podľa schémy. displayName musí byť finálny krátky slovenský názov podľa tvojho rozhodnutia, nie slepé zopakovanie používateľského názvu. likelyName musí byť botanický názov alebo najbezpečnejší rod/druh. Ak si nie si istý, nepíš presný kultivar ako fakt a nastav identificationConfidence na likely alebo needs-confirmation. Starostlivosť musí byť konkrétna pre identifikovanú rastlinu v bežných interiérových podmienkach na Slovensku. wateringIntervalDays vypočítaj podľa rastliny, typu rastu a nárokov na presychanie substrátu; musí to byť praktický priemer v dňoch, nie všeobecný text. carePills musia obsahovať presne položky Svetlo, Zálievka, Vlhkosť, Náročnosť a Presádzanie. careTips musia obsahovať presne 3 krátke praktické tipy. Nepouži všeobecný profil, ak fotka alebo názov umožňujú presnejšiu identifikáciu.",
               type: "input_text",
             },
             { text: `Názov od používateľa: ${plantName}`, type: "input_text" },
-            { detail: "low", image_url: imageDataUrl, type: "input_image" },
+            { detail: "high", image_url: imageDataUrl, type: "input_image" },
           ],
           role: "user",
         },
       ],
-      max_output_tokens: 900,
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      max_output_tokens: 1400,
+      model: process.env.OPENAI_MODEL || "gpt-4o",
       text: {
         format: {
           name: "plant_care_profile",
@@ -160,16 +266,14 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const care = JSON.parse(outputText) as { carePills?: unknown[]; careTips?: unknown[] };
+    const care = parseCareProfile(outputText);
+
+    if (!care) {
+      return { body: JSON.stringify({ error: "AI returned incomplete or invalid care data." }), headers, statusCode: 502 };
+    }
 
     return {
-      body: JSON.stringify({
-        care: {
-          ...care,
-          carePills: Array.isArray(care.carePills) ? care.carePills.slice(0, 5) : [],
-          careTips: Array.isArray(care.careTips) ? care.careTips.slice(0, 3) : [],
-        },
-      }),
+      body: JSON.stringify({ care }),
       headers,
       statusCode: 200,
     };
