@@ -5,6 +5,7 @@ import {
   Check,
   Droplets,
   FileDown,
+  ImagePlus,
   Home,
   Leaf,
   Mail,
@@ -846,11 +847,20 @@ export const App = () => {
               </label>
               <label className="field">
                 <span>Obrázok rastliny</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setNewPlantImageFile(event.target.files?.[0] ?? null)}
-                />
+                <label className="image-upload">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setNewPlantImageFile(event.target.files?.[0] ?? null)}
+                  />
+                  <span className="image-upload-icon">
+                    <ImagePlus size={22} aria-hidden="true" />
+                  </span>
+                  <span className="image-upload-copy">
+                    <strong>{newPlantImageFile ? newPlantImageFile.name : "Vybrať fotku"}</strong>
+                    <small>{newPlantImageFile ? "Fotka je pripravená" : "JPG, PNG alebo fotka z mobilu"}</small>
+                  </span>
+                </label>
               </label>
               <button type="submit" disabled={isAddingPlant}>
                 <Plus size={18} aria-hidden="true" />
