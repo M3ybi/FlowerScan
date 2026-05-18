@@ -66,26 +66,96 @@ const identificationLabel = {
   "needs-confirmation": "ID treba potvrdiť",
 };
 
-const getWaterIconLevel = (flowerId: string) => {
-  const interval = wateringIntervalsDays[flowerId] ?? 7;
+const normalizeCareText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
-  if (interval >= 25) {
+const includesAny = (value: string, keywords: string[]) => keywords.some((keyword) => value.includes(keyword));
+
+const getWaterIconLevel = (value: string, intervalDays: number) => {
+  const normalizedValue = normalizeCareText(value);
+
+  if (
+    includesAny(normalizedValue, [
+      "nechat uplne vyschnut",
+      "po uplnom vyschnuti",
+      "po vyschnuti",
+      "az po preschnuti",
+      "az po vyschnuti",
+      "mierne",
+      "striedmo",
+      "such",
+      "sukulent",
+      "kaktus",
+    ]) ||
+    intervalDays >= 14
+  ) {
     return "low";
   }
 
-  if (interval <= 5) {
+  if (
+    includesAny(normalizedValue, ["udrziavat vlhku", "stale mierne vlhku", "rovnomerne vlhku", "vela vody", "castejsie"]) ||
+    intervalDays <= 5
+  ) {
     return "high";
   }
 
   return "medium";
 };
 
-const getCarePillVisual = (label: string, value: string, flowerId: string) => {
-  const normalizedLabel = label.toLowerCase();
-  const normalizedValue = value.toLowerCase();
+const getSunIconLevel = (value: string) => {
+  const normalizedValue = normalizeCareText(value);
+
+  if (includesAny(normalizedValue, ["plne slnko", "priame slnko", "vela svetla", "velmi jasne", "slnecne", "6 hodin"])) {
+    return "full";
+  }
+
+  if (includesAny(normalizedValue, ["polotien", "tien", "menej svetla", "slabsie svetlo", "nizke svetlo"])) {
+    return "low";
+  }
+
+  return "half";
+};
+
+const getHumidityIconLevel = (value: string) => {
+  const normalizedValue = normalizeCareText(value);
+
+  if (includesAny(normalizedValue, ["nizs", "nizka", "suchy vzduch", "bez rosenia", "nie je narocna", "bezna izbova"])) {
+    return "low";
+  }
+
+  if (includesAny(normalizedValue, ["vysok", "vyss", "rosit", "vlhkomil", "terarium"])) {
+    return "high";
+  }
+
+  return "medium";
+};
+
+const getDifficultyIconLevel = (value: string) => {
+  const normalizedValue = normalizeCareText(value);
+
+  if (includesAny(normalizedValue, ["nenaroc", "lahk", "jednoduch", "zaciatocnik", "odolna"])) {
+    return "easy";
+  }
+
+  if (includesAny(normalizedValue, ["stredn", "mierna"])) {
+    return "medium";
+  }
+
+  if (includesAny(normalizedValue, ["naroc", "citliv", "skusen"])) {
+    return "hard";
+  }
+
+  return "medium";
+};
+
+const getCarePillVisual = (label: string, value: string, intervalDays: number) => {
+  const normalizedLabel = normalizeCareText(label);
 
   if (normalizedLabel.includes("svetlo")) {
-    const strength = normalizedValue.includes("slnko") || normalizedValue.includes("veľa") ? "full" : "half";
+    const strength = getSunIconLevel(value);
 
     return (
       <span className={`pill-visual pill-sun pill-sun-${strength}`} aria-hidden="true">
@@ -94,8 +164,8 @@ const getCarePillVisual = (label: string, value: string, flowerId: string) => {
     );
   }
 
-  if (normalizedLabel.includes("zálievka")) {
-    const level = getWaterIconLevel(flowerId);
+  if (normalizedLabel.includes("zalievka")) {
+    const level = getWaterIconLevel(value, intervalDays);
 
     return (
       <span className={`pill-visual pill-water pill-water-${level}`} aria-hidden="true">
@@ -106,13 +176,8 @@ const getCarePillVisual = (label: string, value: string, flowerId: string) => {
     );
   }
 
-  if (normalizedLabel.includes("vlhkosť")) {
-    const level =
-      normalizedValue.includes("vyšš") || normalizedValue.includes("vlhk")
-        ? "high"
-        : normalizedValue.includes("nízka")
-          ? "low"
-          : "medium";
+  if (normalizedLabel.includes("vlhkost")) {
+    const level = getHumidityIconLevel(value);
 
     return (
       <span className={`pill-visual pill-humidity pill-humidity-${level}`} aria-hidden="true">
@@ -123,12 +188,8 @@ const getCarePillVisual = (label: string, value: string, flowerId: string) => {
     );
   }
 
-  if (normalizedLabel.includes("náročnosť")) {
-    const level = normalizedValue.includes("veľmi") || normalizedValue.includes("ľahk")
-      ? "easy"
-      : normalizedValue.includes("nároč")
-        ? "hard"
-        : "medium";
+  if (normalizedLabel.includes("narocnost")) {
+    const level = getDifficultyIconLevel(value);
 
     return (
       <span className={`pill-visual pill-difficulty pill-difficulty-${level}`} aria-hidden="true">
@@ -496,11 +557,11 @@ export const App = () => {
             <Leaf size={18} aria-hidden="true" />
             <h2 id="care-title">Základná starostlivosť</h2>
           </div>
-          <p>{flower.shortCare}</p>
+          <p className="care-summary">{flower.shortCare}</p>
           <div className="care-pill-grid" aria-label="Rýchly profil starostlivosti">
             {flower.carePills.map((pill) => (
               <div className={`care-pill care-pill-${pill.tone}`} key={`${pill.label}-${pill.value}`}>
-                {getCarePillVisual(pill.label, pill.value, flower.id)}
+                {getCarePillVisual(pill.label, pill.value, intervalDays)}
                 <div>
                   <span>{pill.label}</span>
                   <strong>{pill.value}</strong>
@@ -510,15 +571,24 @@ export const App = () => {
           </div>
           <dl className="care-list">
             <div>
-              <dt>Svetlo</dt>
+              <dt>
+                {getCarePillVisual("Svetlo", flower.light, intervalDays)}
+                <span>Svetlo</span>
+              </dt>
               <dd>{flower.light}</dd>
             </div>
             <div>
-              <dt>Zálievka</dt>
+              <dt>
+                {getCarePillVisual("Zálievka", flower.watering, intervalDays)}
+                <span>Zálievka</span>
+              </dt>
               <dd>{flower.watering}</dd>
             </div>
             <div>
-              <dt>Substrát</dt>
+              <dt>
+                {getCarePillVisual("Presádzanie", flower.soil, intervalDays)}
+                <span>Substrát</span>
+              </dt>
               <dd>{flower.soil}</dd>
             </div>
           </dl>
