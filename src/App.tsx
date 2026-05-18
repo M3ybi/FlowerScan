@@ -15,6 +15,8 @@ import {
   Search,
   Send,
   Sprout,
+  Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
@@ -171,7 +173,7 @@ const useHashRoute = () => {
 
 export const App = () => {
   const route = useHashRoute();
-  const { addCustomFlower, customFlowers } = useCustomFlowers();
+  const { addCustomFlower, customFlowers, removeCustomFlower } = useCustomFlowers();
   const allFlowers = useMemo(() => [...customFlowers, ...builtInFlowers], [customFlowers]);
   const flowerById = useMemo(() => new Map(allFlowers.map((flower) => [flower.id, flower])), [allFlowers]);
   const { records, replaceRecords, updateRecord } = useFlowerRecords(allFlowers);
@@ -186,6 +188,8 @@ export const App = () => {
   const [newPlantImageFile, setNewPlantImageFile] = useState<File | null>(null);
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
+  const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
+  const [deleteFlowerId, setDeleteFlowerId] = useState("");
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -351,11 +355,22 @@ export const App = () => {
       addCustomFlower(customFlower);
       setNewPlantName("");
       setNewPlantImageFile(null);
+      setIsAddPlantModalOpen(false);
     } catch (error) {
       setNewPlantStatus(error instanceof Error ? error.message : "Rastlinu sa nepodarilo pridať.");
     } finally {
       setIsAddingPlant(false);
     }
+  };
+
+  const confirmRemoveCustomFlower = () => {
+    if (!deleteFlowerId) {
+      return;
+    }
+
+    removeCustomFlower(deleteFlowerId);
+    setDeleteFlowerId("");
+    window.location.hash = "#/";
   };
 
   if (route.page === "detail") {
@@ -563,6 +578,42 @@ export const App = () => {
           </div>
           <QrCode value={detailUrl} label={flower.displayName} />
         </section>
+
+        {flower.source === "custom" ? (
+          <section className="danger-panel" aria-labelledby="delete-plant-title">
+            <div>
+              <div className="section-title danger-title">
+                <Trash2 size={18} aria-hidden="true" />
+                <h2 id="delete-plant-title">Odstrániť rastlinu</h2>
+              </div>
+              <p>Táto akcia odstráni iba túto pridanú rastlinu z aplikácie.</p>
+            </div>
+            <button type="button" onClick={() => setDeleteFlowerId(flower.id)}>
+              <Trash2 size={18} aria-hidden="true" />
+              Odstrániť rastlinu
+            </button>
+          </section>
+        ) : null}
+
+        {deleteFlowerId === flower.id ? (
+          <div className="modal-backdrop" role="presentation">
+            <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+              <div className="section-title danger-title">
+                <Trash2 size={20} aria-hidden="true" />
+                <h2 id="delete-confirm-title">Naozaj si želáš danú rastlinu odstrániť?</h2>
+              </div>
+              <p>Rastlina „{flower.displayName}” sa odstráni z tvojho zoznamu. Táto akcia sa nedá vrátiť späť.</p>
+              <div className="modal-actions">
+                <button className="danger-action" type="button" onClick={confirmRemoveCustomFlower}>
+                  Áno, odstrániť
+                </button>
+                <button className="neutral-action" type="button" onClick={() => setDeleteFlowerId("")}>
+                  Nie
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </main>
     );
   }
@@ -735,6 +786,10 @@ export const App = () => {
           <p className="hero-copy">Otvor rastlinu, aktualizuj zálievku alebo presadenie, pridaj poznámku a vytlač QR štítky na kvetináče.</p>
         </div>
         <div className="hero-actions">
+          <button className="qr-action add-plant-trigger" type="button" onClick={() => setIsAddPlantModalOpen(true)}>
+            <Plus size={20} aria-hidden="true" />
+            Pridať rastlinu
+          </button>
           <a className="qr-action secondary-action-link" href="#/report">
             <Mail size={20} aria-hidden="true" />
             Report
@@ -759,43 +814,48 @@ export const App = () => {
         </label>
       </section>
 
-      <section className="add-plant-panel" aria-labelledby="add-plant-title">
-        <div>
-          <div className="section-title">
-            <Plus size={18} aria-hidden="true" />
-            <h2 id="add-plant-title">Pridať novú rastlinu</h2>
-          </div>
-          <p>
-            Zadaj názov a pridaj fotku. AI starostlivosť sa vygeneruje iba pre túto novú rastlinu;
-            existujúce rastliny sa tým nemenia.
-          </p>
+      {isAddPlantModalOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="plant-modal" role="dialog" aria-modal="true" aria-labelledby="add-plant-title">
+            <button className="modal-close" type="button" onClick={() => setIsAddPlantModalOpen(false)} aria-label="Zavrieť">
+              <X size={20} aria-hidden="true" />
+            </button>
+            <div className="section-title">
+              <Plus size={18} aria-hidden="true" />
+              <h2 id="add-plant-title">Pridať novú rastlinu</h2>
+            </div>
+            <p>
+              Zadaj názov a pridaj fotku. AI starostlivosť sa vygeneruje iba pre túto novú rastlinu;
+              existujúce rastliny sa tým nemenia.
+            </p>
+            <form className="add-plant-form modal-form" onSubmit={handleAddCustomFlower}>
+              <label className="field">
+                <span>Názov rastliny</span>
+                <input
+                  type="text"
+                  value={newPlantName}
+                  maxLength={80}
+                  placeholder="napr. Monstera"
+                  onChange={(event) => setNewPlantName(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Obrázok rastliny</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setNewPlantImageFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <button type="submit" disabled={isAddingPlant}>
+                <Plus size={18} aria-hidden="true" />
+                {isAddingPlant ? "Pridávam..." : "Pridať rastlinu"}
+              </button>
+            </form>
+            {newPlantStatus ? <div className="report-status">{newPlantStatus}</div> : null}
+          </section>
         </div>
-        <form className="add-plant-form" onSubmit={handleAddCustomFlower}>
-          <label className="field">
-            <span>Názov rastliny</span>
-            <input
-              type="text"
-              value={newPlantName}
-              maxLength={80}
-              placeholder="napr. Monstera"
-              onChange={(event) => setNewPlantName(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Obrázok rastliny</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setNewPlantImageFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          <button type="submit" disabled={isAddingPlant}>
-            <Plus size={18} aria-hidden="true" />
-            {isAddingPlant ? "Pridávam..." : "Pridať rastlinu"}
-          </button>
-        </form>
-        {newPlantStatus ? <div className="report-status">{newPlantStatus}</div> : null}
-      </section>
+      ) : null}
 
       <section className="flower-grid" aria-label="Prehľad rastlín">
         {filteredFlowers.map((flower) => {

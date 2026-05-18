@@ -188,6 +188,14 @@ button {
   box-shadow: 0 14px 28px rgba(121, 77, 32, 0.12);
 }
 
+.add-plant-trigger {
+  border-color: rgba(183, 103, 42, 0.22);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent),
+    linear-gradient(135deg, var(--accent), var(--accent-2));
+  cursor: pointer;
+}
+
 .nav-link {
   padding: 0 14px;
 }
@@ -795,6 +803,112 @@ textarea:focus-visible {
     radial-gradient(circle at 100% 0%, rgba(231, 168, 79, 0.18), transparent 14rem),
     linear-gradient(180deg, rgba(255, 250, 239, 0.86), rgba(255, 253, 248, 0.96)),
     var(--surface);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(18, 34, 27, 0.48);
+  backdrop-filter: blur(12px);
+}
+
+.plant-modal,
+.confirm-modal {
+  position: relative;
+  width: min(620px, 100%);
+  border: 1px solid rgba(126, 119, 99, 0.22);
+  border-radius: 26px;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 253, 248, 0.98)),
+    var(--surface);
+  box-shadow: 0 30px 80px rgba(18, 34, 27, 0.28);
+}
+
+.plant-modal p,
+.confirm-modal p,
+.danger-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(18, 34, 27, 0.08);
+  color: var(--brand);
+  cursor: pointer;
+}
+
+.modal-form {
+  grid-template-columns: 1fr;
+  margin-top: 16px;
+}
+
+.danger-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 22px;
+  border: 1px solid rgba(138, 55, 43, 0.2);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(217, 81, 69, 0.12), transparent 14rem),
+    linear-gradient(180deg, rgba(255, 247, 244, 0.9), rgba(255, 253, 248, 0.96));
+  box-shadow: var(--shadow-soft);
+}
+
+.danger-title {
+  color: var(--danger-text);
+}
+
+.danger-panel button,
+.danger-action,
+.neutral-action {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 0 16px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.danger-panel button,
+.danger-action {
+  background: linear-gradient(135deg, #a33d32, var(--progress-danger));
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(138, 55, 43, 0.16);
+}
+
+.neutral-action {
+  border: 1px solid rgba(126, 119, 99, 0.22);
+  background: #fff;
+  color: var(--brand);
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .add-plant-panel p {
@@ -1608,6 +1722,20 @@ textarea:focus-visible {
 
   .add-plant-form {
     grid-template-columns: 1fr;
+  }
+
+  .danger-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .danger-panel button,
+  .modal-actions button {
+    width: 100%;
+  }
+
+  .plant-modal,
+  .confirm-modal {
+    padding: 20px;
   }
 
   .report-table-row {

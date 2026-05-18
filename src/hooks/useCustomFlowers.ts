@@ -53,5 +53,9 @@ export const useCustomFlowers = () => {
     setCustomFlowers((current) => [flower, ...current.filter((item) => item.id !== flower.id)]);
   };
 
-  return { addCustomFlower, customFlowers };
+  const removeCustomFlower = (flowerId: string) => {
+    setCustomFlowers((current) => current.filter((item) => item.id !== flowerId));
+  };
+
+  return { addCustomFlower, customFlowers, removeCustomFlower };
 };
