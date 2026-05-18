@@ -50,6 +50,29 @@ export const resizeImageFileToDataUrl = (file: File, maxSize = 900): Promise<str
     reader.readAsDataURL(file);
   });
 
+export const imageSourceToDataUrl = async (imageSource: string): Promise<string> => {
+  if (imageSource.startsWith("data:image/")) {
+    return imageSource;
+  }
+
+  const response = await fetch(imageSource);
+  if (!response.ok) {
+    throw new Error("Obrázok rastliny sa nepodarilo načítať pre AI generovanie.");
+  }
+
+  const blob = await response.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error("Zdroj rastliny nie je obrázok.");
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Obrázok rastliny sa nepodarilo spracovať."));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(blob);
+  });
+};
+
 export const fetchGeneratedCare = async (plantName: string, imageDataUrl: string): Promise<GeneratedCare> => {
   const response = await fetch("/.netlify/functions/plant-care-ai", {
     method: "POST",

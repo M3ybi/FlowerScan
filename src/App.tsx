@@ -15,6 +15,7 @@ import {
   QrCodeIcon,
   Search,
   Send,
+  Sparkles,
   Sprout,
   Trash2,
   X,
@@ -28,7 +29,13 @@ import { wateringIntervalsDays } from "./data/wateringIntervals";
 import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
-import { createCustomFlowerId, fetchGeneratedCare, resizeImageFileToDataUrl } from "./utils/customFlower";
+import {
+  createCustomFlowerId,
+  fetchGeneratedCare,
+  imageSourceToDataUrl,
+  resizeImageFileToDataUrl,
+} from "./utils/customFlower";
+import type { GeneratedCare } from "./utils/customFlower";
 import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
 import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
@@ -207,6 +214,55 @@ const getCarePillVisual = (label: string, value: string, intervalDays: number) =
   );
 };
 
+type CarePreview = {
+  flowerId: string;
+  nextCare: GeneratedCare;
+};
+
+type CareDiffRow = {
+  label: string;
+  currentValue: string;
+  nextValue: string;
+};
+
+const formatCarePills = (carePills: Flower["carePills"]) =>
+  carePills.map((pill) => `${pill.label}: ${pill.value}`).join("\n");
+
+const formatCareTips = (careTips: string[]) => careTips.map((tip) => `• ${tip}`).join("\n");
+
+const getCareDiffRows = (flower: Flower, nextCare: GeneratedCare, currentIntervalDays: number): CareDiffRow[] => {
+  const candidates: CareDiffRow[] = [
+    { label: "Názov", currentValue: flower.displayName, nextValue: nextCare.displayName },
+    { label: "Botanické ID", currentValue: flower.likelyName, nextValue: nextCare.likelyName },
+    { label: "Krátky popis", currentValue: flower.shortCare, nextValue: nextCare.shortCare },
+    { label: "Rýchle info pily", currentValue: formatCarePills(flower.carePills), nextValue: formatCarePills(nextCare.carePills) },
+    { label: "Svetlo", currentValue: flower.light, nextValue: nextCare.light },
+    { label: "Zálievka", currentValue: flower.watering, nextValue: nextCare.watering },
+    {
+      label: "Interval zálievky",
+      currentValue: `${currentIntervalDays} dní`,
+      nextValue: `${nextCare.wateringIntervalDays} dní`,
+    },
+    { label: "Substrát", currentValue: flower.soil, nextValue: nextCare.soil },
+    { label: "Tipy", currentValue: formatCareTips(flower.careTips), nextValue: formatCareTips(nextCare.careTips) },
+    { label: "Poznámka k identifikácii", currentValue: flower.identificationNote, nextValue: nextCare.identificationNote },
+  ];
+
+  return candidates.filter((row) => row.currentValue.trim() !== row.nextValue.trim());
+};
+
+const applyGeneratedCareToFlower = (flower: Flower, nextCare: GeneratedCare): Flower => {
+  const { displayName, identificationConfidence, ...careProfile } = nextCare;
+
+  return {
+    ...flower,
+    ...careProfile,
+    displayName: displayName.trim() || flower.displayName,
+    identification: identificationConfidence,
+    source: "custom",
+  };
+};
+
 const useHashRoute = () => {
   const [hash, setHash] = useState(() => window.location.hash || "#/");
 
@@ -235,12 +291,18 @@ const useHashRoute = () => {
 
 export const App = () => {
   const route = useHashRoute();
-  const { addCustomFlower, customFlowers, removeFlower, removedFlowerIds } = useCustomFlowers();
+  const { addCustomFlower, customFlowers, removeFlower, removedFlowerIds, updateFlower } = useCustomFlowers();
   const allFlowers = useMemo(
-    () => [...customFlowers, ...builtInFlowers].filter((flower) => !removedFlowerIds.includes(flower.id)),
+    () => [
+      ...customFlowers,
+      ...builtInFlowers.filter((flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id)),
+    ].filter((flower) => !removedFlowerIds.includes(flower.id)),
     [customFlowers, removedFlowerIds],
   );
-  const allFlowersIncludingRemoved = useMemo(() => [...customFlowers, ...builtInFlowers], [customFlowers]);
+  const allFlowersIncludingRemoved = useMemo(
+    () => [...customFlowers, ...builtInFlowers.filter((flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id))],
+    [customFlowers],
+  );
   const flowerById = useMemo(
     () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
     [allFlowersIncludingRemoved],
@@ -259,6 +321,9 @@ export const App = () => {
   const [isAddingPlant, setIsAddingPlant] = useState(false);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
   const [deleteFlowerId, setDeleteFlowerId] = useState("");
+  const [carePreview, setCarePreview] = useState<CarePreview | null>(null);
+  const [carePreviewStatus, setCarePreviewStatus] = useState("");
+  const [isGeneratingCarePreview, setIsGeneratingCarePreview] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -429,6 +494,40 @@ export const App = () => {
     }
   };
 
+  const handleGenerateCarePreview = async (flower: Flower) => {
+    setIsGeneratingCarePreview(true);
+    setCarePreviewStatus("AI pripravuje nový návrh starostlivosti...");
+
+    try {
+      const imageDataUrl = await imageSourceToDataUrl(flower.image);
+      const nextCare = await fetchGeneratedCare(flower.displayName, imageDataUrl);
+      setCarePreview({ flowerId: flower.id, nextCare });
+      setCarePreviewStatus("");
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "AI návrh sa nepodarilo vygenerovať.";
+      setCarePreviewStatus(`AI generovanie zlyhalo. ${reason}`);
+    } finally {
+      setIsGeneratingCarePreview(false);
+    }
+  };
+
+  const confirmCareUpdate = () => {
+    if (!carePreview) {
+      return;
+    }
+
+    const currentFlower = flowerById.get(carePreview.flowerId);
+    if (!currentFlower) {
+      setCarePreview(null);
+      setCarePreviewStatus("Rastlina už nie je dostupná.");
+      return;
+    }
+
+    updateFlower(applyGeneratedCareToFlower(currentFlower, carePreview.nextCare));
+    setCarePreview(null);
+    setCarePreviewStatus("Starostlivosť bola aktualizovaná podľa AI návrhu.");
+  };
+
   const confirmRemoveCustomFlower = () => {
     if (!deleteFlowerId) {
       return;
@@ -463,6 +562,8 @@ export const App = () => {
     const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
     const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
     const quickActionLabel = route.scan ? "Naskenovaná rastlina" : "Rýchly záznam";
+    const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
+    const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays) : [];
 
     return (
       <main className="app-shell detail-shell">
@@ -556,7 +657,17 @@ export const App = () => {
           <div className="section-title">
             <Leaf size={18} aria-hidden="true" />
             <h2 id="care-title">Základná starostlivosť</h2>
+            <button
+              className="ai-care-button"
+              type="button"
+              disabled={isGeneratingCarePreview}
+              onClick={() => handleGenerateCarePreview(flower)}
+            >
+              <Sparkles size={16} aria-hidden="true" />
+              {isGeneratingCarePreview ? "Generujem..." : "Generovať AI"}
+            </button>
           </div>
+          {carePreviewStatus ? <p className="care-preview-status">{carePreviewStatus}</p> : null}
           <p className="care-summary">{flower.shortCare}</p>
           <div className="care-pill-grid" aria-label="Rýchly profil starostlivosti">
             {flower.carePills.map((pill) => (
@@ -667,6 +778,58 @@ export const App = () => {
             Odstrániť rastlinu
           </button>
         </section>
+
+        {activeCarePreview ? (
+          <div className="modal-backdrop" role="presentation">
+            <section className="care-preview-modal" role="dialog" aria-modal="true" aria-labelledby="care-preview-title">
+              <button className="modal-close" type="button" onClick={() => setCarePreview(null)} aria-label="Zavrieť">
+                <X size={20} aria-hidden="true" />
+              </button>
+              <div className="section-title">
+                <Sparkles size={20} aria-hidden="true" />
+                <h2 id="care-preview-title">AI návrh starostlivosti</h2>
+              </div>
+              <p>
+                Skontroluj zmeny pre rastlinu „{flower.displayName}”. Aktualizácia sa uloží až po potvrdení.
+              </p>
+
+              {careDiffRows.length > 0 ? (
+                <div className="care-diff-list" aria-label="Zmeny v starostlivosti">
+                  {careDiffRows.map((row) => (
+                    <article className="care-diff-row" key={row.label}>
+                      <h3>{row.label}</h3>
+                      <div>
+                        <span>Pôvodne</span>
+                        <p>{row.currentValue}</p>
+                      </div>
+                      <div>
+                        <span>Nahradiť za</span>
+                        <p>{row.nextValue}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="care-diff-empty">
+                  <BadgeCheck size={18} aria-hidden="true" />
+                  AI nevrátila žiadne rozdiely oproti aktuálnej starostlivosti.
+                </div>
+              )}
+
+              <div className="care-update-question">
+                <strong>Chceš updatnúť info podľa tohto AI návrhu?</strong>
+              </div>
+              <div className="modal-actions">
+                <button className="primary-action" type="button" onClick={confirmCareUpdate} disabled={careDiffRows.length === 0}>
+                  Áno, updatnúť
+                </button>
+                <button className="neutral-action" type="button" onClick={() => setCarePreview(null)}>
+                  Nie
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {deleteFlowerId === flower.id ? (
           <div className="modal-backdrop" role="presentation">

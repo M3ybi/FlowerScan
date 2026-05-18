@@ -17,7 +17,6 @@ const sanitizeCustomFlowers = (value: unknown): Flower[] => {
     const flower = item as Partial<Flower>;
     return (
       typeof flower.id === "string" &&
-      flower.id.startsWith("custom-") &&
       typeof flower.displayName === "string" &&
       typeof flower.likelyName === "string" &&
       typeof flower.image === "string" &&
@@ -72,10 +71,14 @@ export const useCustomFlowers = () => {
     setCustomFlowers((current) => [flower, ...current.filter((item) => item.id !== flower.id)]);
   };
 
+  const updateFlower = (flower: Flower) => {
+    setCustomFlowers((current) => [flower, ...current.filter((item) => item.id !== flower.id)]);
+  };
+
   const removeFlower = (flowerId: string) => {
     setCustomFlowers((current) => current.filter((item) => item.id !== flowerId));
     setRemovedFlowerIds((current) => (current.includes(flowerId) ? current : [...current, flowerId]));
   };
 
-  return { addCustomFlower, customFlowers, removeFlower, removedFlowerIds };
+  return { addCustomFlower, customFlowers, removeFlower, removedFlowerIds, updateFlower };
 };
