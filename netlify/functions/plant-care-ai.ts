@@ -31,8 +31,6 @@ const careSchema = {
     soil: { type: "string" },
     careTips: {
       items: { type: "string" },
-      maxItems: 3,
-      minItems: 3,
       type: "array",
     },
     identificationNote: { type: "string" },
@@ -52,6 +50,11 @@ const careSchema = {
 };
 
 const extractOutputText = (response: unknown) => {
+  const outputText = (response as { output_text?: unknown }).output_text;
+  if (typeof outputText === "string") {
+    return outputText;
+  }
+
   const output = (response as { output?: unknown[] }).output;
   if (!Array.isArray(output)) {
     return "";
@@ -88,7 +91,14 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "OPENAI_API_KEY is not configured." }), headers, statusCode: 503 };
   }
 
-  const body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; plantName?: string };
+  let body: { imageDataUrl?: string; plantName?: string };
+
+  try {
+    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; plantName?: string };
+  } catch {
+    return { body: JSON.stringify({ error: "Invalid JSON body." }), headers, statusCode: 400 };
+  }
+
   const plantName = typeof body.plantName === "string" ? body.plantName.trim().slice(0, 90) : "";
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
 
@@ -108,11 +118,11 @@ export const handler: Handler = async (event) => {
           content: [
             {
               text:
-                "Vygeneruj starostlivosť o izbovú rastlinu po slovensky. Použi zadaný názov ako hlavný názov používateľa, z fotky a názvu odhadni botanický/pravdepodobný názov. Vráť len JSON podľa schémy. Existujúce rastliny v aplikácii neupravuj.",
+                "Vygeneruj starostlivosť o izbovú rastlinu po slovensky. Použi zadaný názov ako hlavný názov používateľa, z fotky a názvu odhadni botanický/pravdepodobný názov. Vráť len JSON podľa schémy. carePills musí obsahovať presne položky Svetlo, Zálievka, Vlhkosť, Náročnosť a Presádzanie. careTips musí obsahovať presne 3 krátke tipy. Existujúce rastliny v aplikácii neupravuj.",
               type: "input_text",
             },
             { text: `Názov od používateľa: ${plantName}`, type: "input_text" },
-            { image_url: imageDataUrl, type: "input_image" },
+            { detail: "low", image_url: imageDataUrl, type: "input_image" },
           ],
           role: "user",
         },
@@ -131,8 +141,12 @@ export const handler: Handler = async (event) => {
   });
 
   if (!response.ok) {
+    const details = await response.text().catch(() => "");
     return {
-      body: JSON.stringify({ error: "AI request failed." }),
+      body: JSON.stringify({
+        error: "AI request failed.",
+        details: details.slice(0, 500),
+      }),
       headers,
       statusCode: 502,
     };
@@ -145,5 +159,21 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "AI did not return care data." }), headers, statusCode: 502 };
   }
 
-  return { body: JSON.stringify({ care: JSON.parse(outputText) }), headers, statusCode: 200 };
+  try {
+    const care = JSON.parse(outputText) as { carePills?: unknown[]; careTips?: unknown[] };
+
+    return {
+      body: JSON.stringify({
+        care: {
+          ...care,
+          carePills: Array.isArray(care.carePills) ? care.carePills.slice(0, 5) : [],
+          careTips: Array.isArray(care.careTips) ? care.careTips.slice(0, 3) : [],
+        },
+      }),
+      headers,
+      statusCode: 200,
+    };
+  } catch {
+    return { body: JSON.stringify({ error: "AI returned invalid JSON." }), headers, statusCode: 502 };
+  }
 };

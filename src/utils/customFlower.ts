@@ -78,7 +78,9 @@ export const fetchGeneratedCare = async (plantName: string, imageDataUrl: string
   });
 
   if (!response.ok) {
-    throw new Error("AI starostlivosť sa nepodarilo vygenerovať.");
+    const errorBody = (await response.json().catch(() => null)) as { error?: string; details?: string } | null;
+    const details = errorBody?.details ? ` ${errorBody.details}` : "";
+    throw new Error(`${errorBody?.error ?? "AI starostlivosť sa nepodarilo vygenerovať."}${details}`);
   }
 
   const data = (await response.json()) as { care?: GeneratedCare };

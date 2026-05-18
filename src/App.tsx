@@ -347,8 +347,9 @@ export const App = () => {
       try {
         care = await fetchGeneratedCare(plantName, imageDataUrl);
         setNewPlantStatus("AI starostlivosť bola vygenerovaná. Rastlina je pridaná.");
-      } catch {
-        setNewPlantStatus("AI backend nie je dostupný. Rastlina je pridaná so všeobecným profilom.");
+      } catch (error) {
+        const reason = error instanceof Error ? ` ${error.message}` : "";
+        setNewPlantStatus(`AI backend nie je dostupný alebo vrátil chybu. Rastlina je pridaná so všeobecným profilom.${reason}`);
       }
 
       const customFlower: Flower = {
