@@ -173,9 +173,16 @@ const useHashRoute = () => {
 
 export const App = () => {
   const route = useHashRoute();
-  const { addCustomFlower, customFlowers, removeCustomFlower } = useCustomFlowers();
-  const allFlowers = useMemo(() => [...customFlowers, ...builtInFlowers], [customFlowers]);
-  const flowerById = useMemo(() => new Map(allFlowers.map((flower) => [flower.id, flower])), [allFlowers]);
+  const { addCustomFlower, customFlowers, removeFlower, removedFlowerIds } = useCustomFlowers();
+  const allFlowers = useMemo(
+    () => [...customFlowers, ...builtInFlowers].filter((flower) => !removedFlowerIds.includes(flower.id)),
+    [customFlowers, removedFlowerIds],
+  );
+  const allFlowersIncludingRemoved = useMemo(() => [...customFlowers, ...builtInFlowers], [customFlowers]);
+  const flowerById = useMemo(
+    () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
+    [allFlowersIncludingRemoved],
+  );
   const { records, replaceRecords, updateRecord } = useFlowerRecords(allFlowers);
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
@@ -368,7 +375,7 @@ export const App = () => {
       return;
     }
 
-    removeCustomFlower(deleteFlowerId);
+    removeFlower(deleteFlowerId);
     setDeleteFlowerId("");
     window.location.hash = "#/";
   };
@@ -579,21 +586,19 @@ export const App = () => {
           <QrCode value={detailUrl} label={flower.displayName} />
         </section>
 
-        {flower.source === "custom" ? (
-          <section className="danger-panel" aria-labelledby="delete-plant-title">
-            <div>
-              <div className="section-title danger-title">
-                <Trash2 size={18} aria-hidden="true" />
-                <h2 id="delete-plant-title">Odstrániť rastlinu</h2>
-              </div>
-              <p>Táto akcia odstráni iba túto pridanú rastlinu z aplikácie.</p>
-            </div>
-            <button type="button" onClick={() => setDeleteFlowerId(flower.id)}>
+        <section className="danger-panel" aria-labelledby="delete-plant-title">
+          <div>
+            <div className="section-title danger-title">
               <Trash2 size={18} aria-hidden="true" />
-              Odstrániť rastlinu
-            </button>
-          </section>
-        ) : null}
+              <h2 id="delete-plant-title">Odstrániť rastlinu</h2>
+            </div>
+            <p>Táto akcia odstráni rastlinu z tvojho zoznamu, dashboardu, QR exportu aj reportu.</p>
+          </div>
+          <button type="button" onClick={() => setDeleteFlowerId(flower.id)}>
+            <Trash2 size={18} aria-hidden="true" />
+            Odstrániť rastlinu
+          </button>
+        </section>
 
         {deleteFlowerId === flower.id ? (
           <div className="modal-backdrop" role="presentation">
