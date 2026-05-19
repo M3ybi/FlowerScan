@@ -71,7 +71,12 @@ const emptyRecord: StoredFlowerRecord = {
   lastTransplanted: "",
 };
 
-const store = () => getStore("flowscan");
+const store = () => {
+  const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+  const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+
+  return siteID && token ? getStore({ name: "flowscan", siteID, token }) : getStore("flowscan");
+};
 const householdRegistryKey = "households";
 
 export const headers = {
