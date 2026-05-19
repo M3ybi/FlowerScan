@@ -1,4 +1,6 @@
 import { getStore } from "@netlify/blobs";
+import type { StoredPlantDiagnostic } from "./diagnostics";
+import { sanitizeDiagnostics } from "./diagnostics";
 import { flowerReportMeta } from "./flowers";
 
 export type StoredFlowerRecord = {
@@ -42,6 +44,7 @@ export type StoredPushSubscription = {
 
 export type StoredPlantState = {
   customFlowers: StoredFlower[];
+  diagnostics: StoredPlantDiagnostic[];
   records: StoredFlowerRecords;
   removedFlowerIds: string[];
 };
@@ -184,6 +187,7 @@ export const sanitizePlantState = (value: unknown): StoredPlantState => {
     customFlowers: Array.isArray(input.customFlowers)
       ? input.customFlowers.map(sanitizeFlower).filter((flower): flower is StoredFlower => Boolean(flower)).slice(0, 120)
       : [],
+    diagnostics: sanitizeDiagnostics(input.diagnostics),
     records: sanitizeRecords(input.records),
     removedFlowerIds: Array.isArray(input.removedFlowerIds)
       ? input.removedFlowerIds.filter((id): id is string => typeof id === "string").map((id) => id.slice(0, 120)).slice(0, 200)
@@ -198,7 +202,7 @@ export const readPlantState = async () => {
   }
 
   const records = await readRecords();
-  return sanitizePlantState({ customFlowers: [], records, removedFlowerIds: [] });
+  return sanitizePlantState({ customFlowers: [], diagnostics: [], records, removedFlowerIds: [] });
 };
 
 export const writePlantState = async (state: StoredPlantState) => {

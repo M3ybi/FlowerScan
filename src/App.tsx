@@ -4,6 +4,7 @@ import {
   Bell,
   BellOff,
   CalendarDays,
+  Camera,
   Check,
   Droplets,
   FileDown,
@@ -48,6 +49,13 @@ import {
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
 } from "./utils/pushNotifications";
+import {
+  createDiagnosticId,
+  fetchPlantDiagnosis,
+  resizeDiagnosticImageFileToDataUrl,
+  sanitizeDiagnosticEntries,
+} from "./utils/diagnostics";
+import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
 
 const todayIsoDate = () => {
   const today = new Date();
@@ -284,6 +292,20 @@ const mergeCloudRecords = (localRecords: FlowerRecords, cloudRecords: FlowerReco
   ) as FlowerRecords;
 };
 
+const diagnosticsStorageKey = "flowscan-plant-diagnostics-v1";
+
+const readStoredDiagnostics = () => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    return sanitizeDiagnosticEntries(JSON.parse(window.localStorage.getItem(diagnosticsStorageKey) ?? "[]"));
+  } catch {
+    return [];
+  }
+};
+
 const useHashRoute = () => {
   const [hash, setHash] = useState(() => window.location.hash || "#/");
 
@@ -357,10 +379,21 @@ export const App = () => {
   const [draftFlowerName, setDraftFlowerName] = useState("");
   const [pushStatus, setPushStatus] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<PlantDiagnosticEntry[]>(() => readStoredDiagnostics());
+  const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false);
+  const [diagnosisImageDataUrl, setDiagnosisImageDataUrl] = useState("");
+  const [diagnosisDraft, setDiagnosisDraft] = useState<PlantDiagnosisDraft | null>(null);
+  const [diagnosisUserNote, setDiagnosisUserNote] = useState("");
+  const [diagnosisStatus, setDiagnosisStatus] = useState("");
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [route.page, "flowerId" in route ? route.flowerId : ""]);
+
+  useEffect(() => {
+    window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(diagnostics));
+  }, [diagnostics]);
 
   useEffect(() => {
     let cancelled = false;
@@ -379,6 +412,7 @@ export const App = () => {
         const settings = (await settingsResponse.json()) as { recipient?: string };
         const cloudState = (await recordsResponse.json()) as {
           customFlowers?: Flower[];
+          diagnostics?: PlantDiagnosticEntry[];
           records?: FlowerRecords;
           removedFlowerIds?: string[];
         };
@@ -392,6 +426,9 @@ export const App = () => {
         const cloudRemovedFlowerIds = Array.isArray(cloudState.removedFlowerIds) ? cloudState.removedFlowerIds : [];
         replaceCustomFlowers(cloudCustomFlowers.length > 0 ? cloudCustomFlowers : customFlowers);
         replaceRemovedFlowerIds(cloudRemovedFlowerIds.length > 0 ? cloudRemovedFlowerIds : removedFlowerIds);
+        if (Array.isArray(cloudState.diagnostics) && cloudState.diagnostics.length > 0) {
+          setDiagnostics(sanitizeDiagnosticEntries(cloudState.diagnostics));
+        }
         if (cloudState.records) {
           replaceRecords(mergeCloudRecords(records, cloudState.records));
         }
@@ -440,14 +477,14 @@ export const App = () => {
       void fetch("/.netlify/functions/plant-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customFlowers, records, removedFlowerIds }),
+        body: JSON.stringify({ customFlowers, diagnostics, records, removedFlowerIds }),
       }).catch(() => {
         setReportStatus("Cloud sync sa nepodaril. Lokálne zmeny sú uložené v tomto zariadení.");
       });
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [cloudSyncEnabled, cloudSyncReady, customFlowers, records, removedFlowerIds]);
+  }, [cloudSyncEnabled, cloudSyncReady, customFlowers, diagnostics, records, removedFlowerIds]);
 
   const reportRows = useMemo(() => getWateringReportRows(records, allFlowers), [allFlowers, records]);
   const qrLabelValidation = useMemo(
@@ -626,6 +663,81 @@ export const App = () => {
     cancelNameEdit();
   };
 
+  const openDiagnosisModal = () => {
+    setDiagnosisImageDataUrl("");
+    setDiagnosisDraft(null);
+    setDiagnosisUserNote("");
+    setDiagnosisStatus("");
+    setIsDiagnosisModalOpen(true);
+  };
+
+  const closeDiagnosisModal = () => {
+    if (isDiagnosing) {
+      return;
+    }
+
+    setIsDiagnosisModalOpen(false);
+  };
+
+  const handleDiagnosisImageChange = async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    try {
+      setDiagnosisStatus("Spracúvam fotku...");
+      setDiagnosisDraft(null);
+      const imageDataUrl = await resizeDiagnosticImageFileToDataUrl(file);
+      setDiagnosisImageDataUrl(imageDataUrl);
+      setDiagnosisStatus("Fotka je pripravená na AI diagnostiku.");
+    } catch (error) {
+      setDiagnosisImageDataUrl("");
+      setDiagnosisStatus(error instanceof Error ? error.message : "Fotku sa nepodarilo spracovať.");
+    }
+  };
+
+  const runPlantDiagnosis = async (flower: Flower) => {
+    if (!diagnosisImageDataUrl || isDiagnosing) {
+      return;
+    }
+
+    setIsDiagnosing(true);
+    setDiagnosisStatus("AI analyzuje fotku rastliny...");
+
+    try {
+      const diagnosis = await fetchPlantDiagnosis(flower.displayName, diagnosisImageDataUrl);
+      setDiagnosisDraft(diagnosis);
+      setDiagnosisStatus(diagnosis.confidence < 45 ? "Výsledok má nízku istotu. Skontroluj ho opatrne." : "");
+    } catch (error) {
+      setDiagnosisDraft(null);
+      setDiagnosisStatus(error instanceof Error ? error.message : "AI diagnostika zlyhala. Skús inú fotku.");
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
+
+  const savePlantDiagnosis = (flower: Flower, userConfirmation: DiagnosisConfirmation) => {
+    if (!diagnosisDraft || !diagnosisImageDataUrl || !flowerById.has(flower.id)) {
+      setDiagnosisStatus("Diagnostiku sa nepodarilo uložiť, rastlina už nie je dostupná.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const entry: PlantDiagnosticEntry = {
+      ...diagnosisDraft,
+      createdAt: now,
+      id: createDiagnosticId(),
+      imageDataUrl: diagnosisImageDataUrl,
+      plantId: flower.id,
+      updatedAt: now,
+      userConfirmation,
+      userNote: diagnosisUserNote.trim(),
+    };
+
+    setDiagnostics((current) => [entry, ...current]);
+    setIsDiagnosisModalOpen(false);
+  };
+
   const confirmRemoveCustomFlower = () => {
     if (!deleteFlowerId) {
       return;
@@ -663,6 +775,7 @@ export const App = () => {
     const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
     const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays) : [];
     const isEditingName = editingNameFlowerId === flower.id;
+    const flowerDiagnostics = diagnostics.filter((diagnosis) => diagnosis.plantId === flower.id);
 
     return (
       <main className="app-shell detail-shell">
@@ -739,6 +852,20 @@ export const App = () => {
               Presadená dnes
             </button>
           </div>
+        </section>
+
+        <section className="diagnosis-panel" aria-labelledby="diagnosis-title">
+          <div>
+            <div className="section-title">
+              <Camera size={18} aria-hidden="true" />
+              <h2 id="diagnosis-title">AI diagnostika problému</h2>
+            </div>
+            <p>Ak listy žltnú, hnednú alebo rastlina vädne, odfoť postihnutú časť a ulož výsledok do histórie.</p>
+          </div>
+          <button type="button" onClick={openDiagnosisModal}>
+            <Camera size={18} aria-hidden="true" />
+            Rastlina vyzerá zle
+          </button>
         </section>
 
         {flower.identification === "confident" ? null : (
@@ -901,6 +1028,38 @@ export const App = () => {
           </label>
         </section>
 
+        <section className="diagnostic-history-panel" aria-labelledby="diagnostic-history-title">
+          <div className="section-title">
+            <Camera size={18} aria-hidden="true" />
+            <h2 id="diagnostic-history-title">História diagnostiky</h2>
+          </div>
+          {flowerDiagnostics.length === 0 ? (
+            <p>Zatiaľ tu nie je uložená žiadna diagnostika.</p>
+          ) : (
+            <div className="diagnostic-history-list">
+              {flowerDiagnostics.map((diagnosis) => (
+                <article className={`diagnostic-history-card diagnostic-risk-${diagnosis.riskLevel}`} key={diagnosis.id}>
+                  <img src={diagnosis.imageDataUrl} alt={`Diagnostika ${diagnosis.diagnosisTitle}`} />
+                  <div>
+                    <span>{formatDate(diagnosis.createdAt.slice(0, 10))}</span>
+                    <h3>{diagnosis.diagnosisTitle}</h3>
+                    <p>
+                      {diagnosis.confidence}% – {diagnosis.confidenceLabel} istota ·{" "}
+                      {diagnosis.userConfirmation === "confirmed" ? "uložené ako správne" : "označené ako nesprávne"}
+                    </p>
+                    <ol>
+                      {diagnosis.recommendedSteps.slice(0, 4).map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                    {diagnosis.userNote ? <small>Poznámka: {diagnosis.userNote}</small> : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="qr-panel" aria-labelledby="single-qr-title">
           <div>
             <div className="section-title">
@@ -974,6 +1133,106 @@ export const App = () => {
                   Nie
                 </button>
               </div>
+            </section>
+          </div>
+        ) : null}
+
+        {isDiagnosisModalOpen ? (
+          <div className="modal-backdrop" role="presentation">
+            <section className="diagnosis-modal" role="dialog" aria-modal="true" aria-labelledby="diagnosis-modal-title">
+              <button className="modal-close" type="button" onClick={closeDiagnosisModal} aria-label="Zavrieť">
+                <X size={20} aria-hidden="true" />
+              </button>
+              <div className="section-title">
+                <Camera size={20} aria-hidden="true" />
+                <h2 id="diagnosis-modal-title">Rastlina vyzerá zle</h2>
+              </div>
+              <p>Pridaj ostrú fotku postihnutého listu alebo časti rastliny. AI výsledok je iba odhad.</p>
+
+              <label className="diagnosis-upload">
+                <span className="image-upload-icon">
+                  <ImagePlus size={19} aria-hidden="true" />
+                </span>
+                <span className="image-upload-copy">
+                  <strong>Vybrať alebo odfotiť problém</strong>
+                  <small>JPG, PNG, WEBP · max 8 MB</small>
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  onChange={(event) => {
+                    void handleDiagnosisImageChange(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+
+              {diagnosisImageDataUrl ? <img className="diagnosis-preview" src={diagnosisImageDataUrl} alt="Náhľad diagnostickej fotky" /> : null}
+              {diagnosisStatus ? <p className="care-preview-status">{diagnosisStatus}</p> : null}
+
+              <button
+                className="primary-action diagnosis-run-button"
+                type="button"
+                disabled={!diagnosisImageDataUrl || isDiagnosing}
+                onClick={() => runPlantDiagnosis(flower)}
+              >
+                {isDiagnosing ? "Analyzujem..." : "Spustiť AI diagnostiku"}
+              </button>
+
+              {diagnosisDraft ? (
+                <div className={`diagnosis-result diagnosis-risk-${diagnosisDraft.riskLevel}`}>
+                  <div className="diagnosis-result-head">
+                    <div>
+                      <span>Diagnóza</span>
+                      <h3>{diagnosisDraft.diagnosisTitle}</h3>
+                    </div>
+                    <strong>
+                      {diagnosisDraft.confidence}% – {diagnosisDraft.confidenceLabel} istota
+                    </strong>
+                  </div>
+                  <div className="diagnosis-result-grid">
+                    <section>
+                      <h4>AI si všimla</h4>
+                      <ul>
+                        {diagnosisDraft.observedSymptoms.map((symptom) => (
+                          <li key={symptom}>{symptom}</li>
+                        ))}
+                      </ul>
+                    </section>
+                    <section>
+                      <h4>Odporúčané kroky</h4>
+                      <ol>
+                        {diagnosisDraft.recommendedSteps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    </section>
+                  </div>
+                  <section>
+                    <h4>Prečo táto diagnóza</h4>
+                    <p>{diagnosisDraft.reasoningSummary}</p>
+                  </section>
+                  <small>{diagnosisDraft.disclaimer}</small>
+                  <label className="field">
+                    <span>Upraviť poznámku pred uložením</span>
+                    <textarea
+                      rows={3}
+                      value={diagnosisUserNote}
+                      placeholder="Voliteľná vlastná poznámka k diagnostike."
+                      onChange={(event) => setDiagnosisUserNote(event.target.value)}
+                    />
+                  </label>
+                  <div className="modal-actions">
+                    <button className="primary-action" type="button" onClick={() => savePlantDiagnosis(flower, "confirmed")}>
+                      Uložiť diagnostiku
+                    </button>
+                    <button className="neutral-action" type="button" onClick={() => savePlantDiagnosis(flower, "rejected")}>
+                      Nie je to správne
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </section>
           </div>
         ) : null}
