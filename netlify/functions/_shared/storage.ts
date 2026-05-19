@@ -26,8 +26,18 @@ export type StoredFlower = {
   light: string;
   watering: string;
   wateringIntervalDays?: number;
+  notificationsEnabled?: boolean;
   soil: string;
   careTips: string[];
+};
+
+export type StoredPushSubscription = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
 };
 
 export type StoredPlantState = {
@@ -39,6 +49,7 @@ export type StoredPlantState = {
 export type ReportSettings = {
   recipient: string;
   lastSentDate: string;
+  lastPushNotificationDate?: string;
 };
 
 const emptyRecord: StoredFlowerRecord = {
@@ -157,6 +168,7 @@ const sanitizeFlower = (value: unknown): StoredFlower | null => {
     shortCare: flower.shortCare.slice(0, 300),
     soil: flower.soil.slice(0, 300),
     source: flower.source === "built-in" ? "built-in" : "custom",
+    notificationsEnabled: flower.notificationsEnabled !== false,
     watering: flower.watering.slice(0, 300),
     wateringIntervalDays:
       typeof flower.wateringIntervalDays === "number" && Number.isFinite(flower.wateringIntervalDays)
@@ -195,11 +207,62 @@ export const writePlantState = async (state: StoredPlantState) => {
   await writeRecords(sanitizedState.records);
 };
 
+export const sanitizePushSubscription = (value: unknown): StoredPushSubscription | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const subscription = value as Partial<StoredPushSubscription>;
+  const keys = subscription.keys;
+
+  if (
+    typeof subscription.endpoint !== "string" ||
+    !subscription.endpoint.startsWith("https://") ||
+    !keys ||
+    typeof keys.auth !== "string" ||
+    typeof keys.p256dh !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    endpoint: subscription.endpoint.slice(0, 2000),
+    expirationTime:
+      typeof subscription.expirationTime === "number" && Number.isFinite(subscription.expirationTime)
+        ? subscription.expirationTime
+        : null,
+    keys: {
+      auth: keys.auth.slice(0, 500),
+      p256dh: keys.p256dh.slice(0, 500),
+    },
+  };
+};
+
+export const readPushSubscriptions = async () => {
+  const subscriptions = await store().get("push-subscriptions", { type: "json" });
+  return Array.isArray(subscriptions)
+    ? subscriptions.map(sanitizePushSubscription).filter((subscription): subscription is StoredPushSubscription => Boolean(subscription))
+    : [];
+};
+
+export const writePushSubscriptions = async (subscriptions: StoredPushSubscription[]) => {
+  const uniqueSubscriptions = new Map(
+    subscriptions
+      .map(sanitizePushSubscription)
+      .filter((subscription): subscription is StoredPushSubscription => Boolean(subscription))
+      .map((subscription) => [subscription.endpoint, subscription]),
+  );
+
+  await store().setJSON("push-subscriptions", [...uniqueSubscriptions.values()]);
+};
+
 export const readSettings = async (): Promise<ReportSettings> => {
   const settings = (await store().get("settings", { type: "json" })) as Partial<ReportSettings> | null;
   return {
     recipient: typeof settings?.recipient === "string" ? settings.recipient : "",
     lastSentDate: typeof settings?.lastSentDate === "string" ? settings.lastSentDate : "",
+    lastPushNotificationDate:
+      typeof settings?.lastPushNotificationDate === "string" ? settings.lastPushNotificationDate : "",
   };
 };
 

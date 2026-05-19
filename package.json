@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test:notifications": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node netlify/functions/_shared/notifications.ts tests/notifications.test.ts && node --test .tmp-tests/tests/notifications.test.js"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.7",
@@ -15,12 +16,14 @@
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.1"

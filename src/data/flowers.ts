@@ -15,6 +15,7 @@ export type Flower = {
   light: string;
   watering: string;
   wateringIntervalDays?: number;
+  notificationsEnabled?: boolean;
   soil: string;
   careTips: string[];
 };

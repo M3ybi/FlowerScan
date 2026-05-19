@@ -1,6 +1,8 @@
 import {
   ArrowLeft,
   BadgeCheck,
+  Bell,
+  BellOff,
   CalendarDays,
   Check,
   Droplets,
@@ -41,6 +43,11 @@ import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
 import { createMailtoReportUrl, getWateringReportRows, reportThresholdPercent } from "./utils/report";
 import { getWateringProgress } from "./utils/watering";
+import {
+  isPushNotificationSupported,
+  subscribeToPushNotifications,
+  unsubscribeFromPushNotifications,
+} from "./utils/pushNotifications";
 
 const todayIsoDate = () => {
   const today = new Date();
@@ -348,6 +355,8 @@ export const App = () => {
   const [isGeneratingCarePreview, setIsGeneratingCarePreview] = useState(false);
   const [editingNameFlowerId, setEditingNameFlowerId] = useState("");
   const [draftFlowerName, setDraftFlowerName] = useState("");
+  const [pushStatus, setPushStatus] = useState("");
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -408,6 +417,21 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
+    if (!isPushNotificationSupported()) {
+      setPushStatus("Tento prehliadač nepodporuje push notifikácie.");
+      return;
+    }
+
+    void navigator.serviceWorker
+      .getRegistration()
+      .then((registration) => registration?.pushManager.getSubscription() ?? null)
+      .then((subscription) => {
+        setPushEnabled(Boolean(subscription));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (!cloudSyncReady || !cloudSyncEnabled) {
       return;
     }
@@ -454,6 +478,28 @@ export const App = () => {
     } catch {
       window.localStorage.setItem("flowscan-report-recipient-v1", recipient);
       setReportStatus("Príjemca je uložený lokálne. Automatické odosielanie potrebuje Netlify backend.");
+    }
+  };
+
+  const enablePushNotifications = async () => {
+    try {
+      setPushStatus("Zapínam push notifikácie...");
+      await subscribeToPushNotifications();
+      setPushEnabled(true);
+      setPushStatus("Push notifikácie sú zapnuté pre toto zariadenie.");
+    } catch (error) {
+      setPushStatus(error instanceof Error ? error.message : "Push notifikácie sa nepodarilo zapnúť.");
+    }
+  };
+
+  const disablePushNotifications = async () => {
+    try {
+      setPushStatus("Vypínam push notifikácie...");
+      await unsubscribeFromPushNotifications();
+      setPushEnabled(false);
+      setPushStatus("Push notifikácie sú vypnuté pre toto zariadenie.");
+    } catch (error) {
+      setPushStatus(error instanceof Error ? error.message : "Push notifikácie sa nepodarilo vypnúť.");
     }
   };
 
@@ -805,6 +851,17 @@ export const App = () => {
             <Pencil size={18} aria-hidden="true" />
             <h2 id="care-log-title">Záznam starostlivosti</h2>
           </div>
+          <label className="toggle-field">
+            <span>
+              <Bell size={18} aria-hidden="true" />
+              Notifikácie pre túto rastlinu
+            </span>
+            <input
+              type="checkbox"
+              checked={flower.notificationsEnabled !== false}
+              onChange={(event) => updateFlower({ ...flower, notificationsEnabled: event.target.checked, source: "custom" })}
+            />
+          </label>
           <label className="field">
             <span>Dátum poslednej zálievky</span>
             <div className="date-row">
@@ -1046,6 +1103,21 @@ export const App = () => {
             Každý deň o 19:00 sa majú poslať iba rastliny pod {reportThresholdPercent} % zálievky.
             Rastliny nad {reportThresholdPercent} % sa do reportu nezahrnú.
           </p>
+          <div className="push-settings">
+            <div>
+              <div className="section-title">
+                {pushEnabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}
+                <h2>Mobilné push notifikácie</h2>
+              </div>
+              <p>
+                Push notifikácia sa pošle ráno iba vtedy, keď sú rastliny na zálievku dnes. Prázdna notifikácia sa neposiela.
+              </p>
+              {pushStatus ? <small>{pushStatus}</small> : null}
+            </div>
+            <button type="button" onClick={pushEnabled ? disablePushNotifications : enablePushNotifications}>
+              {pushEnabled ? "Vypnúť push" : "Zapnúť push"}
+            </button>
+          </div>
           <div className="report-settings">
             <label className="field">
               <span>Príjemca emailu</span>

@@ -953,6 +953,61 @@ textarea:focus-visible {
   gap: 7px;
 }
 
+.toggle-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(47, 106, 81, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.toggle-field span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand);
+  font-weight: 900;
+}
+
+.toggle-field input {
+  width: 46px;
+  height: 26px;
+  flex: 0 0 46px;
+  appearance: none;
+  border: 1px solid rgba(18, 61, 49, 0.18);
+  border-radius: 999px;
+  background: #d7d1c6;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.toggle-field input::before {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 2px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(39, 33, 23, 0.18);
+  transition: transform 140ms ease;
+  content: "";
+}
+
+.toggle-field input:checked {
+  border-color: rgba(47, 106, 81, 0.4);
+  background: var(--brand-2);
+}
+
+.toggle-field input:checked::before {
+  transform: translateX(20px);
+}
+
 .image-upload {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1247,11 +1302,41 @@ textarea:focus-visible {
   margin-top: 16px;
 }
 
+.push-settings {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(47, 106, 81, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.push-settings .section-title {
+  margin-bottom: 6px;
+}
+
+.push-settings p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.push-settings small {
+  display: block;
+  margin-top: 8px;
+  color: var(--accent);
+  font-weight: 800;
+}
+
 .report-settings .field {
   margin-top: 0;
 }
 
 .report-settings button,
+.push-settings button,
 .report-mailto {
   display: inline-flex;
   min-height: 46px;
@@ -1268,7 +1353,8 @@ textarea:focus-visible {
     opacity 140ms ease;
 }
 
-.report-settings button {
+.report-settings button,
+.push-settings button {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent),
     linear-gradient(135deg, var(--brand), var(--brand-2));
@@ -1283,6 +1369,7 @@ textarea:focus-visible {
 }
 
 .report-settings button:hover,
+.push-settings button:hover,
 .report-mailto:hover {
   transform: translateY(-1px);
 }
@@ -2088,6 +2175,10 @@ textarea:focus-visible {
   }
 
   .report-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .push-settings {
     grid-template-columns: 1fr;
   }
 
