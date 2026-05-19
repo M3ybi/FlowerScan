@@ -6,8 +6,8 @@ export const qrLabelSpec = {
   pageWidthMm: 210,
   pageHeightMm: 297,
   pageMarginMm: 10,
-  labelSizeMm: 16,
-  qrSizeMm: 14,
+  labelSizeMm: 14,
+  qrSizeMm: 12,
   quietZoneMm: 1,
   labelGapMm: 4,
 };
@@ -67,8 +67,8 @@ export const validateQrLabelLayout = (items: QrLabelLayoutItem[]) => {
   return {
     isValid: !invalidItem,
     message: invalidItem
-      ? `Neplatný QR štítok pre ${invalidItem.flowerId}. Očakávaný rozmer je 16 x 16 mm a payload musí obsahovať plantId.`
-      : "QR štítky majú rozmer 16 x 16 mm a payload obsahuje plantId.",
+      ? `Neplatný QR štítok pre ${invalidItem.flowerId}. Očakávaný rozmer je ${qrLabelSpec.labelSizeMm} x ${qrLabelSpec.labelSizeMm} mm a payload musí obsahovať plantId.`
+      : `QR štítky majú rozmer ${qrLabelSpec.labelSizeMm} x ${qrLabelSpec.labelSizeMm} mm a payload obsahuje plantId.`,
   };
 };
 
