@@ -294,7 +294,7 @@ const applyGeneratedCareToFlower = (flower: Flower, nextCare: GeneratedCare): Fl
 };
 
 const recordHasValue = (record: FlowerRecords[string] | undefined) =>
-  Boolean(record?.note || record?.lastWatered || record?.lastTransplanted);
+  Boolean(record?.note || record?.lastFertilized || record?.lastWatered || record?.lastTransplanted);
 
 const mergeCloudRecords = (localRecords: FlowerRecords, cloudRecords: FlowerRecords) => {
   const flowerIds = new Set([...Object.keys(localRecords), ...Object.keys(cloudRecords)]);
@@ -973,7 +973,7 @@ export const App = () => {
       );
     }
 
-    const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
+    const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
     const elapsedDays = daysSince(record.lastWatered);
     const detailUrl = publicFlowerUrl(baseUrl, flower.id);
     const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
@@ -1039,7 +1039,7 @@ export const App = () => {
           <div>
             <span>{quickActionLabel}</span>
             <h2 id="quick-action-title">Čo sa dnes udialo?</h2>
-            <p>Ulož dnešný dátum zálievky alebo presadenia jedným klepnutím.</p>
+            <p>Ulož dnešný dátum zálievky, presadenia alebo hnojenia jedným klepnutím.</p>
           </div>
           <div className="scan-action-buttons">
             <button
@@ -1057,6 +1057,14 @@ export const App = () => {
             >
               <Sprout size={18} aria-hidden="true" />
               Presadená dnes
+            </button>
+            <button
+              className="ghost-action"
+              type="button"
+              onClick={() => updateRecord(flower.id, { lastFertilized: todayIsoDate() })}
+            >
+              <Leaf size={18} aria-hidden="true" />
+              Pohnojená dnes
             </button>
           </div>
         </section>
@@ -1097,6 +1105,10 @@ export const App = () => {
           <div>
             <span>Presadené</span>
             <strong>{formatDate(record.lastTransplanted)}</strong>
+          </div>
+          <div>
+            <span>Pohnojené</span>
+            <strong>{formatDate(record.lastFertilized)}</strong>
           </div>
         </section>
 
@@ -1225,10 +1237,24 @@ export const App = () => {
             </div>
           </label>
           <label className="field">
+            <span>Dátum pohnojenia</span>
+            <div className="date-row">
+              <input
+                type="date"
+                value={record.lastFertilized}
+                max="9999-12-31"
+                onChange={(event) => updateRecord(flower.id, { lastFertilized: event.target.value })}
+              />
+              <button type="button" onClick={() => updateRecord(flower.id, { lastFertilized: todayIsoDate() })}>
+                Dnes
+              </button>
+            </div>
+          </label>
+          <label className="field">
             <span>Poznámka</span>
             <textarea
               rows={5}
-              placeholder="Pozorovania, hnojenie, plán presadenia alebo čokoľvek užitočné."
+              placeholder="Pozorovania, plán presadenia alebo čokoľvek užitočné."
               value={record.note}
               onChange={(event) => updateRecord(flower.id, { note: event.target.value })}
             />
@@ -1765,7 +1791,7 @@ export const App = () => {
 
       <section className="flower-grid" aria-label="Prehľad rastlín">
         {filteredFlowers.map((flower) => {
-          const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
+          const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
           const elapsedDays = daysSince(record.lastWatered);
           const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
           const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
@@ -1802,6 +1828,10 @@ export const App = () => {
                   <span>
                     <Sprout size={15} aria-hidden="true" />
                     {formatDate(record.lastTransplanted)}
+                  </span>
+                  <span>
+                    <Leaf size={15} aria-hidden="true" />
+                    {formatDate(record.lastFertilized)}
                   </span>
                 </div>
               </div>

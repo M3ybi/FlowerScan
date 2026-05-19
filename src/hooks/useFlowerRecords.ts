@@ -3,6 +3,7 @@ import type { Flower } from "../data/flowers";
 
 export type FlowerRecord = {
   note: string;
+  lastFertilized: string;
   lastWatered: string;
   lastTransplanted: string;
 };
@@ -12,6 +13,7 @@ export type FlowerRecords = Record<string, FlowerRecord>;
 const storageKey = "flowscan-flower-records-v1";
 
 const emptyRecord: FlowerRecord = {
+  lastFertilized: "",
   note: "",
   lastWatered: "",
   lastTransplanted: "",
@@ -21,6 +23,7 @@ const createInitialRecords = (flowers: Flower[]): FlowerRecords =>
   Object.fromEntries(flowers.map((flower) => [flower.id, { ...emptyRecord }]));
 
 const sanitizeRecord = (record: Partial<FlowerRecord> | undefined): FlowerRecord => ({
+  lastFertilized: typeof record?.lastFertilized === "string" ? record.lastFertilized : "",
   note: typeof record?.note === "string" ? record.note : "",
   lastWatered: typeof record?.lastWatered === "string" ? record.lastWatered : "",
   lastTransplanted: typeof record?.lastTransplanted === "string" ? record.lastTransplanted : "",

@@ -9,7 +9,7 @@ export const reportThresholdPercent = 20;
 export const getWateringReportRows = (records: FlowerRecords, flowers: Flower[]) =>
   flowers
     .map((flower) => {
-      const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
+      const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
       const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
       const progress = getWateringProgress(record.lastWatered, intervalDays);
 

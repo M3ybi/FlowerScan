@@ -6,6 +6,7 @@ import { flowerReportMeta } from "./flowers";
 import { createHouseholdScopedKey, isValidHouseholdTokenValue } from "./household-scope";
 
 export type StoredFlowerRecord = {
+  lastFertilized: string;
   note: string;
   lastWatered: string;
   lastTransplanted: string;
@@ -66,6 +67,7 @@ export type StoredHousehold = {
 };
 
 const emptyRecord: StoredFlowerRecord = {
+  lastFertilized: "",
   note: "",
   lastWatered: "",
   lastTransplanted: "",
@@ -247,6 +249,7 @@ export const sanitizeRecords = (value: unknown): StoredFlowerRecords => {
       return [
         flower.id,
         {
+          lastFertilized: typeof record?.lastFertilized === "string" ? record.lastFertilized : "",
           note: typeof record?.note === "string" ? record.note.slice(0, 4000) : "",
           lastWatered: typeof record?.lastWatered === "string" ? record.lastWatered : "",
           lastTransplanted: typeof record?.lastTransplanted === "string" ? record.lastTransplanted : "",
@@ -261,6 +264,7 @@ export const sanitizeRecords = (value: unknown): StoredFlowerRecords => {
       .map(([flowerId, record]) => [
         flowerId,
         {
+          lastFertilized: typeof record?.lastFertilized === "string" ? record.lastFertilized : "",
           note: typeof record?.note === "string" ? record.note.slice(0, 4000) : "",
           lastWatered: typeof record?.lastWatered === "string" ? record.lastWatered : "",
           lastTransplanted: typeof record?.lastTransplanted === "string" ? record.lastTransplanted : "",

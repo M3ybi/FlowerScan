@@ -94,7 +94,7 @@ const createReportFlowers = (customFlowers: StoredFlower[] = [], removedFlowerId
 export const getReportRows = (records: StoredFlowerRecords, customFlowers: StoredFlower[] = [], removedFlowerIds: string[] = []) =>
   createReportFlowers(customFlowers, removedFlowerIds)
     .map((flower) => {
-      const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
+      const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
       const progress = progressFor(record.lastWatered, flower.intervalDays);
 
       return {
