@@ -3,7 +3,6 @@ import {
   BadgeCheck,
   Bell,
   BellOff,
-  CalendarDays,
   Camera,
   Check,
   Copy,
@@ -407,6 +406,7 @@ export const App = () => {
   const [diagnosisUserNote, setDiagnosisUserNote] = useState("");
   const [diagnosisStatus, setDiagnosisStatus] = useState("");
   const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [quickRecordStatus, setQuickRecordStatus] = useState("");
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -415,6 +415,15 @@ export const App = () => {
   useEffect(() => {
     window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(diagnostics));
   }, [diagnostics]);
+
+  useEffect(() => {
+    if (!quickRecordStatus) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setQuickRecordStatus(""), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [quickRecordStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -651,6 +660,11 @@ export const App = () => {
     } catch (error) {
       setQrExportStatus(error instanceof Error ? error.message : "PDF export zlyhal.");
     }
+  };
+
+  const saveQuickRecord = (flowerId: string, patch: Partial<FlowerRecords[string]>, message: string) => {
+    updateRecord(flowerId, patch);
+    setQuickRecordStatus(message);
   };
 
   const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
@@ -991,7 +1005,7 @@ export const App = () => {
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
-            <p className="eyebrow">{flower.likelyName}</p>
+            <p className="eyebrow">Detail rastliny</p>
             {isEditingName ? (
               <div className="plant-name-editor">
                 <input
@@ -1030,6 +1044,7 @@ export const App = () => {
                 </button>
               </div>
             )}
+            <p className="plant-latin-name">{flower.likelyName}</p>
           </div>
         </header>
 
@@ -1043,29 +1058,33 @@ export const App = () => {
           </div>
           <div className="scan-action-buttons">
             <button
-              className="primary-action"
+              className={`primary-action ${quickRecordStatus === "Zálievka uložená" ? "quick-action-saved" : ""}`}
               type="button"
-              onClick={() => updateRecord(flower.id, { lastWatered: todayIsoDate() })}
+              onClick={() => saveQuickRecord(flower.id, { lastWatered: todayIsoDate() }, "Zálievka uložená")}
             >
-              <Check size={18} aria-hidden="true" />
+              <Droplets size={18} aria-hidden="true" />
               Zaliata dnes
             </button>
             <button
-              className="ghost-action"
+              className={`ghost-action ${quickRecordStatus === "Presadenie uložené" ? "quick-action-saved" : ""}`}
               type="button"
-              onClick={() => updateRecord(flower.id, { lastTransplanted: todayIsoDate() })}
+              onClick={() => saveQuickRecord(flower.id, { lastTransplanted: todayIsoDate() }, "Presadenie uložené")}
             >
               <Sprout size={18} aria-hidden="true" />
               Presadená dnes
             </button>
             <button
-              className="ghost-action"
+              className={`ghost-action ${quickRecordStatus === "Hnojenie uložené" ? "quick-action-saved" : ""}`}
               type="button"
-              onClick={() => updateRecord(flower.id, { lastFertilized: todayIsoDate() })}
+              onClick={() => saveQuickRecord(flower.id, { lastFertilized: todayIsoDate() }, "Hnojenie uložené")}
             >
               <Leaf size={18} aria-hidden="true" />
               Pohnojená dnes
             </button>
+            <div className={`quick-save-feedback ${quickRecordStatus ? "quick-save-feedback-visible" : ""}`} aria-live="polite">
+              <Check size={16} aria-hidden="true" />
+              {quickRecordStatus || "Záznam uložený"}
+            </div>
           </div>
         </section>
 
@@ -1792,7 +1811,6 @@ export const App = () => {
       <section className="flower-grid" aria-label="Prehľad rastlín">
         {filteredFlowers.map((flower) => {
           const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
-          const elapsedDays = daysSince(record.lastWatered);
           const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
           const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
 
@@ -1805,7 +1823,6 @@ export const App = () => {
                   <span>{flower.identification === "confident" ? "overené ID" : flower.identification === "likely" ? "pravdepodobné ID" : "overiť ID"}</span>
                 </div>
                 <h2>{flower.displayName}</h2>
-                <p>{flower.likelyName}</p>
                 <div className={`image-watering image-watering-${wateringProgress.state}`}>
                   <div className="image-watering-label">
                     <span>Zálievka</span>
@@ -1815,24 +1832,6 @@ export const App = () => {
                     <div className="image-progress-fill" style={{ width: `${wateringProgress.percent}%` }} />
                   </div>
                   <small>{wateringProgress.statusText}</small>
-                </div>
-                <div className="flower-meta">
-                  <span>
-                    <Droplets size={15} aria-hidden="true" />
-                    {formatElapsedDays(elapsedDays)}
-                  </span>
-                  <span>
-                    <CalendarDays size={15} aria-hidden="true" />
-                    {formatDate(record.lastWatered)}
-                  </span>
-                  <span>
-                    <Sprout size={15} aria-hidden="true" />
-                    {formatDate(record.lastTransplanted)}
-                  </span>
-                  <span>
-                    <Leaf size={15} aria-hidden="true" />
-                    {formatDate(record.lastFertilized)}
-                  </span>
                 </div>
               </div>
             </a>
