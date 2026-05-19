@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Camera,
   Check,
+  Copy,
   Droplets,
   FileDown,
   ImagePlus,
@@ -40,6 +41,17 @@ import {
 } from "./utils/customFlower";
 import type { GeneratedCare } from "./utils/customFlower";
 import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
+import {
+  clearHouseholdSession,
+  createHouseholdApiUrl,
+  createHouseholdUrl,
+  getHouseholdTokenFromUrl,
+  getStoredHouseholdSession,
+  isValidHouseholdToken,
+  removeHouseholdFromCurrentUrl,
+  storeHouseholdSession,
+} from "./utils/household";
+import type { HouseholdSession } from "./utils/household";
 import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
 import { createMailtoReportUrl, getWateringReportRows, reportThresholdPercent } from "./utils/report";
@@ -78,6 +90,9 @@ const currentBaseUrl = () => {
   const { origin, pathname } = window.location;
   return `${origin}${pathname}`;
 };
+
+const currentHouseholdBaseUrl = (householdToken: string) =>
+  isValidHouseholdToken(householdToken) ? createHouseholdUrl(householdToken, "").replace(/#\/?$/, "") : currentBaseUrl();
 
 const publicFlowerUrl = (baseUrl: string, flowerId: string) =>
   `${normalizeBaseUrl(baseUrl)}${flowerPath(flowerId, true)}`;
@@ -361,6 +376,12 @@ export const App = () => {
   const { records, replaceRecords, updateRecord } = useFlowerRecords(allFlowers);
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
+  const [activeHousehold, setActiveHousehold] = useState<HouseholdSession | null>(() => getStoredHouseholdSession());
+  const [accessStatus, setAccessStatus] = useState("");
+  const [householdNameDraft, setHouseholdNameDraft] = useState("Moja domácnosť");
+  const [householdLinkStatus, setHouseholdLinkStatus] = useState("");
+  const [isAccessChecking, setIsAccessChecking] = useState(true);
+  const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
   const [reportRecipient, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
   const [reportStatus, setReportStatus] = useState("Denný report sa odosiela o 19:00, keď je aplikácia nasadená cez Netlify.");
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
@@ -398,11 +419,73 @@ export const App = () => {
   useEffect(() => {
     let cancelled = false;
 
+    const resolveHousehold = async () => {
+      const urlToken = getHouseholdTokenFromUrl();
+      const storedHousehold = getStoredHouseholdSession();
+      const token = urlToken || storedHousehold?.publicToken || "";
+
+      if (!token) {
+        setActiveHousehold(null);
+        setAccessStatus("");
+        setIsAccessChecking(false);
+        return;
+      }
+
+      try {
+        setIsAccessChecking(true);
+        const response = await fetch(createHouseholdApiUrl("/.netlify/functions/household-access", token));
+        if (!response.ok) {
+          throw new Error("Household access failed.");
+        }
+
+        const data = (await response.json()) as { household?: HouseholdSession };
+        if (!data.household || !isValidHouseholdToken(data.household.publicToken)) {
+          throw new Error("Invalid household response.");
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        storeHouseholdSession(data.household);
+        setActiveHousehold(data.household);
+        setBaseUrl(currentHouseholdBaseUrl(data.household.publicToken));
+        setAccessStatus("");
+      } catch {
+        if (!cancelled) {
+          clearHouseholdSession();
+          setActiveHousehold(null);
+          setCloudSyncEnabled(false);
+          setAccessStatus("Link domácnosti nie je platný alebo už nie je dostupný.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAccessChecking(false);
+        }
+      }
+    };
+
+    void resolveHousehold();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeHousehold) {
+      setCloudSyncReady(false);
+      return;
+    }
+
+    let cancelled = false;
+
     const loadCloudState = async () => {
       try {
+        setCloudSyncReady(false);
         const [settingsResponse, recordsResponse] = await Promise.all([
-          fetch("/.netlify/functions/report-settings"),
-          fetch("/.netlify/functions/plant-state"),
+          fetch(createHouseholdApiUrl("/.netlify/functions/report-settings", activeHousehold.publicToken)),
+          fetch(createHouseholdApiUrl("/.netlify/functions/plant-state", activeHousehold.publicToken)),
         ]);
 
         if (!settingsResponse.ok || !recordsResponse.ok) {
@@ -451,7 +534,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeHousehold]);
 
   useEffect(() => {
     if (!isPushNotificationSupported()) {
@@ -469,22 +552,22 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!cloudSyncReady || !cloudSyncEnabled) {
+    if (!activeHousehold || !cloudSyncReady || !cloudSyncEnabled) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      void fetch("/.netlify/functions/plant-state", {
+      void fetch(createHouseholdApiUrl("/.netlify/functions/plant-state", activeHousehold.publicToken), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customFlowers, diagnostics, records, removedFlowerIds }),
+        body: JSON.stringify({ customFlowers, diagnostics, householdId: activeHousehold.publicToken, records, removedFlowerIds }),
       }).catch(() => {
         setReportStatus("Cloud sync sa nepodaril. Lokálne zmeny sú uložené v tomto zariadení.");
       });
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [cloudSyncEnabled, cloudSyncReady, customFlowers, diagnostics, records, removedFlowerIds]);
+  }, [activeHousehold, cloudSyncEnabled, cloudSyncReady, customFlowers, diagnostics, records, removedFlowerIds]);
 
   const reportRows = useMemo(() => getWateringReportRows(records, allFlowers), [allFlowers, records]);
   const qrLabelValidation = useMemo(
@@ -493,6 +576,11 @@ export const App = () => {
   );
 
   const saveReportRecipient = async () => {
+    if (!activeHousehold) {
+      setReportStatus("Najprv otvor alebo vytvor domácnosť.");
+      return;
+    }
+
     const recipient = reportRecipient.trim();
     if (!recipient) {
       setReportStatus("Najprv zadaj email príjemcu reportu.");
@@ -500,10 +588,10 @@ export const App = () => {
     }
 
     try {
-      const response = await fetch("/.netlify/functions/report-settings", {
+      const response = await fetch(createHouseholdApiUrl("/.netlify/functions/report-settings", activeHousehold.publicToken), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipient }),
+        body: JSON.stringify({ householdId: activeHousehold.publicToken, recipient }),
       });
 
       if (!response.ok) {
@@ -519,9 +607,14 @@ export const App = () => {
   };
 
   const enablePushNotifications = async () => {
+    if (!activeHousehold) {
+      setPushStatus("Najprv otvor alebo vytvor domácnosť.");
+      return;
+    }
+
     try {
       setPushStatus("Zapínam push notifikácie...");
-      await subscribeToPushNotifications();
+      await subscribeToPushNotifications(activeHousehold.publicToken);
       setPushEnabled(true);
       setPushStatus("Push notifikácie sú zapnuté pre toto zariadenie.");
     } catch (error) {
@@ -530,9 +623,14 @@ export const App = () => {
   };
 
   const disablePushNotifications = async () => {
+    if (!activeHousehold) {
+      setPushStatus("Najprv otvor alebo vytvor domácnosť.");
+      return;
+    }
+
     try {
       setPushStatus("Vypínam push notifikácie...");
-      await unsubscribeFromPushNotifications();
+      await unsubscribeFromPushNotifications(activeHousehold.publicToken);
       setPushEnabled(false);
       setPushStatus("Push notifikácie sú vypnuté pre toto zariadenie.");
     } catch (error) {
@@ -555,6 +653,65 @@ export const App = () => {
     }
   };
 
+  const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isCreatingHousehold) {
+      return;
+    }
+
+    try {
+      setIsCreatingHousehold(true);
+      setAccessStatus("Vytváram súkromnú domácnosť...");
+      const response = await fetch("/.netlify/functions/household-access", {
+        body: JSON.stringify({ name: householdNameDraft }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Household could not be created.");
+      }
+
+      const data = (await response.json()) as { household?: HouseholdSession };
+      if (!data.household || !isValidHouseholdToken(data.household.publicToken)) {
+        throw new Error("Invalid household response.");
+      }
+
+      storeHouseholdSession(data.household);
+      window.history.replaceState(null, "", createHouseholdUrl(data.household.publicToken));
+      setActiveHousehold(data.household);
+      setBaseUrl(currentHouseholdBaseUrl(data.household.publicToken));
+      setAccessStatus("");
+    } catch {
+      setAccessStatus("Domácnosť sa nepodarilo vytvoriť. Skontroluj Netlify backend a skús znova.");
+    } finally {
+      setIsCreatingHousehold(false);
+      setIsAccessChecking(false);
+    }
+  };
+
+  const copyHouseholdLink = async () => {
+    if (!activeHousehold) {
+      return;
+    }
+
+    const link = createHouseholdUrl(activeHousehold.publicToken);
+    try {
+      await navigator.clipboard.writeText(link);
+      setHouseholdLinkStatus("Link domácnosti je skopírovaný.");
+    } catch {
+      setHouseholdLinkStatus(link);
+    }
+  };
+
+  const changeHousehold = () => {
+    clearHouseholdSession();
+    removeHouseholdFromCurrentUrl();
+    setActiveHousehold(null);
+    setCloudSyncEnabled(false);
+    setCloudSyncReady(false);
+    setAccessStatus("");
+  };
 
   const filteredFlowers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -747,6 +904,56 @@ export const App = () => {
     setDeleteFlowerId("");
     window.location.hash = "#/";
   };
+
+  if (isAccessChecking) {
+    return (
+      <main className="app-shell access-shell">
+        <section className="access-card" aria-live="polite">
+          <div className="section-title">
+            <Home size={20} aria-hidden="true" />
+            <h1>Načítavam domácnosť</h1>
+          </div>
+          <p>Overujem súkromný link pred načítaním rastlín.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!activeHousehold) {
+    return (
+      <main className="app-shell access-shell">
+        <section className="access-card" aria-labelledby="access-title">
+          <div className="section-title">
+            <Home size={20} aria-hidden="true" />
+            <h1 id="access-title">Súkromná domácnosť</h1>
+          </div>
+          <p>
+            Rastliny sa už nezdieľajú globálne pre celý web. Otvor zdieľaný link domácnosti alebo vytvor nový súkromný
+            link pre svoju domácnosť.
+          </p>
+          <form className="access-form" onSubmit={handleCreateHousehold}>
+            <label className="field">
+              <span>Názov domácnosti</span>
+              <input
+                type="text"
+                value={householdNameDraft}
+                maxLength={80}
+                onChange={(event) => setHouseholdNameDraft(event.target.value)}
+              />
+            </label>
+            <button type="submit" disabled={isCreatingHousehold}>
+              <Plus size={18} aria-hidden="true" />
+              {isCreatingHousehold ? "Vytváram..." : "Vytvoriť domácnosť"}
+            </button>
+          </form>
+          {accessStatus ? <p className="access-status">{accessStatus}</p> : null}
+          <p className="access-note">
+            Link bude obsahovať náhodný tajný token. Pošli ho iba ľuďom, ktorí majú mať prístup k týmto rastlinám.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   if (route.page === "detail") {
     const flower = flowerById.get(route.flowerId);
@@ -1362,6 +1569,22 @@ export const App = () => {
             Každý deň o 19:00 sa majú poslať iba rastliny pod {reportThresholdPercent} % zálievky.
             Rastliny nad {reportThresholdPercent} % sa do reportu nezahrnú.
           </p>
+          <div className="household-panel household-panel-compact" aria-label="Aktívna domácnosť">
+            <div>
+              <span>Domácnosť</span>
+              <strong>{activeHousehold.name}</strong>
+              {householdLinkStatus ? <small>{householdLinkStatus}</small> : null}
+            </div>
+            <div className="household-actions">
+              <button type="button" onClick={copyHouseholdLink}>
+                <Copy size={17} aria-hidden="true" />
+                Kopírovať link
+              </button>
+              <button type="button" onClick={changeHousehold}>
+                Zmeniť domácnosť
+              </button>
+            </div>
+          </div>
           <div className="push-settings">
             <div>
               <div className="section-title">
@@ -1469,6 +1692,23 @@ export const App = () => {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+      </section>
+
+      <section className="household-panel" aria-label="Aktívna domácnosť">
+        <div>
+          <span>Domácnosť</span>
+          <strong>{activeHousehold.name}</strong>
+          {householdLinkStatus ? <small>{householdLinkStatus}</small> : null}
+        </div>
+        <div className="household-actions">
+          <button type="button" onClick={copyHouseholdLink}>
+            <Copy size={17} aria-hidden="true" />
+            Kopírovať link
+          </button>
+          <button type="button" onClick={changeHousehold}>
+            Zmeniť domácnosť
+          </button>
+        </div>
       </section>
 
       {isAddPlantModalOpen ? (

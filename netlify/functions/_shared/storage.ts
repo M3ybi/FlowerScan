@@ -1,7 +1,9 @@
 import { getStore } from "@netlify/blobs";
+import { randomBytes } from "node:crypto";
 import type { StoredPlantDiagnostic } from "./diagnostics";
 import { sanitizeDiagnostics } from "./diagnostics";
 import { flowerReportMeta } from "./flowers";
+import { createHouseholdScopedKey, isValidHouseholdTokenValue } from "./household-scope";
 
 export type StoredFlowerRecord = {
   note: string;
@@ -55,6 +57,14 @@ export type ReportSettings = {
   lastPushNotificationDate?: string;
 };
 
+export type StoredHousehold = {
+  id: string;
+  publicToken: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const emptyRecord: StoredFlowerRecord = {
   note: "",
   lastWatered: "",
@@ -62,6 +72,7 @@ const emptyRecord: StoredFlowerRecord = {
 };
 
 const store = () => getStore("flowscan");
+const householdRegistryKey = "households";
 
 export const headers = {
   "Access-Control-Allow-Headers": "Content-Type",
@@ -72,6 +83,154 @@ export const headers = {
 
 export const createEmptyRecords = (): StoredFlowerRecords =>
   Object.fromEntries(flowerReportMeta.map((flower) => [flower.id, { ...emptyRecord }]));
+
+export const isValidHouseholdToken = isValidHouseholdTokenValue;
+
+export const generateHouseholdToken = () => randomBytes(24).toString("base64url");
+
+export const getHouseholdTokenFromRequest = (event: { queryStringParameters?: Record<string, string | undefined> | null; headers: Record<string, string | undefined>; body?: string | null }) => {
+  const queryToken = event.queryStringParameters?.householdId ?? event.queryStringParameters?.household;
+  const headerToken = event.headers["x-household-id"] ?? event.headers["X-Household-Id"];
+
+  if (isValidHouseholdToken(queryToken)) {
+    return queryToken;
+  }
+
+  if (isValidHouseholdToken(headerToken)) {
+    return headerToken;
+  }
+
+  if (event.body) {
+    try {
+      const body = JSON.parse(event.body) as { householdId?: unknown; householdToken?: unknown };
+      const bodyToken = body.householdId ?? body.householdToken;
+      return isValidHouseholdToken(bodyToken) ? bodyToken : "";
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
+};
+
+const scopedKey = createHouseholdScopedKey;
+
+const sanitizeHousehold = (value: unknown): StoredHousehold | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const household = value as Partial<StoredHousehold>;
+  if (!isValidHouseholdToken(household.publicToken)) {
+    return null;
+  }
+
+  const createdAt = typeof household.createdAt === "string" ? household.createdAt : new Date().toISOString();
+  const updatedAt = typeof household.updatedAt === "string" ? household.updatedAt : createdAt;
+
+  return {
+    createdAt,
+    id: typeof household.id === "string" && household.id ? household.id.slice(0, 100) : household.publicToken,
+    name: typeof household.name === "string" && household.name.trim() ? household.name.trim().slice(0, 80) : "Moja domácnosť",
+    publicToken: household.publicToken,
+    updatedAt,
+  };
+};
+
+const sanitizeHouseholds = (value: unknown): StoredHousehold[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const unique = new Map<string, StoredHousehold>();
+  for (const item of value) {
+    const household = sanitizeHousehold(item);
+    if (household) {
+      unique.set(household.publicToken, household);
+    }
+  }
+
+  return [...unique.values()];
+};
+
+export const readHouseholds = async () => sanitizeHouseholds(await store().get(householdRegistryKey, { type: "json" }));
+
+const writeHouseholds = async (households: StoredHousehold[]) => {
+  await store().setJSON(householdRegistryKey, sanitizeHouseholds(households));
+};
+
+export const getHouseholdByToken = async (householdToken: string) => {
+  if (!isValidHouseholdToken(householdToken)) {
+    return null;
+  }
+
+  const households = await readHouseholds();
+  return households.find((household) => household.publicToken === householdToken) ?? null;
+};
+
+const readLegacyPlantState = async () => {
+  const state = await store().get("plant-state", { type: "json" });
+  if (state) {
+    return sanitizePlantState(state);
+  }
+
+  const records = await store().get("records", { type: "json" });
+  return sanitizePlantState({ customFlowers: [], diagnostics: [], records: records ?? createEmptyRecords(), removedFlowerIds: [] });
+};
+
+const migrateLegacyDataToHousehold = async (householdToken: string) => {
+  const existingState = await store().get(scopedKey(householdToken, "plant-state"), { type: "json" });
+  if (!existingState) {
+    await store().setJSON(scopedKey(householdToken, "plant-state"), await readLegacyPlantState());
+  }
+
+  const settings = await store().get("settings", { type: "json" });
+  if (settings && !(await store().get(scopedKey(householdToken, "settings"), { type: "json" }))) {
+    await store().setJSON(scopedKey(householdToken, "settings"), settings);
+  }
+
+  const subscriptions = await store().get("push-subscriptions", { type: "json" });
+  if (subscriptions && !(await store().get(scopedKey(householdToken, "push-subscriptions"), { type: "json" }))) {
+    await store().setJSON(scopedKey(householdToken, "push-subscriptions"), subscriptions);
+  }
+};
+
+export const createHousehold = async (name?: string) => {
+  const households = await readHouseholds();
+  const now = new Date().toISOString();
+  let publicToken = process.env.DEFAULT_HOUSEHOLD_TOKEN && households.length === 0 ? process.env.DEFAULT_HOUSEHOLD_TOKEN : generateHouseholdToken();
+
+  while (!isValidHouseholdToken(publicToken) || households.some((household) => household.publicToken === publicToken)) {
+    publicToken = generateHouseholdToken();
+  }
+
+  const household: StoredHousehold = {
+    createdAt: now,
+    id: publicToken,
+    name: typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : "Moja domácnosť",
+    publicToken,
+    updatedAt: now,
+  };
+
+  await writeHouseholds([household, ...households]);
+
+  if (households.length === 0) {
+    await migrateLegacyDataToHousehold(publicToken);
+  } else {
+    await store().setJSON(scopedKey(publicToken, "plant-state"), sanitizePlantState({}));
+  }
+
+  return household;
+};
+
+export const requireHousehold = async (householdToken: string) => {
+  const household = await getHouseholdByToken(householdToken);
+  if (!household) {
+    throw new Error("Household access is required.");
+  }
+
+  return household;
+};
 
 export const sanitizeRecords = (value: unknown): StoredFlowerRecords => {
   const input = value && typeof value === "object" ? (value as Partial<StoredFlowerRecords>) : {};
@@ -107,13 +266,15 @@ export const sanitizeRecords = (value: unknown): StoredFlowerRecords => {
   return { ...builtInRecords, ...dynamicRecords };
 };
 
-export const readRecords = async () => {
-  const records = await store().get("records", { type: "json" });
+export const readRecords = async (householdToken: string) => {
+  await requireHousehold(householdToken);
+  const records = await store().get(scopedKey(householdToken, "records"), { type: "json" });
   return sanitizeRecords(records ?? createEmptyRecords());
 };
 
-export const writeRecords = async (records: StoredFlowerRecords) => {
-  await store().setJSON("records", sanitizeRecords(records));
+export const writeRecords = async (householdToken: string, records: StoredFlowerRecords) => {
+  await requireHousehold(householdToken);
+  await store().setJSON(scopedKey(householdToken, "records"), sanitizeRecords(records));
 };
 
 const sanitizeFlower = (value: unknown): StoredFlower | null => {
@@ -195,20 +356,22 @@ export const sanitizePlantState = (value: unknown): StoredPlantState => {
   };
 };
 
-export const readPlantState = async () => {
-  const state = await store().get("plant-state", { type: "json" });
+export const readPlantState = async (householdToken: string) => {
+  await requireHousehold(householdToken);
+  const state = await store().get(scopedKey(householdToken, "plant-state"), { type: "json" });
   if (state) {
     return sanitizePlantState(state);
   }
 
-  const records = await readRecords();
+  const records = await readRecords(householdToken);
   return sanitizePlantState({ customFlowers: [], diagnostics: [], records, removedFlowerIds: [] });
 };
 
-export const writePlantState = async (state: StoredPlantState) => {
+export const writePlantState = async (householdToken: string, state: StoredPlantState) => {
+  await requireHousehold(householdToken);
   const sanitizedState = sanitizePlantState(state);
-  await store().setJSON("plant-state", sanitizedState);
-  await writeRecords(sanitizedState.records);
+  await store().setJSON(scopedKey(householdToken, "plant-state"), sanitizedState);
+  await store().setJSON(scopedKey(householdToken, "records"), sanitizedState.records);
 };
 
 export const sanitizePushSubscription = (value: unknown): StoredPushSubscription | null => {
@@ -242,14 +405,16 @@ export const sanitizePushSubscription = (value: unknown): StoredPushSubscription
   };
 };
 
-export const readPushSubscriptions = async () => {
-  const subscriptions = await store().get("push-subscriptions", { type: "json" });
+export const readPushSubscriptions = async (householdToken: string) => {
+  await requireHousehold(householdToken);
+  const subscriptions = await store().get(scopedKey(householdToken, "push-subscriptions"), { type: "json" });
   return Array.isArray(subscriptions)
     ? subscriptions.map(sanitizePushSubscription).filter((subscription): subscription is StoredPushSubscription => Boolean(subscription))
     : [];
 };
 
-export const writePushSubscriptions = async (subscriptions: StoredPushSubscription[]) => {
+export const writePushSubscriptions = async (householdToken: string, subscriptions: StoredPushSubscription[]) => {
+  await requireHousehold(householdToken);
   const uniqueSubscriptions = new Map(
     subscriptions
       .map(sanitizePushSubscription)
@@ -257,11 +422,12 @@ export const writePushSubscriptions = async (subscriptions: StoredPushSubscripti
       .map((subscription) => [subscription.endpoint, subscription]),
   );
 
-  await store().setJSON("push-subscriptions", [...uniqueSubscriptions.values()]);
+  await store().setJSON(scopedKey(householdToken, "push-subscriptions"), [...uniqueSubscriptions.values()]);
 };
 
-export const readSettings = async (): Promise<ReportSettings> => {
-  const settings = (await store().get("settings", { type: "json" })) as Partial<ReportSettings> | null;
+export const readSettings = async (householdToken: string): Promise<ReportSettings> => {
+  await requireHousehold(householdToken);
+  const settings = (await store().get(scopedKey(householdToken, "settings"), { type: "json" })) as Partial<ReportSettings> | null;
   return {
     recipient: typeof settings?.recipient === "string" ? settings.recipient : "",
     lastSentDate: typeof settings?.lastSentDate === "string" ? settings.lastSentDate : "",
@@ -270,8 +436,9 @@ export const readSettings = async (): Promise<ReportSettings> => {
   };
 };
 
-export const writeSettings = async (settings: ReportSettings) => {
-  await store().setJSON("settings", settings);
+export const writeSettings = async (householdToken: string, settings: ReportSettings) => {
+  await requireHousehold(householdToken);
+  await store().setJSON(scopedKey(householdToken, "settings"), settings);
 };
 
 export const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);

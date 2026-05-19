@@ -93,6 +93,121 @@ button {
   max-width: 620px;
 }
 
+.access-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.access-card {
+  width: min(620px, 100%);
+  padding: 28px;
+  border: 1px solid rgba(18, 61, 49, 0.14);
+  border-radius: 28px;
+  background:
+    linear-gradient(145deg, rgba(255, 253, 248, 0.98), rgba(244, 250, 239, 0.96)),
+    var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.access-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 8vw, 3.8rem);
+  line-height: 0.96;
+}
+
+.access-card p {
+  margin: 14px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.access-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: end;
+  margin-top: 24px;
+}
+
+.access-form button,
+.household-actions button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fffdf7;
+  font-weight: 850;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(18, 61, 49, 0.16);
+}
+
+.access-form button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.access-status {
+  padding: 12px 14px;
+  border: 1px solid rgba(138, 55, 43, 0.22);
+  border-radius: 16px;
+  background: var(--danger-bg);
+  color: var(--danger-text) !important;
+  font-weight: 760;
+}
+
+.access-note {
+  font-size: 0.92rem;
+}
+
+.household-panel {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(18, 61, 49, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: var(--shadow-soft);
+}
+
+.household-panel-compact {
+  margin-top: 18px;
+}
+
+.household-panel span,
+.household-panel small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.household-panel strong {
+  display: block;
+  color: var(--brand);
+  font-size: 1.02rem;
+}
+
+.household-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.household-actions button + button {
+  background: #fffdf8;
+  color: var(--brand);
+  border: 1px solid rgba(18, 61, 49, 0.16);
+  box-shadow: none;
+}
+
 .hero {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -2241,6 +2356,30 @@ textarea:focus-visible {
   }
 
   .hero-actions {
+    width: 100%;
+  }
+
+  .access-card {
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .access-form,
+  .household-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .access-form {
+    display: grid;
+  }
+
+  .household-panel {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .household-actions,
+  .household-actions button {
     width: 100%;
   }
 

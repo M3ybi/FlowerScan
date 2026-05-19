@@ -29,7 +29,7 @@ const fetchPublicKey = async () => {
   return data.publicKey;
 };
 
-export const subscribeToPushNotifications = async () => {
+export const subscribeToPushNotifications = async (householdId: string) => {
   if (!isPushNotificationSupported()) {
     throw new Error("Tento prehliadač nepodporuje push notifikácie.");
   }
@@ -49,7 +49,7 @@ export const subscribeToPushNotifications = async () => {
     }));
 
   const response = await fetch("/.netlify/functions/push-subscription", {
-    body: JSON.stringify({ subscription }),
+    body: JSON.stringify({ householdId, subscription }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
   });
@@ -61,7 +61,7 @@ export const subscribeToPushNotifications = async () => {
   return subscription;
 };
 
-export const unsubscribeFromPushNotifications = async () => {
+export const unsubscribeFromPushNotifications = async (householdId: string) => {
   if (!isPushNotificationSupported()) {
     return;
   }
@@ -73,7 +73,7 @@ export const unsubscribeFromPushNotifications = async () => {
   }
 
   await fetch("/.netlify/functions/push-subscription", {
-    body: JSON.stringify({ subscription }),
+    body: JSON.stringify({ householdId, subscription }),
     headers: { "Content-Type": "application/json" },
     method: "DELETE",
   }).catch(() => undefined);

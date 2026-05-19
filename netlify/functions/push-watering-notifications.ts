@@ -9,6 +9,7 @@ import {
   todayInBratislava,
 } from "./_shared/notifications";
 import {
+  readHouseholds,
   readPlantState,
   readPushSubscriptions,
   readSettings,
@@ -36,61 +37,68 @@ export const handler = schedule("0 * * * *", async () => {
     return { statusCode: 503, body: "Skipped: VAPID keys are not configured." };
   }
 
-  const settings = await readSettings();
   const today = todayInBratislava();
-
-  if (settings.lastPushNotificationDate === today) {
-    return { statusCode: 200, body: "Skipped: push notification already sent today." };
-  }
-
-  const plantState = await readPlantState();
-  const customFlowers = plantState.customFlowers.map(storedFlowerToNotificationFlower);
-  const flowers = [
-    ...customFlowers,
-    ...flowerReportMeta
-      .filter(
-        (flower) =>
-          !customFlowers.some((customFlower) => customFlower.id === flower.id) &&
-          !plantState.removedFlowerIds.includes(flower.id),
-      )
-      .map((flower) => ({
-        displayName: flower.displayName,
-        id: flower.id,
-        intervalDays: flower.intervalDays,
-        likelyName: flower.likelyName,
-        notificationsEnabled: true,
-      })),
-  ];
-  const duePlants = getDueWateringPlants(flowers, recordsForNotifications(plantState.records), today);
-  const payload = createPushNotificationPayload(duePlants);
-
-  if (!payload) {
-    return { statusCode: 200, body: "Skipped: no plants require watering today." };
-  }
-
-  const subscriptions = await readPushSubscriptions();
-  if (subscriptions.length === 0) {
-    return { statusCode: 200, body: "Skipped: no push subscriptions." };
-  }
+  const households = await readHouseholds();
+  let sentCount = 0;
+  let duePlantCount = 0;
 
   webPush.setVapidDetails(subject, publicKey, privateKey);
 
-  const sendResults = await Promise.allSettled(
-    subscriptions.map((subscription) => webPush.sendNotification(subscription, JSON.stringify(payload))),
-  );
-  const validSubscriptions = subscriptions.filter((_, index) => {
-    const result = sendResults[index];
-    if (result.status === "fulfilled") {
-      return true;
+  for (const household of households) {
+    const settings = await readSettings(household.publicToken);
+
+    if (settings.lastPushNotificationDate === today) {
+      continue;
     }
 
-    const statusCode = (result.reason as { statusCode?: unknown })?.statusCode;
-    return statusCode !== 404 && statusCode !== 410;
-  });
+    const plantState = await readPlantState(household.publicToken);
+    const customFlowers = plantState.customFlowers.map(storedFlowerToNotificationFlower);
+    const flowers = [
+      ...customFlowers,
+      ...flowerReportMeta
+        .filter(
+          (flower) =>
+            !customFlowers.some((customFlower) => customFlower.id === flower.id) &&
+            !plantState.removedFlowerIds.includes(flower.id),
+        )
+        .map((flower) => ({
+          displayName: flower.displayName,
+          id: flower.id,
+          intervalDays: flower.intervalDays,
+          likelyName: flower.likelyName,
+          notificationsEnabled: true,
+        })),
+    ];
+    const duePlants = getDueWateringPlants(flowers, recordsForNotifications(plantState.records), today);
+    const payload = createPushNotificationPayload(duePlants);
 
-  await writePushSubscriptions(validSubscriptions);
-  await writeSettings({ ...settings, lastPushNotificationDate: today });
+    if (!payload) {
+      continue;
+    }
 
-  const sentCount = sendResults.filter((result) => result.status === "fulfilled").length;
-  return { statusCode: 200, body: `Sent ${sentCount} push notifications for ${duePlants.length} plants.` };
+    const subscriptions = await readPushSubscriptions(household.publicToken);
+    if (subscriptions.length === 0) {
+      continue;
+    }
+
+    const sendResults = await Promise.allSettled(
+      subscriptions.map((subscription) => webPush.sendNotification(subscription, JSON.stringify(payload))),
+    );
+    const validSubscriptions = subscriptions.filter((_, index) => {
+      const result = sendResults[index];
+      if (result.status === "fulfilled") {
+        return true;
+      }
+
+      const statusCode = (result.reason as { statusCode?: unknown })?.statusCode;
+      return statusCode !== 404 && statusCode !== 410;
+    });
+
+    await writePushSubscriptions(household.publicToken, validSubscriptions);
+    await writeSettings(household.publicToken, { ...settings, lastPushNotificationDate: today });
+    sentCount += sendResults.filter((result) => result.status === "fulfilled").length;
+    duePlantCount += duePlants.length;
+  }
+
+  return { statusCode: 200, body: `Sent ${sentCount} push notifications for ${duePlantCount} plants.` };
 });

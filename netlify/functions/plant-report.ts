@@ -1,6 +1,6 @@
 import { schedule } from "@netlify/functions";
 import { createEmailReport } from "./_shared/report";
-import { readPlantState, readSettings, writeSettings } from "./_shared/storage";
+import { readHouseholds, readPlantState, readSettings, writeSettings } from "./_shared/storage";
 
 const bratislavaParts = () => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -51,21 +51,23 @@ export const handler = schedule("0 * * * *", async () => {
     return { statusCode: 200, body: "Skipped: not 19:00 Europe/Bratislava." };
   }
 
-  const settings = await readSettings();
+  const households = await readHouseholds();
+  let sentReports = 0;
 
-  if (!settings.recipient) {
-    return { statusCode: 200, body: "Skipped: recipient is not configured." };
+  for (const household of households) {
+    const settings = await readSettings(household.publicToken);
+
+    if (!settings.recipient || settings.lastSentDate === now.date) {
+      continue;
+    }
+
+    const plantState = await readPlantState(household.publicToken);
+    const report = createEmailReport(plantState.records, plantState.customFlowers, plantState.removedFlowerIds);
+
+    await sendEmail(settings.recipient, report.subject, report.html, report.text);
+    await writeSettings(household.publicToken, { ...settings, lastSentDate: now.date });
+    sentReports += 1;
   }
 
-  if (settings.lastSentDate === now.date) {
-    return { statusCode: 200, body: "Skipped: report already sent today." };
-  }
-
-  const plantState = await readPlantState();
-  const report = createEmailReport(plantState.records, plantState.customFlowers, plantState.removedFlowerIds);
-
-  await sendEmail(settings.recipient, report.subject, report.html, report.text);
-  await writeSettings({ ...settings, lastSentDate: now.date });
-
-  return { statusCode: 200, body: `Sent ${report.rows.length} report rows.` };
+  return { statusCode: 200, body: `Sent ${sentReports} household reports.` };
 });

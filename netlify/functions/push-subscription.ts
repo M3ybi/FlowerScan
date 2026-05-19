@@ -1,6 +1,8 @@
 import type { Handler } from "@netlify/functions";
 import {
   headers,
+  getHouseholdByToken,
+  getHouseholdTokenFromRequest,
   readPushSubscriptions,
   sanitizePushSubscription,
   writePushSubscriptions,
@@ -15,6 +17,14 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "Method not allowed" }), headers, statusCode: 405 };
   }
 
+  const householdToken = getHouseholdTokenFromRequest(event);
+  if (!householdToken) {
+    return { body: JSON.stringify({ error: "Household access is required." }), headers, statusCode: 401 };
+  }
+  if (!(await getHouseholdByToken(householdToken))) {
+    return { body: JSON.stringify({ error: "Household access is invalid." }), headers, statusCode: 404 };
+  }
+
   let body: { subscription?: unknown };
   try {
     body = JSON.parse(event.body || "{}") as { subscription?: unknown };
@@ -27,14 +37,14 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "Invalid push subscription." }), headers, statusCode: 400 };
   }
 
-  const subscriptions = await readPushSubscriptions();
+  const subscriptions = await readPushSubscriptions(householdToken);
 
   if (event.httpMethod === "DELETE") {
     const nextSubscriptions = subscriptions.filter((item) => item.endpoint !== subscription.endpoint);
-    await writePushSubscriptions(nextSubscriptions);
+    await writePushSubscriptions(householdToken, nextSubscriptions);
     return { body: JSON.stringify({ count: nextSubscriptions.length }), headers, statusCode: 200 };
   }
 
-  await writePushSubscriptions([subscription, ...subscriptions.filter((item) => item.endpoint !== subscription.endpoint)]);
+  await writePushSubscriptions(householdToken, [subscription, ...subscriptions.filter((item) => item.endpoint !== subscription.endpoint)]);
   return { body: JSON.stringify({ count: subscriptions.length + 1 }), headers, statusCode: 200 };
 };

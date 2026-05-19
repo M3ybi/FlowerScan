@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { headers, readPlantState, sanitizePlantState, writePlantState } from "./_shared/storage";
+import { getHouseholdByToken, getHouseholdTokenFromRequest, headers, readPlantState, sanitizePlantState, writePlantState } from "./_shared/storage";
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
@@ -7,7 +7,15 @@ export const handler: Handler = async (event) => {
   }
 
   if (event.httpMethod === "GET") {
-    const state = await readPlantState();
+    const householdToken = getHouseholdTokenFromRequest(event);
+    if (!householdToken) {
+      return { body: JSON.stringify({ error: "Household access is required." }), headers, statusCode: 401 };
+    }
+    if (!(await getHouseholdByToken(householdToken))) {
+      return { body: JSON.stringify({ error: "Household access is invalid." }), headers, statusCode: 404 };
+    }
+
+    const state = await readPlantState(householdToken);
     return { body: JSON.stringify(state), headers, statusCode: 200 };
   }
 
@@ -22,8 +30,16 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "Invalid JSON body." }), headers, statusCode: 400 };
   }
 
+  const householdToken = getHouseholdTokenFromRequest(event);
+  if (!householdToken) {
+    return { body: JSON.stringify({ error: "Household access is required." }), headers, statusCode: 401 };
+  }
+  if (!(await getHouseholdByToken(householdToken))) {
+    return { body: JSON.stringify({ error: "Household access is invalid." }), headers, statusCode: 404 };
+  }
+
   const state = sanitizePlantState(body);
-  await writePlantState(state);
+  await writePlantState(householdToken, state);
 
   return { body: JSON.stringify(state), headers, statusCode: 200 };
 };
