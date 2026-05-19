@@ -20,6 +20,25 @@ const emptyRecord: FlowerRecord = {
 const createInitialRecords = (flowers: Flower[]): FlowerRecords =>
   Object.fromEntries(flowers.map((flower) => [flower.id, { ...emptyRecord }]));
 
+const sanitizeRecord = (record: Partial<FlowerRecord> | undefined): FlowerRecord => ({
+  note: typeof record?.note === "string" ? record.note : "",
+  lastWatered: typeof record?.lastWatered === "string" ? record.lastWatered : "",
+  lastTransplanted: typeof record?.lastTransplanted === "string" ? record.lastTransplanted : "",
+});
+
+const sanitizeRecords = (value: unknown): FlowerRecords => {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const input = value as Partial<FlowerRecords>;
+  return Object.fromEntries(
+    Object.entries(input)
+      .filter(([flowerId]) => typeof flowerId === "string" && flowerId.length > 0)
+      .map(([flowerId, record]) => [flowerId, sanitizeRecord(record)]),
+  );
+};
+
 const readRecords = (flowers: Flower[]): FlowerRecords => {
   if (typeof window === "undefined") {
     return createInitialRecords(flowers);
@@ -31,17 +50,11 @@ const readRecords = (flowers: Flower[]): FlowerRecords => {
       return createInitialRecords(flowers);
     }
 
-    const parsed = JSON.parse(rawValue) as Partial<FlowerRecords>;
+    const parsed = sanitizeRecords(JSON.parse(rawValue));
     return Object.fromEntries(
       flowers.map((flower) => [
         flower.id,
-        {
-          note: typeof parsed[flower.id]?.note === "string" ? parsed[flower.id]!.note : "",
-          lastWatered:
-            typeof parsed[flower.id]?.lastWatered === "string" ? parsed[flower.id]!.lastWatered : "",
-          lastTransplanted:
-            typeof parsed[flower.id]?.lastTransplanted === "string" ? parsed[flower.id]!.lastTransplanted : "",
-        },
+        sanitizeRecord(parsed[flower.id]),
       ]),
     );
   } catch {
@@ -73,22 +86,7 @@ export const useFlowerRecords = (flowers: Flower[]) => {
   };
 
   const replaceRecords = (nextRecords: FlowerRecords) => {
-    setRecords(
-      Object.fromEntries(
-        flowers.map((flower) => [
-          flower.id,
-          {
-            note: typeof nextRecords[flower.id]?.note === "string" ? nextRecords[flower.id].note : "",
-            lastWatered:
-              typeof nextRecords[flower.id]?.lastWatered === "string" ? nextRecords[flower.id].lastWatered : "",
-            lastTransplanted:
-              typeof nextRecords[flower.id]?.lastTransplanted === "string"
-                ? nextRecords[flower.id].lastTransplanted
-                : "",
-          },
-        ]),
-      ),
-    );
+    setRecords(sanitizeRecords(nextRecords));
   };
 
   return { records, replaceRecords, updateRecord };

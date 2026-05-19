@@ -1,6 +1,6 @@
 import { schedule } from "@netlify/functions";
 import { createEmailReport } from "./_shared/report";
-import { readRecords, readSettings, writeSettings } from "./_shared/storage";
+import { readPlantState, readSettings, writeSettings } from "./_shared/storage";
 
 const bratislavaParts = () => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -61,8 +61,8 @@ export const handler = schedule("0 * * * *", async () => {
     return { statusCode: 200, body: "Skipped: report already sent today." };
   }
 
-  const records = await readRecords();
-  const report = createEmailReport(records);
+  const plantState = await readPlantState();
+  const report = createEmailReport(plantState.records, plantState.customFlowers, plantState.removedFlowerIds);
 
   await sendEmail(settings.recipient, report.subject, report.html, report.text);
   await writeSettings({ ...settings, lastSentDate: now.date });

@@ -263,6 +263,20 @@ const applyGeneratedCareToFlower = (flower: Flower, nextCare: GeneratedCare): Fl
   };
 };
 
+const recordHasValue = (record: FlowerRecords[string] | undefined) =>
+  Boolean(record?.note || record?.lastWatered || record?.lastTransplanted);
+
+const mergeCloudRecords = (localRecords: FlowerRecords, cloudRecords: FlowerRecords) => {
+  const flowerIds = new Set([...Object.keys(localRecords), ...Object.keys(cloudRecords)]);
+
+  return Object.fromEntries(
+    [...flowerIds].map((flowerId) => [
+      flowerId,
+      recordHasValue(cloudRecords[flowerId]) ? cloudRecords[flowerId] : localRecords[flowerId],
+    ]),
+  ) as FlowerRecords;
+};
+
 const useHashRoute = () => {
   const [hash, setHash] = useState(() => window.location.hash || "#/");
 
@@ -291,7 +305,15 @@ const useHashRoute = () => {
 
 export const App = () => {
   const route = useHashRoute();
-  const { addCustomFlower, customFlowers, removeFlower, removedFlowerIds, updateFlower } = useCustomFlowers();
+  const {
+    addCustomFlower,
+    customFlowers,
+    removeFlower,
+    removedFlowerIds,
+    replaceCustomFlowers,
+    replaceRemovedFlowerIds,
+    updateFlower,
+  } = useCustomFlowers();
   const allFlowers = useMemo(
     () => [
       ...customFlowers,
@@ -338,7 +360,7 @@ export const App = () => {
       try {
         const [settingsResponse, recordsResponse] = await Promise.all([
           fetch("/.netlify/functions/report-settings"),
-          fetch("/.netlify/functions/plant-records"),
+          fetch("/.netlify/functions/plant-state"),
         ]);
 
         if (!settingsResponse.ok || !recordsResponse.ok) {
@@ -346,15 +368,23 @@ export const App = () => {
         }
 
         const settings = (await settingsResponse.json()) as { recipient?: string };
-        const cloudRecords = (await recordsResponse.json()) as { records?: FlowerRecords };
+        const cloudState = (await recordsResponse.json()) as {
+          customFlowers?: Flower[];
+          records?: FlowerRecords;
+          removedFlowerIds?: string[];
+        };
 
         if (cancelled) {
           return;
         }
 
         setReportRecipient(typeof settings.recipient === "string" ? settings.recipient : "");
-        if (cloudRecords.records) {
-          replaceRecords(cloudRecords.records);
+        const cloudCustomFlowers = Array.isArray(cloudState.customFlowers) ? cloudState.customFlowers : [];
+        const cloudRemovedFlowerIds = Array.isArray(cloudState.removedFlowerIds) ? cloudState.removedFlowerIds : [];
+        replaceCustomFlowers(cloudCustomFlowers.length > 0 ? cloudCustomFlowers : customFlowers);
+        replaceRemovedFlowerIds(cloudRemovedFlowerIds.length > 0 ? cloudRemovedFlowerIds : removedFlowerIds);
+        if (cloudState.records) {
+          replaceRecords(mergeCloudRecords(records, cloudState.records));
         }
         setCloudSyncEnabled(true);
         setReportStatus("Cloud sync je aktívny. Denný email sa odošle o 19:00.");
@@ -383,17 +413,17 @@ export const App = () => {
     }
 
     const timeoutId = window.setTimeout(() => {
-      void fetch("/.netlify/functions/plant-records", {
+      void fetch("/.netlify/functions/plant-state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records }),
+        body: JSON.stringify({ customFlowers, records, removedFlowerIds }),
       }).catch(() => {
         setReportStatus("Cloud sync sa nepodaril. Lokálne zmeny sú uložené v tomto zariadení.");
       });
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [cloudSyncEnabled, cloudSyncReady, records]);
+  }, [cloudSyncEnabled, cloudSyncReady, customFlowers, records, removedFlowerIds]);
 
   const reportRows = useMemo(() => getWateringReportRows(records, allFlowers), [allFlowers, records]);
   const qrLabelValidation = useMemo(

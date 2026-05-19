@@ -75,10 +75,26 @@ export const useCustomFlowers = () => {
     setCustomFlowers((current) => [flower, ...current.filter((item) => item.id !== flower.id)]);
   };
 
+  const replaceCustomFlowers = (flowers: Flower[]) => {
+    setCustomFlowers(sanitizeCustomFlowers(flowers));
+  };
+
+  const replaceRemovedFlowerIds = (flowerIds: string[]) => {
+    setRemovedFlowerIds(flowerIds.filter((value): value is string => typeof value === "string"));
+  };
+
   const removeFlower = (flowerId: string) => {
     setCustomFlowers((current) => current.filter((item) => item.id !== flowerId));
     setRemovedFlowerIds((current) => (current.includes(flowerId) ? current : [...current, flowerId]));
   };
 
-  return { addCustomFlower, customFlowers, removeFlower, removedFlowerIds, updateFlower };
+  return {
+    addCustomFlower,
+    customFlowers,
+    removeFlower,
+    removedFlowerIds,
+    replaceCustomFlowers,
+    replaceRemovedFlowerIds,
+    updateFlower,
+  };
 };

@@ -1,5 +1,5 @@
 import { flowerReportMeta } from "./flowers";
-import type { StoredFlowerRecords } from "./storage";
+import type { StoredFlower, StoredFlowerRecords } from "./storage";
 
 const thresholdPercent = 20;
 
@@ -72,8 +72,27 @@ const progressFor = (lastWatered: string, intervalDays: number) => {
   return { nextWatering, percent, statusText: `zaliať o ${daysLeft} d.` };
 };
 
-export const getReportRows = (records: StoredFlowerRecords) =>
-  flowerReportMeta
+type ReportFlower = {
+  id: string;
+  displayName: string;
+  likelyName: string;
+  intervalDays: number;
+};
+
+const createReportFlowers = (customFlowers: StoredFlower[] = [], removedFlowerIds: string[] = []): ReportFlower[] => [
+  ...customFlowers.map((flower) => ({
+    displayName: flower.displayName,
+    id: flower.id,
+    intervalDays: flower.wateringIntervalDays ?? 7,
+    likelyName: flower.likelyName,
+  })),
+  ...flowerReportMeta.filter(
+    (flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id) && !removedFlowerIds.includes(flower.id),
+  ),
+];
+
+export const getReportRows = (records: StoredFlowerRecords, customFlowers: StoredFlower[] = [], removedFlowerIds: string[] = []) =>
+  createReportFlowers(customFlowers, removedFlowerIds)
     .map((flower) => {
       const record = records[flower.id] ?? { note: "", lastWatered: "", lastTransplanted: "" };
       const progress = progressFor(record.lastWatered, flower.intervalDays);
@@ -97,8 +116,8 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
-export const createEmailReport = (records: StoredFlowerRecords) => {
-  const rows = getReportRows(records);
+export const createEmailReport = (records: StoredFlowerRecords, customFlowers: StoredFlower[] = [], removedFlowerIds: string[] = []) => {
+  const rows = getReportRows(records, customFlowers, removedFlowerIds);
   const subject = `FlowerScan report: ${rows.length} rastlín pod ${thresholdPercent} %`;
 
   const htmlRows = rows
