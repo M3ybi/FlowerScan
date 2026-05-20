@@ -6,10 +6,10 @@ export const qrLabelSpec = {
   pageWidthMm: 210,
   pageHeightMm: 297,
   pageMarginMm: 10,
-  labelSizeMm: 14,
-  qrSizeMm: 12,
+  labelSizeMm: 10,
+  qrSizeMm: 8,
   quietZoneMm: 1,
-  labelGapMm: 4,
+  labelGapMm: 3,
 };
 
 export type QrLabelLayoutItem = {
@@ -114,8 +114,8 @@ export const exportQrLabelsPdf = async (flowers: Flower[], baseUrl: string) => {
         dark: "#000000",
         light: "#ffffff",
       },
-      errorCorrectionLevel: "M",
-      margin: 2,
+      errorCorrectionLevel: "L",
+      margin: 1,
       width: 256,
     });
 

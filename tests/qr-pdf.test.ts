@@ -12,8 +12,8 @@ const readSpecNumber = (key: string) => {
 };
 
 test("QR labels are smaller for tongue depressor sticks", () => {
-  assert.equal(readSpecNumber("labelSizeMm"), 14);
-  assert.equal(readSpecNumber("qrSizeMm"), 12);
+  assert.equal(readSpecNumber("labelSizeMm"), 10);
+  assert.equal(readSpecNumber("qrSizeMm"), 8);
   assert.equal(readSpecNumber("quietZoneMm"), 1);
 });
 
@@ -21,4 +21,9 @@ test("QR label validation message uses current dimensions", () => {
   assert.match(source, /qrLabelSpec\.labelSizeMm/);
   assert.match(source, /qrLabelSpec\.qrSizeMm/);
   assert.match(source, /payload.*flowerId/s);
+});
+
+test("QR export uses low density settings for tiny print", () => {
+  assert.match(source, /errorCorrectionLevel:\s*"L"/);
+  assert.match(source, /margin:\s*1/);
 });
