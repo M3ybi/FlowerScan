@@ -29,6 +29,7 @@ import { AuthButton } from "./components/AuthButton";
 import { LegacyMigrationCard } from "./components/LegacyMigrationCard";
 import { PricingPage } from "./components/PricingPage";
 import { QrCode } from "./components/QrCode";
+import { HealthPage, LegalPageView, ReleaseChecklistPage } from "./components/ReleasePages";
 import { UpgradeModal } from "./components/UpgradeModal";
 import { flowers as builtInFlowers } from "./data/flowers";
 import type { Flower } from "./data/flowers";
@@ -96,6 +97,7 @@ import {
   sanitizeDiagnosticEntries,
 } from "./utils/diagnostics";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
+import type { LegalPageId } from "./lib/releaseReadiness";
 
 const todayIsoDate = () => {
   const today = new Date();
@@ -416,6 +418,19 @@ const useHashRoute = () => {
     return { page: "account" as const };
   }
 
+  const legalPageMatch = hash.match(/^#\/(privacy|terms|support|delete-account|subscription-terms)$/);
+  if (legalPageMatch) {
+    return { page: "legal" as const, legalPageId: legalPageMatch[1] as LegalPageId };
+  }
+
+  if (hash === "#/release-readiness") {
+    return { page: "release-readiness" as const };
+  }
+
+  if (hash === "#/health") {
+    return { page: "health" as const };
+  }
+
   return { page: "dashboard" as const };
 };
 
@@ -494,6 +509,9 @@ export const App = () => {
   const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
+  const [deleteAccountContact, setDeleteAccountContact] = useState(() => auth.user?.email ?? "");
+  const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
+  const [healthEndpointStatus, setHealthEndpointStatus] = useState("");
   const [supabasePlantIdsByLegacyId, setSupabasePlantIdsByLegacyId] = useState<Record<string, string>>({});
   const [quickRecordStatus, setQuickRecordStatus] = useState("");
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
@@ -578,6 +596,36 @@ export const App = () => {
   useEffect(() => {
     window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(legacyDiagnostics));
   }, [legacyDiagnostics]);
+
+  useEffect(() => {
+    if (!deleteAccountContact && auth.user?.email) {
+      setDeleteAccountContact(auth.user.email);
+    }
+  }, [auth.user?.email, deleteAccountContact]);
+
+  useEffect(() => {
+    if (route.page !== "health") {
+      return;
+    }
+
+    let cancelled = false;
+    setHealthEndpointStatus("checking");
+    void fetch("/.netlify/functions/health")
+      .then((response) => {
+        if (!cancelled) {
+          setHealthEndpointStatus(response.ok ? "reachable" : `returned ${response.status}`);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHealthEndpointStatus("not reachable in this runtime");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [route.page]);
 
   useEffect(
     () => () => {
@@ -1461,6 +1509,70 @@ export const App = () => {
     void removeFlowerById(deleteFlowerId);
     setDeleteFlowerId("");
     window.location.hash = "#/";
+  }
+
+  const requestAccountDeletion = async () => {
+    const contact = deleteAccountContact.trim();
+    if (!contact) {
+      setDeleteAccountStatus("Enter the account email or user ID before requesting deletion review.");
+      return;
+    }
+
+    setDeleteAccountStatus("Submitting deletion review request...");
+    try {
+      const response = await fetch("/.netlify/functions/delete-account-request", {
+        body: JSON.stringify({
+          contact,
+          userId: auth.user?.id ?? null,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      if (!response.ok) {
+        throw new Error(body?.message ?? "Deletion request could not be submitted.");
+      }
+
+      setDeleteAccountStatus(body?.message ?? "Deletion request received for manual review.");
+    } catch (error) {
+      setDeleteAccountStatus(error instanceof Error ? error.message : "Deletion request could not be submitted.");
+    }
+  };
+
+  const releaseEnv = {
+    viteRevenueCatAndroidKey: import.meta.env.VITE_REVENUECAT_API_KEY_ANDROID,
+    viteRevenueCatIosKey: import.meta.env.VITE_REVENUECAT_API_KEY_IOS,
+    viteSupabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    viteSupabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+  };
+
+  if (route.page === "legal" || route.page === "release-readiness" || route.page === "health") {
+    return (
+      <main className="app-shell compact">
+        <header className="topbar">
+          <a className="icon-link" href="#/" aria-label="Back to Plantie">
+            <ArrowLeft size={22} aria-hidden="true" />
+          </a>
+          <div>
+            <p className="eyebrow">Plantie release</p>
+            <h1>{route.page === "health" ? "Health" : route.page === "release-readiness" ? "Readiness" : "Compliance"}</h1>
+          </div>
+        </header>
+        {route.page === "legal" ? (
+          <LegalPageView
+            deleteRequestStatus={deleteAccountStatus}
+            onRequestDeletion={requestAccountDeletion}
+            pageId={route.legalPageId}
+            requestEmail={deleteAccountContact}
+            setRequestEmail={setDeleteAccountContact}
+          />
+        ) : route.page === "release-readiness" ? (
+          <ReleaseChecklistPage />
+        ) : (
+          <HealthPage backendStatus={healthEndpointStatus} env={releaseEnv} />
+        )}
+      </main>
+    );
   };
 
   if (isAccessChecking) {
@@ -2193,6 +2305,17 @@ export const App = () => {
         <section className="mobile-product-card">
           <h2>Prihl?senie je st?le volite?n?</h2>
           <p>Legacy dom?cnostn? link, lok?lne d?ta a Netlify Blob sync zost?vaj? akt?vne. Premium sa aktivuje a? cez serverov? entitlementy.</p>
+        </section>
+        <section className="mobile-product-card">
+          <h2>Release and support</h2>
+          <div className="migration-preview-grid">
+            <a href="#/privacy">Privacy Policy</a>
+            <a href="#/terms">Terms of Service</a>
+            <a href="#/support">Support</a>
+            <a href="#/delete-account">Delete Account</a>
+            <a href="#/subscription-terms">Subscription Terms</a>
+            <a href="#/health">Release Health</a>
+          </div>
         </section>
         <section className="migration-card" aria-labelledby="data-source-title">
           <div className="section-title">

@@ -1450,6 +1450,50 @@ textarea:focus-visible {
   border-radius: 12px;
 }
 
+.release-page {
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(18, 61, 49, 0.1);
+  border-radius: 18px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 36px rgba(30, 45, 34, 0.08);
+}
+
+.release-page > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.release-section {
+  display: grid;
+  gap: 8px;
+}
+
+.release-section h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.release-section p,
+.release-section li {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.release-section p,
+.release-section ul,
+.release-section ol {
+  margin: 0;
+}
+
+.release-form {
+  display: grid;
+  gap: 12px;
+}
+
 .diagnosis-preview {
   display: block;
   width: 100%;
