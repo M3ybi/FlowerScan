@@ -24,7 +24,7 @@ const bratislavaParts = () => {
 
 const sendEmail = async (to: string, subject: string, html: string, text: string) => {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.REPORT_FROM_EMAIL || "FlowerScan <onboarding@resend.dev>";
+  const from = process.env.REPORT_FROM_EMAIL || "Plantie <onboarding@resend.dev>";
 
   if (!apiKey) {
     throw new Error("RESEND_API_KEY is missing.");

@@ -1,4 +1,4 @@
-# FlowerScan
+# Plantie
 
 Mobilná webová aplikácia na evidenciu izbových rastlín, QR štítky, zálievku, presádzanie a poznámky.
 
@@ -15,6 +15,54 @@ npm run dev
 npm run build
 ```
 
+## Supabase foundation
+
+The Supabase database foundation is prepared but not yet connected to the current app storage flow.
+
+Required frontend environment variables:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Do not expose a Supabase service role key in frontend code or any `VITE_*` variable.
+
+See `docs/supabase-setup.md` and `docs/supabase-storage-buckets.md`.
+
+Catalog seed validation:
+
+```bash
+npm run test:supabase
+```
+
+Catalog seed, local/server only:
+
+```bash
+npm run seed:plant-catalog
+```
+
+Billing validation:
+
+```bash
+npm run test:billing
+```
+
+RevenueCat billing is prepared but disabled. See `docs/revenuecat-billing.md`.
+
+Legacy-to-Supabase import is available as an opt-in account action. It keeps legacy storage primary.
+See `docs/legacy-supabase-migration.md`.
+
+## Mobile app wrapper
+
+Capacitor is configured for iOS and Android shells.
+
+```bash
+npm run mobile:build
+npm run mobile:ios
+npm run mobile:android
+```
+
+See `docs/mobile-capacitor.md`.
+
 ## Publikovanie
 
 Aplikácia je pripravená na GitHub Pages cez workflow `.github/workflows/deploy.yml`.
@@ -30,7 +78,7 @@ Automatický email report potrebuje hosting so serverless funkciami. Projekt je 
 Potrebné environment variables v Netlify:
 
 - `RESEND_API_KEY` - API kľúč pre odosielanie emailov cez Resend
-- `REPORT_FROM_EMAIL` - overený odosielateľ, napr. `FlowerScan <report@tvoja-domena.sk>`
+- `REPORT_FROM_EMAIL` - overený odosielateľ, napr. `Plantie <report@tvoja-domena.sk>`
 - `OPENAI_API_KEY` - API kľúč na AI generovanie starostlivosti pri pridávaní novej rastliny
 - `OPENAI_MODEL` - voliteľné, predvolená hodnota je `gpt-4o-mini`
 

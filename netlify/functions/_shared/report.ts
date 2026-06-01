@@ -118,7 +118,7 @@ const escapeHtml = (value: string) =>
 
 export const createEmailReport = (records: StoredFlowerRecords, customFlowers: StoredFlower[] = [], removedFlowerIds: string[] = []) => {
   const rows = getReportRows(records, customFlowers, removedFlowerIds);
-  const subject = `FlowerScan report: ${rows.length} rastlín pod ${thresholdPercent} %`;
+  const subject = `Plantie report: ${rows.length} rastlín pod ${thresholdPercent} %`;
 
   const htmlRows = rows
     .map(
@@ -139,7 +139,7 @@ export const createEmailReport = (records: StoredFlowerRecords, customFlowers: S
 
   const html = `
     <div style="font-family:Inter,Arial,sans-serif;color:#12221b;line-height:1.5">
-      <h1 style="margin:0 0 8px;font-size:24px">FlowerScan denný report</h1>
+      <h1 style="margin:0 0 8px;font-size:24px">Plantie denný report</h1>
       <p style="margin:0 0 18px;color:#617069">
         V reporte sú iba rastliny s úrovňou zálievky pod ${thresholdPercent} %. Rastliny nad ${thresholdPercent} % nie sú zahrnuté.
       </p>

@@ -4,10 +4,12 @@ self.addEventListener("push", (event) => {
   }
 
   const payload = event.data.json();
-  const title = payload.title || "FlowerScan";
+  const title = payload.title || "Plantie";
   const options = {
     body: payload.body || "",
     data: payload.data || { url: "/" },
+    icon: payload.icon || "/plantie-logo.svg",
+    badge: payload.badge || "/plantie-logo.svg",
     tag: payload.tag || "watering",
     renotify: false,
   };

@@ -25,18 +25,47 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { AuthButton } from "./components/AuthButton";
+import { LegacyMigrationCard } from "./components/LegacyMigrationCard";
+import { PricingPage } from "./components/PricingPage";
 import { QrCode } from "./components/QrCode";
+import { UpgradeModal } from "./components/UpgradeModal";
 import { flowers as builtInFlowers } from "./data/flowers";
 import type { Flower } from "./data/flowers";
 import { wateringIntervalsDays } from "./data/wateringIntervals";
+import { useAuth } from "./hooks/useAuth";
 import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
+import { checkDiagnosisGate, recordDiagnosisUsage } from "./lib/diagnosisGate";
+import { captureImage, detectImageRuntime } from "./lib/imageCaptureService";
+import type { NormalizedImage } from "./lib/imageCaptureService";
+import {
+  compareLegacyAndSupabaseHouseholdState,
+  detectDataSourceMode,
+  loadSupabaseReadThroughState,
+} from "./lib/supabaseReadThrough";
+import type { LegacySupabaseComparison, SupabaseReadThroughState } from "./lib/supabaseReadThrough";
+import {
+  createSupabaseDiagnosis,
+  detectSupabaseWriteMode,
+  runSupabaseWrite,
+  setSupabasePlantRemoved,
+  updateSupabaseCareRecord,
+  updateSupabaseDiagnosis,
+  updateSupabaseReportSettings,
+  upsertSupabasePlantFromFlower,
+} from "./lib/supabaseSourceOfTruth";
+import {
+  getHouseholdPlantByLegacyId,
+  getPlantDiagnostics,
+  getUserHouseholds,
+} from "./lib/plantieRepository";
+import { getReminderArchitectureNote, normalizeReminderSettings } from "./lib/reminderService";
 import {
   createCustomFlowerId,
   fetchGeneratedCare,
   imageSourceToDataUrl,
-  resizeImageFileToDataUrl,
 } from "./utils/customFlower";
 import type { GeneratedCare } from "./utils/customFlower";
 import { daysSince, formatDate, formatElapsedDays } from "./utils/dates";
@@ -63,7 +92,7 @@ import {
 import {
   createDiagnosticId,
   fetchPlantDiagnosis,
-  resizeDiagnosticImageFileToDataUrl,
+  sanitizeDiagnosticNote,
   sanitizeDiagnosticEntries,
 } from "./utils/diagnostics";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
@@ -320,6 +349,42 @@ const readStoredDiagnostics = () => {
   }
 };
 
+const riskLevelLabel = (riskLevel: PlantDiagnosticEntry["riskLevel"]) => {
+  if (riskLevel === "high") {
+    return "vysoké riziko";
+  }
+
+  if (riskLevel === "medium") {
+    return "stredné riziko";
+  }
+
+  return "nízke riziko";
+};
+
+const flowerDiagnosticsCount = (flowerId: string, diagnostics: PlantDiagnosticEntry[]) =>
+  diagnostics.filter((diagnostic) => diagnostic.plantId === flowerId).length;
+
+const MobileBottomNav = () => (
+  <nav className="mobile-bottom-nav" aria-label="Hlavná mobilná navigácia">
+    <a href="#/">
+      <Leaf size={18} aria-hidden="true" />
+      Rastliny
+    </a>
+    <a href="#/diagnose">
+      <Camera size={18} aria-hidden="true" />
+      Diagnóza
+    </a>
+    <a href="#/qr">
+      <QrCodeIcon size={18} aria-hidden="true" />
+      QR
+    </a>
+    <a href="#/account">
+      <Home size={18} aria-hidden="true" />
+      Účet
+    </a>
+  </nav>
+);
+
 const useHashRoute = () => {
   const [hash, setHash] = useState(() => window.location.hash || "#/");
 
@@ -339,15 +404,38 @@ const useHashRoute = () => {
     return { page: "qr" as const };
   }
 
+  if (hash === "#/diagnose") {
+    return { page: "diagnose" as const };
+  }
+
   if (hash === "#/report") {
     return { page: "report" as const };
+  }
+
+  if (hash === "#/account") {
+    return { page: "account" as const };
   }
 
   return { page: "dashboard" as const };
 };
 
+const pageTitle = (pageName: string) => `${pageName} | Plantie`;
+
+const isSupabaseReadThroughEnabled = import.meta.env.VITE_ENABLE_SUPABASE_READS === "true";
+const isSupabaseWriteThroughEnvEnabled = isSupabaseReadThroughEnabled && import.meta.env.VITE_ENABLE_SUPABASE_WRITES === "true";
+const supabaseWritesDisabledStorageKey = "plantie-disable-supabase-writes-v1";
+
+const dataSourceLabel = {
+  error: "Fallback",
+  fallback: "Fallback",
+  legacy: "Legacy",
+  "supabase-readwrite": "Supabase source of truth",
+  "supabase-readonly": "Supabase preview",
+};
+
 export const App = () => {
   const route = useHashRoute();
+  const auth = useAuth();
   const {
     addCustomFlower,
     customFlowers,
@@ -357,22 +445,18 @@ export const App = () => {
     replaceRemovedFlowerIds,
     updateFlower,
   } = useCustomFlowers();
-  const allFlowers = useMemo(
+  const legacyAllFlowers = useMemo(
     () => [
       ...customFlowers,
       ...builtInFlowers.filter((flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id)),
     ].filter((flower) => !removedFlowerIds.includes(flower.id)),
     [customFlowers, removedFlowerIds],
   );
-  const allFlowersIncludingRemoved = useMemo(
+  const legacyAllFlowersIncludingRemoved = useMemo(
     () => [...customFlowers, ...builtInFlowers.filter((flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id))],
     [customFlowers],
   );
-  const flowerById = useMemo(
-    () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
-    [allFlowersIncludingRemoved],
-  );
-  const { records, replaceRecords, updateRecord } = useFlowerRecords(allFlowers);
+  const { records: legacyRecords, replaceRecords, updateRecord } = useFlowerRecords(legacyAllFlowers);
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
   const [activeHousehold, setActiveHousehold] = useState<HouseholdSession | null>(() => getStoredHouseholdSession());
@@ -387,7 +471,7 @@ export const App = () => {
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [qrExportStatus, setQrExportStatus] = useState("");
   const [newPlantName, setNewPlantName] = useState("");
-  const [newPlantImageFile, setNewPlantImageFile] = useState<File | null>(null);
+  const [newPlantImage, setNewPlantImage] = useState<NormalizedImage | null>(null);
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
@@ -399,22 +483,119 @@ export const App = () => {
   const [draftFlowerName, setDraftFlowerName] = useState("");
   const [pushStatus, setPushStatus] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
-  const [diagnostics, setDiagnostics] = useState<PlantDiagnosticEntry[]>(() => readStoredDiagnostics());
+  const [legacyDiagnostics, setDiagnostics] = useState<PlantDiagnosticEntry[]>(() => readStoredDiagnostics());
   const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false);
   const [diagnosisImageDataUrl, setDiagnosisImageDataUrl] = useState("");
+  const [diagnosisImagePreviewUrl, setDiagnosisImagePreviewUrl] = useState("");
   const [diagnosisDraft, setDiagnosisDraft] = useState<PlantDiagnosisDraft | null>(null);
   const [diagnosisUserNote, setDiagnosisUserNote] = useState("");
   const [diagnosisStatus, setDiagnosisStatus] = useState("");
   const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
+  const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
+  const [openDiagnosticId, setOpenDiagnosticId] = useState("");
+  const [supabasePlantIdsByLegacyId, setSupabasePlantIdsByLegacyId] = useState<Record<string, string>>({});
   const [quickRecordStatus, setQuickRecordStatus] = useState("");
+  const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
+  const [supabaseReadError, setSupabaseReadError] = useState(false);
+  const [supabaseCompareResult, setSupabaseCompareResult] = useState<LegacySupabaseComparison | null>(null);
+  const [supabaseWriteWarning, setSupabaseWriteWarning] = useState("");
+  const [isSupabaseWritesLocallyDisabled, setIsSupabaseWritesLocallyDisabled] = useState(
+    () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
+  );
+  const isSupabaseWriteThroughEnabled = isSupabaseWriteThroughEnvEnabled && !isSupabaseWritesLocallyDisabled;
+  const isNativeImageRuntime = detectImageRuntime() !== "web";
+  const dataSourceMode = detectDataSourceMode({
+    featureEnabled: isSupabaseReadThroughEnabled,
+    hasAuthenticatedUser: auth.isAuthenticated,
+    hasMigratedHousehold: Boolean(supabaseReadState),
+    readError: supabaseReadError,
+    writesEnabled: isSupabaseWriteThroughEnabled,
+  });
+  const supabaseWriteMode = detectSupabaseWriteMode({
+    hasAuthenticatedUser: auth.isAuthenticated,
+    hasMigratedHousehold: Boolean(supabaseReadState),
+    readsEnabled: isSupabaseReadThroughEnabled,
+    writesEnabled: isSupabaseWriteThroughEnabled,
+  });
+  const isUsingSupabaseReadState =
+    (dataSourceMode === "supabase-readonly" || dataSourceMode === "supabase-readwrite") && Boolean(supabaseReadState);
+  const allFlowersIncludingRemoved = isUsingSupabaseReadState ? supabaseReadState?.allFlowers ?? [] : legacyAllFlowersIncludingRemoved;
+  const allFlowers = isUsingSupabaseReadState
+    ? (supabaseReadState?.allFlowers ?? []).filter((flower) => !(supabaseReadState?.removedFlowerIds ?? []).includes(flower.id))
+    : legacyAllFlowers;
+  const records = isUsingSupabaseReadState ? supabaseReadState?.records ?? {} : legacyRecords;
+  const diagnostics = isUsingSupabaseReadState ? supabaseReadState?.diagnostics ?? [] : legacyDiagnostics;
+  const effectiveReportRecipient = isUsingSupabaseReadState
+    ? supabaseReadState?.reportSettings.recipientEmail ?? reportRecipient
+    : reportRecipient;
+  const flowerById = useMemo(
+    () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
+    [allFlowersIncludingRemoved],
+  );
+  const legacyHouseholdState = useMemo(
+    () => ({
+      activeHousehold,
+      allFlowers: legacyAllFlowersIncludingRemoved,
+      customFlowers,
+      diagnostics: legacyDiagnostics,
+      records: legacyRecords,
+      removedFlowerIds,
+      reportSettings: { recipientEmail: reportRecipient },
+    }),
+    [activeHousehold, customFlowers, legacyAllFlowersIncludingRemoved, legacyDiagnostics, legacyRecords, removedFlowerIds, reportRecipient],
+  );
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [route.page, "flowerId" in route ? route.flowerId : ""]);
 
   useEffect(() => {
-    window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(diagnostics));
-  }, [diagnostics]);
+    if (route.page === "detail") {
+      const flower = flowerById.get(route.flowerId);
+      document.title = pageTitle(flower?.displayName ?? "Detail rastliny");
+      return;
+    }
+
+  if (route.page === "qr") {
+      document.title = pageTitle("QR štítky");
+      return;
+    }
+
+  if (route.page === "diagnose") {
+      document.title = pageTitle("AI diagnostika");
+      return;
+    }
+
+    if (route.page === "report") {
+      document.title = pageTitle("Denný report");
+      return;
+    }
+
+    document.title = pageTitle("Prehľad rastlín");
+  }, [flowerById, route.page, "flowerId" in route ? route.flowerId : ""]);
+
+  useEffect(() => {
+    window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(legacyDiagnostics));
+  }, [legacyDiagnostics]);
+
+  useEffect(
+    () => () => {
+      if (newPlantImage?.previewUrl) {
+        URL.revokeObjectURL(newPlantImage.previewUrl);
+      }
+    },
+    [newPlantImage?.previewUrl],
+  );
+
+  useEffect(
+    () => () => {
+      if (diagnosisImagePreviewUrl) {
+        URL.revokeObjectURL(diagnosisImagePreviewUrl);
+      }
+    },
+    [diagnosisImagePreviewUrl],
+  );
 
   useEffect(() => {
     if (!quickRecordStatus) {
@@ -424,6 +605,186 @@ export const App = () => {
     const timeoutId = window.setTimeout(() => setQuickRecordStatus(""), 1800);
     return () => window.clearTimeout(timeoutId);
   }, [quickRecordStatus]);
+
+  const refreshSupabaseReadState = async () => {
+    if (!isSupabaseReadThroughEnabled || !auth.isAuthenticated) {
+      return null;
+    }
+
+    const nextState = await loadSupabaseReadThroughState(activeHousehold);
+    setSupabaseReadState(nextState);
+    setSupabaseReadError(false);
+    if (nextState) {
+      setSupabasePlantIdsByLegacyId(nextState.supabasePlantIdsByLegacyId);
+      setSupabaseCompareResult(compareLegacyAndSupabaseHouseholdState(legacyHouseholdState, nextState));
+    }
+
+    return nextState;
+  };
+
+  const disableSupabaseWritesLocally = () => {
+    window.localStorage.setItem(supabaseWritesDisabledStorageKey, "true");
+    setIsSupabaseWritesLocallyDisabled(true);
+    setSupabaseWriteWarning("Supabase write mode is disabled locally. Legacy writes remain intact for rollback.");
+  };
+
+  const writeSupabaseFirst = async <T,>(
+    operation: () => Promise<T>,
+    mirrorLegacy: () => void,
+    fallbackMessage = "Supabase write failed. Saved to legacy storage for rollback.",
+  ) => {
+    if (supabaseWriteMode !== "supabase-first") {
+      mirrorLegacy();
+      return false;
+    }
+
+    const result = await runSupabaseWrite(operation);
+    mirrorLegacy();
+
+    if (result.mode === "fallback") {
+      setSupabaseReadError(true);
+      setSupabaseWriteWarning(fallbackMessage);
+      return false;
+    }
+
+
+    try {
+      await refreshSupabaseReadState();
+      setSupabaseWriteWarning("");
+    } catch {
+      setSupabaseReadError(true);
+      setSupabaseWriteWarning("Supabase write succeeded, but read-back verification failed. Legacy mirror remains available.");
+    }
+
+    return true;
+  };
+
+  useEffect(() => {
+    if (!isSupabaseReadThroughEnabled || auth.loading || !auth.isAuthenticated) {
+      setSupabaseReadState(null);
+      setSupabaseReadError(false);
+      setSupabaseCompareResult(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadReadThroughState = async () => {
+      try {
+        const nextState = await loadSupabaseReadThroughState(activeHousehold);
+        if (!cancelled) {
+          setSupabaseReadState(nextState);
+          setSupabaseReadError(false);
+          setSupabaseCompareResult(null);
+          if (nextState) {
+            setSupabasePlantIdsByLegacyId(nextState.supabasePlantIdsByLegacyId);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setSupabaseReadState(null);
+          setSupabaseReadError(true);
+          setSupabaseCompareResult(null);
+        }
+      }
+    };
+
+    void loadReadThroughState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeHousehold, auth.isAuthenticated, auth.loading]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !activeHousehold) {
+      setSupabasePlantIdsByLegacyId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSupabaseLinkedPlants = async () => {
+      try {
+        const households = await getUserHouseholds();
+        const household = households.find((item) => item.legacyPublicToken === activeHousehold.publicToken) ?? households[0];
+        if (!household) {
+          return;
+        }
+
+        const entries = await Promise.all(
+          allFlowers.map(async (flower) => {
+            const plant = await getHouseholdPlantByLegacyId(household.id, flower.id);
+            return plant ? ([flower.id, plant.id] as const) : null;
+          }),
+        );
+
+        if (!cancelled) {
+          setSupabasePlantIdsByLegacyId(Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry))));
+        }
+      } catch {
+        if (!cancelled) {
+          setSupabasePlantIdsByLegacyId({});
+        }
+      }
+    };
+
+    void loadSupabaseLinkedPlants();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeHousehold, allFlowers, auth.isAuthenticated]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      return;
+    }
+
+    const supabasePlantIds = Object.values(supabasePlantIdsByLegacyId);
+    if (supabasePlantIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSupabaseDiagnostics = async () => {
+      try {
+        const supabaseDiagnostics = (await Promise.all(supabasePlantIds.map((plantId) => getPlantDiagnostics(plantId)))).flat();
+        if (cancelled || supabaseDiagnostics.length === 0) {
+          return;
+        }
+
+        setDiagnostics((current) => {
+          const byId = new Map(current.map((diagnostic) => [diagnostic.id, diagnostic]));
+          for (const diagnostic of supabaseDiagnostics) {
+            const legacyPlantId = Object.entries(supabasePlantIdsByLegacyId).find(([, plantId]) => plantId === diagnostic.plantId)?.[0];
+            if (!legacyPlantId) {
+              continue;
+            }
+
+            byId.set(diagnostic.id, {
+              ...diagnostic,
+              imageDataUrl: "",
+              imagePath: diagnostic.imagePath ?? undefined,
+              plantId: legacyPlantId,
+              storageMode: "supabase",
+            });
+          }
+
+          return [...byId.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        });
+      } catch {
+        // Supabase history is additive. Legacy local history remains the source of truth when it cannot be loaded.
+      }
+    };
+
+    void loadSupabaseDiagnostics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, supabasePlantIdsByLegacyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -569,14 +930,20 @@ export const App = () => {
       void fetch(createHouseholdApiUrl("/.netlify/functions/plant-state", activeHousehold.publicToken), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customFlowers, diagnostics, householdId: activeHousehold.publicToken, records, removedFlowerIds }),
+        body: JSON.stringify({
+          customFlowers,
+          diagnostics: legacyDiagnostics,
+          householdId: activeHousehold.publicToken,
+          records: legacyRecords,
+          removedFlowerIds,
+        }),
       }).catch(() => {
         setReportStatus("Cloud sync sa nepodaril. Lokálne zmeny sú uložené v tomto zariadení.");
       });
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeHousehold, cloudSyncEnabled, cloudSyncReady, customFlowers, diagnostics, records, removedFlowerIds]);
+  }, [activeHousehold, cloudSyncEnabled, cloudSyncReady, customFlowers, legacyDiagnostics, legacyRecords, removedFlowerIds]);
 
   const reportRows = useMemo(() => getWateringReportRows(records, allFlowers), [allFlowers, records]);
   const qrLabelValidation = useMemo(
@@ -595,6 +962,20 @@ export const App = () => {
       setReportStatus("Najprv zadaj email príjemcu reportu.");
       return;
     }
+    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
+      const wroteSupabase = await writeSupabaseFirst(
+        () => updateSupabaseReportSettings(supabaseReadState.household.id, { recipientEmail: recipient }),
+        () => window.localStorage.setItem("flowscan-report-recipient-v1", recipient),
+        "Supabase report settings update failed. Recipient is saved locally for rollback.",
+      );
+      setReportStatus(
+        wroteSupabase
+          ? "Recipient saved to Supabase. Legacy mirror remains available for rollback."
+          : "Recipient saved locally. Supabase write failed and the app fell back to legacy."
+      );
+      return;
+    }
+
 
     try {
       const response = await fetch(createHouseholdApiUrl("/.netlify/functions/report-settings", activeHousehold.publicToken), {
@@ -662,9 +1043,79 @@ export const App = () => {
     }
   };
 
+  const updateCareRecord = async (flowerId: string, patch: Partial<FlowerRecords[string]>, message = "") => {
+    const supabasePlantId = supabasePlantIdsByLegacyId[flowerId];
+    if (supabaseWriteMode === "supabase-first" && supabasePlantId) {
+      await writeSupabaseFirst(
+        () => updateSupabaseCareRecord(supabasePlantId, patch),
+        () => updateRecord(flowerId, patch),
+        "Supabase care record write failed. Change is saved to legacy storage.",
+      );
+    } else {
+      updateRecord(flowerId, patch);
+    }
+
+    if (message) {
+      setQuickRecordStatus(message);
+    }
+  };
+
   const saveQuickRecord = (flowerId: string, patch: Partial<FlowerRecords[string]>, message: string) => {
-    updateRecord(flowerId, patch);
-    setQuickRecordStatus(message);
+    void updateCareRecord(flowerId, patch, message);
+  };
+
+  const saveFlower = async (flower: Flower, message = "") => {
+    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
+      const result = await writeSupabaseFirst(
+        () => upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower),
+        () => updateFlower(flower),
+        "Supabase plant write failed. Change is saved to legacy storage.",
+      );
+      if (result && message) {
+        setQuickRecordStatus(message);
+      }
+      return;
+    }
+
+    updateFlower(flower);
+    if (message) {
+      setQuickRecordStatus(message);
+    }
+  };
+
+  const addFlower = async (flower: Flower) => {
+    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
+      await writeSupabaseFirst(
+        () => upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower),
+        () => addCustomFlower(flower),
+        "Supabase custom plant write failed. Plant is saved to legacy storage.",
+      );
+      return;
+    }
+
+    addCustomFlower(flower);
+  };
+
+  const removeFlowerById = async (flowerId: string) => {
+    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
+      await writeSupabaseFirst(
+        () => setSupabasePlantRemoved(supabaseReadState.household.id, flowerId, true),
+        () => removeFlower(flowerId),
+        "Supabase plant removal failed. Removal is saved to legacy storage.",
+      );
+      return;
+    }
+
+    removeFlower(flowerId);
+  };
+
+  const runSupabaseComparison = () => {
+    if (!supabaseReadState) {
+      setSupabaseCompareResult(null);
+      return;
+    }
+
+    setSupabaseCompareResult(compareLegacyAndSupabaseHouseholdState(legacyHouseholdState, supabaseReadState));
   };
 
   const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
@@ -744,7 +1195,7 @@ export const App = () => {
     event.preventDefault();
     const plantName = newPlantName.trim();
 
-    if (!plantName || !newPlantImageFile) {
+    if (!plantName || !newPlantImage) {
       setNewPlantStatus("Zadaj názov rastliny a pridaj obrázok.");
       return;
     }
@@ -753,7 +1204,7 @@ export const App = () => {
     setNewPlantStatus("Spracúvam obrázok a generujem starostlivosť cez AI...");
 
     try {
-      const imageDataUrl = await resizeImageFileToDataUrl(newPlantImageFile);
+      const imageDataUrl = newPlantImage.dataUrl;
       const care = await fetchGeneratedCare(plantName, imageDataUrl);
       const { displayName: aiCareDisplayName, identificationConfidence, ...careProfile } = care;
       const aiDisplayName = aiCareDisplayName.trim();
@@ -767,10 +1218,11 @@ export const App = () => {
         source: "custom",
       };
 
-      addCustomFlower(customFlower);
+      await addFlower(customFlower);
       setNewPlantStatus(`AI identifikovala rastlinu ako ${customFlower.displayName}. Rastlina je pridaná.`);
       setNewPlantName("");
-      setNewPlantImageFile(null);
+      URL.revokeObjectURL(newPlantImage.previewUrl);
+      setNewPlantImage(null);
       setIsAddPlantModalOpen(false);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Rastlinu sa nepodarilo pridať.";
@@ -809,7 +1261,7 @@ export const App = () => {
       return;
     }
 
-    updateFlower(applyGeneratedCareToFlower(currentFlower, carePreview.nextCare));
+    void saveFlower(applyGeneratedCareToFlower(currentFlower, carePreview.nextCare), "Plant care updated.");
     setCarePreview(null);
     setCarePreviewStatus("Starostlivosť bola aktualizovaná podľa AI návrhu.");
   };
@@ -830,13 +1282,15 @@ export const App = () => {
       return;
     }
 
-    updateFlower({ ...flower, displayName: nextName, source: "custom" });
+    void saveFlower({ ...flower, displayName: nextName, source: "custom" });
     cancelNameEdit();
   };
 
   const openDiagnosisModal = () => {
     setDiagnosisImageDataUrl("");
+    setDiagnosisImagePreviewUrl("");
     setDiagnosisDraft(null);
+    setDiagnosisSymptomNotes("");
     setDiagnosisUserNote("");
     setDiagnosisStatus("");
     setIsDiagnosisModalOpen(true);
@@ -850,19 +1304,42 @@ export const App = () => {
     setIsDiagnosisModalOpen(false);
   };
 
-  const handleDiagnosisImageChange = async (file: File | undefined) => {
-    if (!file) {
+  const handleNewPlantImageCapture = async (source: "camera" | "gallery", file?: File) => {
+    try {
+      setNewPlantStatus("SpracĂşvam fotku...");
+      const image = await captureImage({ file, source });
+      if (newPlantImage?.previewUrl) {
+        URL.revokeObjectURL(newPlantImage.previewUrl);
+      }
+      setNewPlantImage(image);
+      setNewPlantStatus("Fotka je pripravenĂˇ.");
+    } catch (error) {
+      setNewPlantImage(null);
+      setNewPlantStatus(error instanceof Error ? error.message : "Fotku sa nepodarilo spracovaĹĄ.");
+    }
+  };
+
+  const handleDiagnosisImageChange = async (source: "camera" | "gallery", file?: File) => {
+    if (!file && source === "gallery") {
       return;
     }
 
     try {
       setDiagnosisStatus("Spracúvam fotku...");
       setDiagnosisDraft(null);
-      const imageDataUrl = await resizeDiagnosticImageFileToDataUrl(file);
-      setDiagnosisImageDataUrl(imageDataUrl);
+      const image = await captureImage({ file, source });
+      if (diagnosisImagePreviewUrl) {
+        URL.revokeObjectURL(diagnosisImagePreviewUrl);
+      }
+      setDiagnosisImageDataUrl(image.dataUrl);
+      setDiagnosisImagePreviewUrl(image.previewUrl);
       setDiagnosisStatus("Fotka je pripravená na AI diagnostiku.");
     } catch (error) {
+      if (diagnosisImagePreviewUrl) {
+        URL.revokeObjectURL(diagnosisImagePreviewUrl);
+      }
       setDiagnosisImageDataUrl("");
+      setDiagnosisImagePreviewUrl("");
       setDiagnosisStatus(error instanceof Error ? error.message : "Fotku sa nepodarilo spracovať.");
     }
   };
@@ -873,40 +1350,107 @@ export const App = () => {
     }
 
     setIsDiagnosing(true);
-    setDiagnosisStatus("AI analyzuje fotku rastliny...");
+    setDiagnosisStatus("Overujem Premium pr?stup...");
 
     try {
-      const diagnosis = await fetchPlantDiagnosis(flower.displayName, diagnosisImageDataUrl);
+      const gate = await checkDiagnosisGate({
+        isAuthenticated: auth.isAuthenticated,
+        wasLegacyDiagnosisAvailable: true,
+      });
+
+      if (!gate.allowed) {
+        setDiagnosisUpgradeReason(gate.message);
+        setDiagnosisStatus(gate.message);
+        return;
+      }
+
+      setDiagnosisStatus("AI analyzuje fotku rastliny...");
+      const diagnosis = await fetchPlantDiagnosis(flower.displayName, diagnosisImageDataUrl, diagnosisSymptomNotes);
       setDiagnosisDraft(diagnosis);
-      setDiagnosisStatus(diagnosis.confidence < 45 ? "Výsledok má nízku istotu. Skontroluj ho opatrne." : "");
+      await recordDiagnosisUsage(gate.mode);
+      setDiagnosisStatus(diagnosis.confidence < 45 ? "V?sledok m? n?zku istotu. Skontroluj ho opatrne." : "");
     } catch (error) {
       setDiagnosisDraft(null);
-      setDiagnosisStatus(error instanceof Error ? error.message : "AI diagnostika zlyhala. Skús inú fotku.");
+      setDiagnosisStatus(error instanceof Error ? error.message : "AI diagnostika zlyhala. Sk?s in? fotku.");
     } finally {
       setIsDiagnosing(false);
     }
   };
 
-  const savePlantDiagnosis = (flower: Flower, userConfirmation: DiagnosisConfirmation) => {
+  const savePlantDiagnosis = async (flower: Flower, userConfirmation: DiagnosisConfirmation) => {
     if (!diagnosisDraft || !diagnosisImageDataUrl || !flowerById.has(flower.id)) {
-      setDiagnosisStatus("Diagnostiku sa nepodarilo uložiť, rastlina už nie je dostupná.");
+      setDiagnosisStatus("Diagnostiku sa nepodarilo ulo?i?, rastlina u? nie je dostupn?.");
       return;
     }
 
     const now = new Date().toISOString();
+    const sanitizedNote = sanitizeDiagnosticNote(diagnosisUserNote);
+    const supabasePlantId = supabasePlantIdsByLegacyId[flower.id];
+    let supabaseImagePath = "";
+    let supabaseDiagnosticId = "";
+
+    if (supabaseWriteMode === "supabase-first" && supabasePlantId) {
+      try {
+        const legacyDiagnosisId = createDiagnosticId();
+        const saved = await createSupabaseDiagnosis({
+          diagnosis: diagnosisDraft,
+          imageDataUrl: diagnosisImageDataUrl,
+          legacyId: legacyDiagnosisId,
+          plantId: supabasePlantId,
+          userConfirmation,
+          userNote: sanitizedNote,
+        });
+        supabaseImagePath = saved.imagePath ?? "";
+        supabaseDiagnosticId = saved.id;
+      } catch {
+        setDiagnosisStatus("Supabase ulo?enie zlyhalo. Diagnostiku uklad?m lok?lne pre sp?tn? kompatibilitu.");
+      }
+    }
+
     const entry: PlantDiagnosticEntry = {
       ...diagnosisDraft,
       createdAt: now,
-      id: createDiagnosticId(),
-      imageDataUrl: diagnosisImageDataUrl,
+      id: supabaseDiagnosticId || createDiagnosticId(),
+      imageDataUrl: supabaseImagePath ? "" : diagnosisImageDataUrl,
+      imagePath: supabaseImagePath || undefined,
       plantId: flower.id,
+      storageMode: supabaseImagePath ? "supabase" : "local",
       updatedAt: now,
       userConfirmation,
-      userNote: diagnosisUserNote.trim(),
+      userNote: sanitizedNote,
     };
 
-    setDiagnostics((current) => [entry, ...current]);
+    setDiagnostics((current) => [entry, ...current.filter((diagnostic) => diagnostic.id !== entry.id)]);
     setIsDiagnosisModalOpen(false);
+  };
+
+  const updateDiagnosticHistoryEntry = async (diagnosticId: string, patch: Partial<Pick<PlantDiagnosticEntry, "userConfirmation" | "userNote">>) => {
+    const sanitizedPatch = {
+      ...patch,
+      ...(patch.userNote !== undefined ? { userNote: sanitizeDiagnosticNote(patch.userNote) } : {}),
+    };
+
+    setDiagnostics((current) =>
+      current.map((diagnostic) =>
+        diagnostic.id === diagnosticId
+          ? {
+              ...diagnostic,
+              ...sanitizedPatch,
+              updatedAt: new Date().toISOString(),
+            }
+          : diagnostic,
+      ),
+    );
+
+    const diagnostic = diagnostics.find((item) => item.id === diagnosticId);
+    if (diagnostic?.storageMode === "supabase" && supabaseWriteMode === "supabase-first") {
+      try {
+        await updateSupabaseDiagnosis(diagnosticId, sanitizedPatch);
+        await refreshSupabaseReadState();
+      } catch {
+        setDiagnosisStatus("Zmena je ulo?en? lok?lne. Supabase synchroniz?cia zlyhala.");
+      }
+    }
   };
 
   const confirmRemoveCustomFlower = () => {
@@ -914,7 +1458,7 @@ export const App = () => {
       return;
     }
 
-    removeFlower(deleteFlowerId);
+    void removeFlowerById(deleteFlowerId);
     setDeleteFlowerId("");
     window.location.hash = "#/";
   };
@@ -1065,6 +1609,14 @@ export const App = () => {
               <Droplets size={18} aria-hidden="true" />
               Zaliata dnes
             </button>
+            <button className="ghost-action" type="button" onClick={openDiagnosisModal}>
+              <Camera size={18} aria-hidden="true" />
+              Diagnostikova? probl?m
+            </button>
+            <a className="ghost-action action-link-button" href="#care-title">
+              <Leaf size={18} aria-hidden="true" />
+              Tipy starostlivosti
+            </a>
             <button
               className={`ghost-action ${quickRecordStatus === "Presadenie uložené" ? "quick-action-saved" : ""}`}
               type="button"
@@ -1224,8 +1776,32 @@ export const App = () => {
             <input
               type="checkbox"
               checked={flower.notificationsEnabled !== false}
-              onChange={(event) => updateFlower({ ...flower, notificationsEnabled: event.target.checked, source: "custom" })}
+              onChange={(event) => void saveFlower({ ...flower, notificationsEnabled: event.target.checked, source: "custom" })}
             />
+          </label>
+          <label className="field">
+            <span>Interval z?lievky pre pripomienky</span>
+            <input
+              type="number"
+              min={1}
+              max={90}
+              value={intervalDays}
+              onChange={(event) => {
+                const settings = normalizeReminderSettings({
+                  notificationsEnabled: flower.notificationsEnabled !== false,
+                  preference: "web_push",
+                  wateringIntervalDays: Number(event.target.value),
+                });
+                void saveFlower({ ...flower, wateringIntervalDays: settings.wateringIntervalDays, source: "custom" });
+              }}
+            />
+            <small>{getReminderArchitectureNote()}</small>
+          </label>
+          <label className="field">
+            <span>Preferencia pripomienok</span>
+            <select value="web_push" disabled>
+              <option value="web_push">Web push teraz, native push nesk?r</option>
+            </select>
           </label>
           <label className="field">
             <span>Dátum poslednej zálievky</span>
@@ -1234,9 +1810,9 @@ export const App = () => {
                 type="date"
                 value={record.lastWatered}
                 max="9999-12-31"
-                onChange={(event) => updateRecord(flower.id, { lastWatered: event.target.value })}
+                onChange={(event) => void updateCareRecord(flower.id, { lastWatered: event.target.value })}
               />
-              <button type="button" onClick={() => updateRecord(flower.id, { lastWatered: todayIsoDate() })}>
+              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastWatered: todayIsoDate() })}>
                 Dnes
               </button>
             </div>
@@ -1248,9 +1824,9 @@ export const App = () => {
                 type="date"
                 value={record.lastTransplanted}
                 max="9999-12-31"
-                onChange={(event) => updateRecord(flower.id, { lastTransplanted: event.target.value })}
+                onChange={(event) => void updateCareRecord(flower.id, { lastTransplanted: event.target.value })}
               />
-              <button type="button" onClick={() => updateRecord(flower.id, { lastTransplanted: todayIsoDate() })}>
+              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastTransplanted: todayIsoDate() })}>
                 Dnes
               </button>
             </div>
@@ -1262,9 +1838,9 @@ export const App = () => {
                 type="date"
                 value={record.lastFertilized}
                 max="9999-12-31"
-                onChange={(event) => updateRecord(flower.id, { lastFertilized: event.target.value })}
+                onChange={(event) => void updateCareRecord(flower.id, { lastFertilized: event.target.value })}
               />
-              <button type="button" onClick={() => updateRecord(flower.id, { lastFertilized: todayIsoDate() })}>
+              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastFertilized: todayIsoDate() })}>
                 Dnes
               </button>
             </div>
@@ -1275,7 +1851,7 @@ export const App = () => {
               rows={5}
               placeholder="Pozorovania, plán presadenia alebo čokoľvek užitočné."
               value={record.note}
-              onChange={(event) => updateRecord(flower.id, { note: event.target.value })}
+              onChange={(event) => void updateCareRecord(flower.id, { note: event.target.value })}
             />
           </label>
         </section>
@@ -1289,25 +1865,85 @@ export const App = () => {
             <p>Zatiaľ tu nie je uložená žiadna diagnostika.</p>
           ) : (
             <div className="diagnostic-history-list">
-              {flowerDiagnostics.map((diagnosis) => (
-                <article className={`diagnostic-history-card diagnostic-risk-${diagnosis.riskLevel}`} key={diagnosis.id}>
-                  <img src={diagnosis.imageDataUrl} alt={`Diagnostika ${diagnosis.diagnosisTitle}`} />
-                  <div>
-                    <span>{formatDate(diagnosis.createdAt.slice(0, 10))}</span>
-                    <h3>{diagnosis.diagnosisTitle}</h3>
-                    <p>
-                      {diagnosis.confidence}% – {diagnosis.confidenceLabel} istota ·{" "}
-                      {diagnosis.userConfirmation === "confirmed" ? "uložené ako správne" : "označené ako nesprávne"}
-                    </p>
-                    <ol>
-                      {diagnosis.recommendedSteps.slice(0, 4).map((step) => (
-                        <li key={step}>{step}</li>
-                      ))}
-                    </ol>
-                    {diagnosis.userNote ? <small>Poznámka: {diagnosis.userNote}</small> : null}
-                  </div>
-                </article>
-              ))}
+              {flowerDiagnostics.map((diagnosis) => {
+                const isOpen = openDiagnosticId === diagnosis.id;
+                return (
+                  <article className={`diagnostic-history-card diagnostic-risk-${diagnosis.riskLevel}`} key={diagnosis.id}>
+                    {diagnosis.imageDataUrl ? (
+                      <img src={diagnosis.imageDataUrl} alt={`Diagnostika ${diagnosis.diagnosisTitle}`} />
+                    ) : (
+                      <div className="diagnostic-image-placeholder">Supabase</div>
+                    )}
+                    <div>
+                      <span>{formatDate(diagnosis.createdAt.slice(0, 10))}</span>
+                      <h3>{diagnosis.diagnosisTitle}</h3>
+                      <p>
+                        {diagnosis.confidence}% - {diagnosis.confidenceLabel} istota ? {riskLevelLabel(diagnosis.riskLevel)} ? {" "}
+                        {diagnosis.userConfirmation === "confirmed" ? "potvrden?" : "zamietnut?"}
+                      </p>
+                      <button className="text-action" type="button" onClick={() => setOpenDiagnosticId(isOpen ? "" : diagnosis.id)}>
+                        {isOpen ? "Skry? detail" : "Otvori? detail"}
+                      </button>
+                      {isOpen ? (
+                        <div className="diagnostic-detail">
+                          <section>
+                            <h4>Detegovan? sympt?my</h4>
+                            <ul>
+                              {diagnosis.observedSymptoms.map((symptom) => (
+                                <li key={symptom}>{symptom}</li>
+                              ))}
+                            </ul>
+                          </section>
+                          <section>
+                            <h4>Odpor??an? kroky</h4>
+                            <ol>
+                              {diagnosis.recommendedSteps.map((step) => (
+                                <li key={step}>{step}</li>
+                              ))}
+                            </ol>
+                          </section>
+                          <section>
+                            <h4>Pravdepodobn? pr??iny</h4>
+                            <p>{diagnosis.reasoningSummary}</p>
+                          </section>
+                          <small>{diagnosis.disclaimer}</small>
+                          <label className="field">
+                            <span>Osobn? pozn?mka</span>
+                            <textarea
+                              rows={3}
+                              value={diagnosis.userNote}
+                              onChange={(event) => void updateDiagnosticHistoryEntry(diagnosis.id, { userNote: event.target.value })}
+                            />
+                          </label>
+                          <div className="modal-actions">
+                            <button
+                              className="primary-action"
+                              type="button"
+                              onClick={() => void updateDiagnosticHistoryEntry(diagnosis.id, { userConfirmation: "confirmed" })}
+                            >
+                              Potvrdi?
+                            </button>
+                            <button
+                              className="neutral-action"
+                              type="button"
+                              onClick={() => void updateDiagnosticHistoryEntry(diagnosis.id, { userConfirmation: "rejected" })}
+                            >
+                              Zamietnu?
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <ol>
+                          {diagnosis.recommendedSteps.slice(0, 3).map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      )}
+                      {diagnosis.userNote && !isOpen ? <small>Pozn?mka: {diagnosis.userNote}</small> : null}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1401,12 +2037,23 @@ export const App = () => {
               </div>
               <p>Pridaj ostrú fotku postihnutého listu alebo časti rastliny. AI výsledok je iba odhad.</p>
 
+              <label className="field">
+                <span>Sympt?my alebo pozn?mky</span>
+                <textarea
+                  rows={3}
+                  value={diagnosisSymptomNotes}
+                  maxLength={600}
+                  placeholder="Napr. ?lt? listy, m?kk? stonka, ?kvrny, posledn? z?lievka..."
+                  onChange={(event) => setDiagnosisSymptomNotes(event.target.value)}
+                />
+              </label>
+
               <label className="diagnosis-upload">
                 <span className="image-upload-icon">
                   <ImagePlus size={19} aria-hidden="true" />
                 </span>
                 <span className="image-upload-copy">
-                  <strong>Vybrať alebo odfotiť problém</strong>
+                  <strong>Vybrat alebo odfotit problem</strong>
                   <small>JPG, PNG, WEBP · max 8 MB</small>
                 </span>
                 <input
@@ -1414,13 +2061,26 @@ export const App = () => {
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
                   onChange={(event) => {
-                    void handleDiagnosisImageChange(event.target.files?.[0]);
+                    void handleDiagnosisImageChange("gallery", event.target.files?.[0]);
                     event.target.value = "";
                   }}
                 />
               </label>
 
-              {diagnosisImageDataUrl ? <img className="diagnosis-preview" src={diagnosisImageDataUrl} alt="Náhľad diagnostickej fotky" /> : null}
+              {isNativeImageRuntime ? (
+                <div className="image-capture-actions">
+                  <button className="ghost-action" type="button" onClick={() => void handleDiagnosisImageChange("camera")}>
+                    <Camera size={17} aria-hidden="true" />
+                    Odfotit
+                  </button>
+                  <button className="ghost-action" type="button" onClick={() => void handleDiagnosisImageChange("gallery")}>
+                    <ImagePlus size={17} aria-hidden="true" />
+                    Galeria
+                  </button>
+                </div>
+              ) : null}
+
+              {diagnosisImageDataUrl ? <img className="diagnosis-preview" src={diagnosisImagePreviewUrl || diagnosisImageDataUrl} alt="Náhľad diagnostickej fotky" /> : null}
               {diagnosisStatus ? <p className="care-preview-status">{diagnosisStatus}</p> : null}
 
               <button
@@ -1438,6 +2098,7 @@ export const App = () => {
                     <div>
                       <span>Diagnóza</span>
                       <h3>{diagnosisDraft.diagnosisTitle}</h3>
+                      <small>{riskLevelLabel(diagnosisDraft.riskLevel)}</small>
                     </div>
                     <strong>
                       {diagnosisDraft.confidence}% – {diagnosisDraft.confidenceLabel} istota
@@ -1489,6 +2150,10 @@ export const App = () => {
           </div>
         ) : null}
 
+        {diagnosisUpgradeReason ? (
+          <UpgradeModal limitReason={diagnosisUpgradeReason} onClose={() => setDiagnosisUpgradeReason("")} />
+        ) : null}
+
         {deleteFlowerId === flower.id ? (
           <div className="modal-backdrop" role="presentation">
             <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
@@ -1508,6 +2173,150 @@ export const App = () => {
             </section>
           </div>
         ) : null}
+      </main>
+    );
+  }
+
+  if (route.page === "account") {
+    return (
+      <main className="app-shell compact">
+        <header className="topbar">
+          <a className="icon-link" href="#/" aria-label="Sp?? na preh?ad">
+            <ArrowLeft size={22} aria-hidden="true" />
+          </a>
+          <div>
+            <p className="eyebrow">Plantie ??et</p>
+            <h1>??et a Premium</h1>
+          </div>
+          <AuthButton />
+        </header>
+        <section className="mobile-product-card">
+          <h2>Prihl?senie je st?le volite?n?</h2>
+          <p>Legacy dom?cnostn? link, lok?lne d?ta a Netlify Blob sync zost?vaj? akt?vne. Premium sa aktivuje a? cez serverov? entitlementy.</p>
+        </section>
+        <section className="migration-card" aria-labelledby="data-source-title">
+          <div className="section-title">
+            <BadgeCheck size={18} aria-hidden="true" />
+            <h2 id="data-source-title">Data source</h2>
+          </div>
+          <div className="migration-preview-grid">
+            <span>Current source: {dataSourceLabel[dataSourceMode]}</span>
+            <span>Supabase reads flag: {isSupabaseReadThroughEnabled ? "on" : "off"}</span>
+            <span>Supabase writes flag: {isSupabaseWriteThroughEnvEnabled ? "on" : "off"}</span>
+            <span>Local write rollback: {isSupabaseWritesLocallyDisabled ? "enabled" : "off"}</span>
+            <span>Authenticated: {auth.isAuthenticated ? "yes" : "no"}</span>
+            <span>Migrated household: {supabaseReadState ? "found" : "not found"}</span>
+            <span>Supabase plants: {supabaseReadState?.allFlowers.length ?? 0}</span>
+            <span>Report settings: {effectiveReportRecipient ? "present" : "missing"}</span>
+          </div>
+          <p className="report-status">
+            {dataSourceMode === "supabase-readonly"
+              ? "Supabase preview is read-only. Current write actions still use the legacy local and Netlify flow."
+              : dataSourceMode === "supabase-readwrite"
+                ? "Supabase is the primary read/write source. Successful writes are mirrored to legacy storage for rollback."
+              : dataSourceMode === "error"
+                ? "Supabase read failed, so the app is safely showing legacy data."
+                : "Legacy data remains the active runtime source unless Supabase reads are enabled and a migrated authenticated household is available."}
+          </p>
+          {supabaseWriteWarning ? <p className="report-status">{supabaseWriteWarning}</p> : null}
+          <button
+            className="neutral-action"
+            type="button"
+            disabled={!isSupabaseWriteThroughEnvEnabled || isSupabaseWritesLocallyDisabled}
+            onClick={disableSupabaseWritesLocally}
+          >
+            Disable Supabase write mode locally
+          </button>
+          <button
+            className="primary-action"
+            type="button"
+            disabled={!supabaseReadState}
+            onClick={runSupabaseComparison}
+          >
+            Compare legacy vs Supabase
+          </button>
+          {supabaseCompareResult ? (
+            <div className="migration-result">
+              <strong>Safe comparison summary</strong>
+              <span>
+                Plants: legacy {supabaseCompareResult.summary.legacyPlants} / Supabase{" "}
+                {supabaseCompareResult.summary.supabasePlants}
+              </span>
+              <span>
+                Care records: legacy {supabaseCompareResult.summary.legacyCareRecords} / Supabase{" "}
+                {supabaseCompareResult.summary.supabaseCareRecords}
+              </span>
+              <span>
+                Diagnostics: legacy {supabaseCompareResult.summary.legacyDiagnostics} / Supabase{" "}
+                {supabaseCompareResult.summary.supabaseDiagnostics}
+              </span>
+              <span>
+                Hidden or removed: legacy {supabaseCompareResult.summary.legacyHiddenOrRemovedPlants} / Supabase{" "}
+                {supabaseCompareResult.summary.supabaseHiddenOrRemovedPlants}
+              </span>
+              <span>Missing legacy ID references: {supabaseCompareResult.missingLegacyIds.length}</span>
+              <small>
+                Mismatches:{" "}
+                {[
+                  supabaseCompareResult.plantCountMismatch ? "plant count" : "",
+                  supabaseCompareResult.careRecordCountMismatch ? "care records" : "",
+                  supabaseCompareResult.diagnosisCountMismatch ? "diagnostics" : "",
+                  supabaseCompareResult.hiddenRemovedPlantMismatch ? "hidden/removed plants" : "",
+                  supabaseCompareResult.missingLegacyIds.length > 0 ? "legacy IDs" : "",
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "none"}
+              </small>
+            </div>
+          ) : null}
+        </section>
+        <LegacyMigrationCard
+          activeHousehold={activeHousehold}
+          allFlowers={legacyAllFlowersIncludingRemoved}
+          customFlowers={customFlowers}
+          diagnostics={legacyDiagnostics}
+          isAuthenticated={auth.isAuthenticated}
+          records={legacyRecords}
+          removedFlowerIds={removedFlowerIds}
+          reportSettings={{ recipientEmail: reportRecipient }}
+        />
+        <PricingPage />
+        <MobileBottomNav />
+      </main>
+    );
+  }
+
+  if (route.page === "diagnose") {
+    return (
+      <main className="app-shell compact">
+        <header className="topbar">
+          <a className="icon-link" href="#/" aria-label="Sp?? na preh?ad">
+            <ArrowLeft size={22} aria-hidden="true" />
+          </a>
+          <div>
+            <p className="eyebrow">Premium pripraven?</p>
+            <h1>Diagnostika rastliny</h1>
+          </div>
+        </header>
+        <section className="diagnose-picker" aria-labelledby="diagnose-picker-title">
+          <div className="section-title">
+            <Camera size={18} aria-hidden="true" />
+            <h2 id="diagnose-picker-title">Vyber rastlinu</h2>
+          </div>
+          <p>Otvor detail rastliny a pou?i akciu ?Rastlina vyzer? zle?. Prihl?sen? pou??vatelia musia ma? Premium entitlement zo Supabase.</p>
+          <div className="diagnose-picker-list">
+            {allFlowers.map((flower) => (
+              <a className="diagnose-picker-card" href={flowerPath(flower.id, true)} key={flower.id}>
+                <img src={flower.image} alt={flower.displayName} loading="lazy" />
+                <div>
+                  <strong>{flower.displayName}</strong>
+                  <span>{flowerDiagnosticsCount(flower.id, diagnostics)} ulo?en?ch diagnost?k</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+        <MobileBottomNav />
       </main>
     );
   }
@@ -1711,6 +2520,7 @@ export const App = () => {
           <p className="hero-copy">Otvor rastlinu, aktualizuj zálievku alebo presadenie, pridaj poznámku a vytlač QR štítky na kvetináče.</p>
         </div>
         <div className="hero-actions">
+          <AuthButton />
           <button className="qr-action add-plant-trigger" type="button" onClick={() => setIsAddPlantModalOpen(true)}>
             <Plus size={20} aria-hidden="true" />
             Pridať rastlinu
@@ -1786,17 +2596,33 @@ export const App = () => {
                 <label className="image-upload">
                   <input
                     type="file"
-                    accept="image/*"
-                    onChange={(event) => setNewPlantImageFile(event.target.files?.[0] ?? null)}
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      void handleNewPlantImageCapture("gallery", event.target.files?.[0]);
+                      event.target.value = "";
+                    }}
                   />
                   <span className="image-upload-icon">
                     <ImagePlus size={22} aria-hidden="true" />
                   </span>
                   <span className="image-upload-copy">
-                    <strong>{newPlantImageFile ? newPlantImageFile.name : "Vybrať fotku"}</strong>
-                    <small>{newPlantImageFile ? "Fotka je pripravená" : "JPG, PNG alebo fotka z mobilu"}</small>
+                    <strong>{newPlantImage ? newPlantImage.name : "Vybrat fotku"}</strong>
+                    <small>{newPlantImage ? "Fotka je pripravena" : "JPG, PNG, WEBP max 8 MB"}</small>
                   </span>
                 </label>
+                {isNativeImageRuntime ? (
+                  <div className="image-capture-actions">
+                    <button className="ghost-action" type="button" onClick={() => void handleNewPlantImageCapture("camera")}>
+                      <Camera size={17} aria-hidden="true" />
+                      Odfotit
+                    </button>
+                    <button className="ghost-action" type="button" onClick={() => void handleNewPlantImageCapture("gallery")}>
+                      <ImagePlus size={17} aria-hidden="true" />
+                      Galeria
+                    </button>
+                  </div>
+                ) : null}
+                {newPlantImage ? <img className="diagnosis-preview" src={newPlantImage.previewUrl} alt="Náhľad novej rastliny" /> : null}
               </label>
               <button type="submit" disabled={isAddingPlant}>
                 <Plus size={18} aria-hidden="true" />
@@ -1846,6 +2672,7 @@ export const App = () => {
           <p>Vymaž vyhľadávanie a zobrazí sa celý dashboard.</p>
         </section>
       ) : null}
+      <MobileBottomNav />
     </main>
   );
 };

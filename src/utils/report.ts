@@ -41,7 +41,7 @@ export const createMailtoReportUrl = (recipient: string, records: FlowerRecords,
       ])
     : ["Dnes nie je žiadna rastlina pod 20 % zálievky."];
 
-  const subject = "FlowerScan report: rastliny pod 20 % zálievky";
+  const subject = "Plantie report: rastliny pod 20 % zálievky";
   const body = [
     "Prehľad rastlín, ktoré sú pod 20 % zálievky.",
     "Rastliny nad 20 % nie sú v reporte zahrnuté.",

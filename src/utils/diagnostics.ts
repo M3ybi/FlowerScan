@@ -1,5 +1,6 @@
 export type DiagnosisRiskLevel = "low" | "medium" | "high";
 export type DiagnosisConfirmation = "confirmed" | "rejected";
+export type DiagnosisStorageMode = "local" | "supabase";
 
 export type PlantDiagnosisDraft = {
   diagnosisTitle: string;
@@ -16,16 +17,36 @@ export type PlantDiagnosticEntry = PlantDiagnosisDraft & {
   id: string;
   plantId: string;
   imageDataUrl: string;
+  imagePath?: string;
+  storageMode?: DiagnosisStorageMode;
   userConfirmation: DiagnosisConfirmation;
   userNote: string;
   createdAt: string;
   updatedAt: string;
 };
 
-const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const maxDiagnosticImageBytes = 8 * 1024 * 1024;
+export const allowedDiagnosticImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+export const maxDiagnosticImageBytes = 8 * 1024 * 1024;
+export const maxDiagnosticNoteLength = 700;
 
 export const createDiagnosticId = () => `diag-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export const sanitizeDiagnosticNote = (value: string) =>
+  value
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxDiagnosticNoteLength);
+
+export const validateDiagnosticImageFile = (file: File) => {
+  if (!allowedDiagnosticImageTypes.has(file.type)) {
+    throw new Error("Podporovan? s? iba obr?zky JPG, PNG alebo WEBP.");
+  }
+
+  if (file.size > maxDiagnosticImageBytes) {
+    throw new Error("Obr?zok je pr?li? ve?k?. Maximum je 8 MB.");
+  }
+};
 
 export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[] => {
   if (!Array.isArray(value)) {
@@ -43,7 +64,7 @@ export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[
         typeof diagnosis.id === "string" &&
         typeof diagnosis.plantId === "string" &&
         typeof diagnosis.imageDataUrl === "string" &&
-        diagnosis.imageDataUrl.startsWith("data:image/") &&
+        (diagnosis.imageDataUrl.startsWith("data:image/") || diagnosis.imageDataUrl === "") &&
         typeof diagnosis.diagnosisTitle === "string" &&
         typeof diagnosis.confidence === "number" &&
         typeof diagnosis.confidenceLabel === "string" &&
@@ -61,19 +82,17 @@ export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[
       confidence: Math.max(0, Math.min(100, Math.round(diagnosis.confidence))),
       observedSymptoms: diagnosis.observedSymptoms.filter((item): item is string => typeof item === "string").slice(0, 8),
       recommendedSteps: diagnosis.recommendedSteps.filter((item): item is string => typeof item === "string").slice(0, 8),
-      userNote: typeof diagnosis.userNote === "string" ? diagnosis.userNote : "",
+      storageMode: diagnosis.storageMode === "supabase" ? "supabase" : "local",
+      userNote: typeof diagnosis.userNote === "string" ? sanitizeDiagnosticNote(diagnosis.userNote) : "",
     }));
 };
 
 export const resizeDiagnosticImageFileToDataUrl = (file: File, maxSize = 1200): Promise<string> =>
   new Promise((resolve, reject) => {
-    if (!allowedImageTypes.has(file.type)) {
-      reject(new Error("Podporované sú iba obrázky JPG, PNG alebo WEBP."));
-      return;
-    }
-
-    if (file.size > maxDiagnosticImageBytes) {
-      reject(new Error("Obrázok je príliš veľký. Maximum je 8 MB."));
+    try {
+      validateDiagnosticImageFile(file);
+    } catch (error) {
+      reject(error);
       return;
     }
 
@@ -156,11 +175,11 @@ const normalizeDiagnosis = (value: unknown): PlantDiagnosisDraft | null => {
   };
 };
 
-export const fetchPlantDiagnosis = async (plantName: string, imageDataUrl: string): Promise<PlantDiagnosisDraft> => {
+export const fetchPlantDiagnosis = async (plantName: string, imageDataUrl: string, symptomNotes = ""): Promise<PlantDiagnosisDraft> => {
   const response = await fetch("/.netlify/functions/plant-diagnosis-ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageDataUrl, plantName }),
+    body: JSON.stringify({ imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) }),
   });
 
   if (!response.ok) {

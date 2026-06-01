@@ -124,14 +124,15 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "AI diagnostic service is not configured." }), headers, statusCode: 503 };
   }
 
-  let body: { imageDataUrl?: string; plantName?: string };
+  let body: { imageDataUrl?: string; plantName?: string; symptomNotes?: string };
   try {
-    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; plantName?: string };
+    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; plantName?: string; symptomNotes?: string };
   } catch {
     return { body: JSON.stringify({ error: "Invalid JSON body." }), headers, statusCode: 400 };
   }
 
   const plantName = typeof body.plantName === "string" ? body.plantName.trim().slice(0, 90) : "";
+  const symptomNotes = sanitizeText(body.symptomNotes, 600);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
   const isSupportedImage = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl);
 
@@ -155,6 +156,7 @@ export const handler: Handler = async (event) => {
               type: "input_text",
             },
             { text: `Rastlina: ${plantName}`, type: "input_text" },
+            ...(symptomNotes ? [{ text: `Poznámky používateľa: ${symptomNotes}`, type: "input_text" }] : []),
             { detail: "high", image_url: imageDataUrl, type: "input_image" },
           ],
           role: "user",

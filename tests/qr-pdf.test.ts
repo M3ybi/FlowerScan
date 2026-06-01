@@ -27,3 +27,9 @@ test("QR export uses low density settings for tiny print", () => {
   assert.match(source, /errorCorrectionLevel:\s*"L"/);
   assert.match(source, /margin:\s*1/);
 });
+
+test("QR export uses Plantie branding", () => {
+  assert.match(source, /author:\s*"Plantie"/);
+  assert.match(source, /title:\s*"Plantie QR labels"/);
+  assert.match(source, /pdf\.save\("plantie-qr-labels-a4\.pdf"\)/);
+});

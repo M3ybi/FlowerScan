@@ -93,9 +93,9 @@ export const exportQrLabelsPdf = async (flowers: Flower[], baseUrl: string) => {
   const pdf = new jsPDF({ format: "a4", orientation: "portrait", unit: "mm" });
 
   pdf.setProperties({
-    author: "FlowerScan",
+    author: "Plantie",
     subject: "Tlačiteľné QR štítky pre rastliny",
-    title: "FlowerScan QR labels",
+    title: "Plantie QR labels",
   });
 
   for (const [index, item] of layout.entries()) {
@@ -129,5 +129,5 @@ export const exportQrLabelsPdf = async (flowers: Flower[], baseUrl: string) => {
     );
   }
 
-  pdf.save("flowerscan-qr-labels-a4.pdf");
+  pdf.save("plantie-qr-labels-a4.pdf");
 };

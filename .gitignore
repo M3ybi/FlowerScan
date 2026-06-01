@@ -2,7 +2,9 @@ node_modules/
 dist/
 .tmp-tests/
 .env
+.env.local
 .env.*
+.env.*.local
 *.local
 .DS_Store
 Thumbs.db

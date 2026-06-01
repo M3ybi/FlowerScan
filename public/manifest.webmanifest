@@ -1,0 +1,18 @@
+{
+  "name": "Plantie",
+  "short_name": "Plantie",
+  "description": "Prehľad starostlivosti o izbové rastliny s QR štítkami a dennými reportmi.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f3ea",
+  "theme_color": "#123d31",
+  "icons": [
+    {
+      "src": "/plantie-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
