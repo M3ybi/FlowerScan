@@ -54,14 +54,14 @@ const createDiagnostic = (patch: Partial<SupabasePlantDiagnostic> = {}): Supabas
   id: "supabase-diagnostic-id",
   imagePath: null,
   legacyId: "legacy-diagnostic-id",
-  observedSymptoms: ["ĹľltĂ˝ list"],
+  observedSymptoms: ["žltý list"],
   plantId: "supabase-plant-id",
-  reasoningSummary: "Listy ĹľltnĂş odspodu.",
-  recommendedSteps: ["Skontroluj substrĂˇt"],
+  reasoningSummary: "Listy žltnú odspodu.",
+  recommendedSteps: ["Skontroluj substrát"],
   riskLevel: "medium",
   updatedAt: "2026-05-31T10:00:00.000Z",
   userConfirmation: "confirmed",
-  userNote: "overenĂ©",
+  userNote: "overené",
   ...patch,
 });
 

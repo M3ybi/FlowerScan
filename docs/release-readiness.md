@@ -15,7 +15,7 @@ This checklist prepares Plantie for beta and store review without enabling real 
 ## Google Play requirements
 
 - Complete Google Play identity verification.
-- Prepare Data safety answers for account data, plant photos, AI diagnosis images, household sharing, email reports, purchases, and diagnostics.
+- Prepare Data safety answers for account data, email/password authentication through Supabase Auth, Google OAuth, plant photos, AI diagnosis images, household sharing, email reports, purchases, and diagnostics.
 - Prepare app access instructions for reviewers.
 - Upload feature graphic, app icon, phone screenshots, and tablet screenshots if tablet support remains enabled.
 - Configure subscription products only after identity verification and production readiness are complete.
@@ -25,6 +25,7 @@ This checklist prepares Plantie for beta and store review without enabling real 
 - Purchase and configure Apple Developer Program membership.
 - Prepare privacy nutrition labels for account data, photos, user content, purchases, diagnostics, and identifiers.
 - Add review notes explaining that purchases are not active until App Store products are configured.
+- Keep Apple Sign-In marked as coming soon until Apple Developer Program setup is complete. If Google remains enabled in the App Store build, Apple Sign-In must be configured before review.
 - Upload 1024x1024 icon, screenshots, support URL, privacy URL, and subscription terms URL.
 
 ## Subscription checklist

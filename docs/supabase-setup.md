@@ -125,12 +125,13 @@ These functions use the browser Supabase client and rely on RLS. They are intent
 
 ## Auth infrastructure
 
-Optional Supabase Auth infrastructure is available, but login is not required for the current app flow.
+Optional Supabase Auth infrastructure is available. First-run onboarding now asks users to choose language, choose an auth path, then explicitly create or join a household before the dashboard appears. Guest mode remains available and is local/limited.
 
 Files:
 
 - `src/lib/authService.ts`
 - `src/hooks/useAuth.ts`
+- `src/components/AuthPanel.tsx`
 - `src/components/AuthButton.tsx`
 - `src/components/AuthModal.tsx`
 - `src/components/AccountMenu.tsx`
@@ -138,6 +139,9 @@ Files:
 Available auth service functions:
 
 - `signInWithMagicLink(email)`
+- `registerWithEmailPassword(email, password)`
+- `signInWithEmailPassword(email, password)`
+- `requestPasswordReset(email)`
 - `signInWithGoogle()`
 - `signOut()`
 - `getCurrentUser()`
@@ -147,8 +151,25 @@ Available auth service functions:
 The auth bootstrap:
 
 - Upserts `profiles.id` from `auth.users.id`.
-- Creates a default personal household through `create_household_for_current_user` when the authenticated user has no households.
-- Creates the owner membership through the RPC.
+- Loads the first existing household for the authenticated user.
+- Returns `null` when the user has no household. The app must then show Create or Join Household.
+- Does not create a household automatically on login.
+
+Required Supabase Auth settings:
+
+- Enable Email provider with password sign-up/sign-in.
+- Configure password minimum length at least 8 characters.
+- Enable password reset emails and set the site URL / redirect URLs for web and Capacitor deep links before production.
+- Enable Google OAuth with the configured web, Android, and iOS redirect URIs.
+- Apple Sign-In is shown as a disabled placeholder until Apple Developer setup is ready.
+- Amazon Login is shown as a disabled placeholder and should stay disabled unless a complete provider integration is added.
+
+Google Play Data Safety notes:
+
+- Declare account creation and login with email/password.
+- Declare OAuth login with Google.
+- Apple and Amazon are not active providers yet because the buttons are disabled and do not authenticate users.
+- Do not declare client-side password storage; Plantie uses Supabase Auth and does not store passwords manually.
 - Does not migrate legacy household-token data.
 - Does not replace localStorage or Netlify Blob sync.
 

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 const migration = readFileSync(resolve("supabase/migrations/20260531210000_household_creation_rpc.sql"), "utf8");
 const seedScript = readFileSync(resolve("scripts/seed-plant-catalog.mjs"), "utf8");
 const authService = readFileSync(resolve("src/lib/authService.ts"), "utf8");
+const authRules = readFileSync(resolve("src/lib/authRules.ts"), "utf8");
 const authHook = readFileSync(resolve("src/hooks/useAuth.ts"), "utf8");
 const authButton = readFileSync(resolve("src/components/AuthButton.tsx"), "utf8");
 const entitlementMigration = readFileSync(resolve("supabase/migrations/20260531213000_subscription_entitlements.sql"), "utf8");
@@ -52,11 +53,15 @@ const requiredAuthFragments = [
   "onAuthStateChange",
   "profiles",
   "bootstrapAuthenticatedAccount",
-  "createHousehold(\"Moja domácnosť\")",
+  "signUp",
+  "signInWithPassword",
+  "resetPasswordForEmail",
+  "getUserHouseholds()",
+  "return null",
 ];
 
 for (const fragment of requiredAuthFragments) {
-  if (!authService.includes(fragment)) {
+  if (!(authService.includes(fragment) || authRules.includes(fragment))) {
     throw new Error(`Auth service is missing required fragment: ${fragment}`);
   }
 }

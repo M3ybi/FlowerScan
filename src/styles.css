@@ -436,7 +436,8 @@ button {
 }
 
 .account-menu-user,
-.account-menu button {
+.account-menu button,
+.account-menu-link {
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -446,6 +447,7 @@ button {
   color: var(--brand);
   font-size: 0.88rem;
   font-weight: 850;
+  text-decoration: none;
 }
 
 .account-menu-user {
@@ -455,7 +457,8 @@ button {
   white-space: nowrap;
 }
 
-.account-menu button {
+.account-menu button,
+.account-menu-link {
   border: 1px solid rgba(18, 61, 49, 0.12);
   background: #fff;
   cursor: pointer;
@@ -1235,13 +1238,74 @@ textarea:focus-visible {
   gap: 14px;
 }
 
+.auth-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-panel-compact {
+  padding-top: 2px;
+}
+
+.auth-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(18, 61, 49, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.auth-mode-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.auth-mode-tabs button.active {
+  background: #fff;
+  color: var(--brand);
+  box-shadow: 0 8px 18px rgba(18, 61, 49, 0.08);
+}
+
 .auth-form .primary-action,
+.auth-provider-list .neutral-action,
 .auth-google-button {
   width: 100%;
 }
 
-.auth-google-button {
-  margin-top: 12px;
+.auth-provider-list {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-provider-list button {
+  justify-content: center;
+}
+
+.auth-provider-list button span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.auth-security-note,
+.auth-delete-link {
+  font-size: 0.86rem;
+}
+
+.auth-security-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.auth-delete-link {
+  color: var(--brand);
+  font-weight: 850;
 }
 
 .pricing-page {
@@ -1492,6 +1556,70 @@ textarea:focus-visible {
 .release-form {
   display: grid;
   gap: 12px;
+}
+
+.onboarding-shell {
+  min-height: 100vh;
+}
+
+.onboarding-card {
+  gap: 18px;
+}
+
+.onboarding-language-grid,
+.onboarding-actions,
+.onboarding-empty-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-language-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.onboarding-language-grid button {
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  border: 1px solid rgba(18, 61, 49, 0.14);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.onboarding-language-grid button span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.onboarding-language-grid .selected-language {
+  border-color: rgba(47, 106, 81, 0.5);
+  background: rgba(235, 249, 238, 0.92);
+}
+
+.compact-language-grid {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.text-button {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.onboarding-empty-dashboard {
+  margin-top: 18px;
+}
+
+.onboarding-empty-actions {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  width: min(100%, 720px);
 }
 
 .diagnosis-preview {
@@ -2982,6 +3110,73 @@ textarea:focus-visible {
   text-decoration: none;
 }
 
+.mobile-bottom-nav a.active {
+  background: linear-gradient(180deg, rgba(232, 246, 230, 0.98), rgba(255, 253, 248, 0.98));
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px rgba(47, 123, 91, 0.12);
+}
+
+.plant-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.plant-card-actions span {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(18, 61, 49, 0.12);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--brand);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.empty-state-card,
+.account-summary-card {
+  border: 1px solid rgba(26, 61, 46, 0.12);
+  border-radius: 24px;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 244, 232, 0.9)),
+    var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.empty-state-card {
+  margin-top: 16px;
+}
+
+.account-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.account-summary-list div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(18, 61, 49, 0.1);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.account-summary-list span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.account-summary-list strong {
+  color: var(--brand);
+  overflow-wrap: anywhere;
+}
+
 .migration-card {
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(26, 61, 46, 0.12);
@@ -3027,12 +3222,198 @@ textarea:focus-visible {
 }
 
 @media (max-width: 780px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .mobile-bottom-nav {
     display: flex;
   }
 
   .app-shell {
-    padding-bottom: calc(118px + var(--safe-area-bottom));
+    width: 100%;
+    padding:
+      calc(14px + var(--safe-area-top))
+      max(14px, var(--safe-area-right))
+      calc(112px + var(--safe-area-bottom))
+      max(14px, var(--safe-area-left));
+    overflow-x: clip;
+  }
+
+  .access-shell {
+    min-height: 100svh;
+    padding:
+      calc(16px + var(--safe-area-top))
+      max(14px, var(--safe-area-right))
+      calc(24px + var(--safe-area-bottom))
+      max(14px, var(--safe-area-left));
+  }
+
+  .access-card,
+  .onboarding-card,
+  .auth-modal,
+  .plant-modal,
+  .confirm-modal,
+  .diagnosis-modal,
+  .care-preview-modal {
+    width: min(100%, 480px);
+    border-radius: 24px;
+  }
+
+  .hero,
+  .detail-header,
+  .topbar {
+    gap: 12px;
+  }
+
+  .hero h1,
+  .detail-header h1,
+  .topbar h1 {
+    font-size: clamp(1.8rem, 10vw, 2.8rem);
+    line-height: 0.98;
+  }
+
+  .hero-copy {
+    font-size: 0.94rem;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .hero-actions .auth-trigger,
+  .hero-actions .add-plant-trigger {
+    grid-column: span 2;
+  }
+
+  .qr-action,
+  .primary-action,
+  .ghost-action,
+  .neutral-action,
+  .icon-link,
+  .icon-button,
+  .account-menu button,
+  .account-menu-link,
+  .mobile-bottom-nav a {
+    min-height: 44px;
+  }
+
+  .account-menu {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: stretch;
+    border-radius: 22px;
+  }
+
+  .account-menu-user,
+  .account-menu button,
+  .account-menu-link {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .toolbar {
+    position: sticky;
+    top: var(--safe-area-top);
+    margin-right: calc(max(14px, var(--safe-area-right)) * -1);
+    margin-left: calc(max(14px, var(--safe-area-left)) * -1);
+    padding-right: max(14px, var(--safe-area-right));
+    padding-left: max(14px, var(--safe-area-left));
+  }
+
+  .flower-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .flower-card {
+    border-radius: 24px;
+  }
+
+  .flower-card img {
+    aspect-ratio: 16 / 10;
+  }
+
+  .flower-card-body {
+    min-height: auto;
+    padding: 14px;
+  }
+
+  .flower-card h2 {
+    font-size: 1.18rem;
+  }
+
+  .image-watering {
+    padding: 12px;
+  }
+
+  .plant-card-actions span {
+    flex: 1;
+  }
+
+  .household-panel,
+  .scan-action-panel,
+  .diagnosis-panel,
+  .qr-panel,
+  .pdf-export-panel,
+  .base-url-panel,
+  .mobile-product-card,
+  .migration-card,
+  .pricing-page,
+  .diagnose-picker,
+  .empty-state-card {
+    border-radius: 24px;
+  }
+
+  .account-operational-panel {
+    display: none;
+  }
+
+  .mobile-product-card .migration-preview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .qr-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .qr-label {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .qr-label .qr-image,
+  .qr-label .qr-placeholder {
+    width: 118px;
+    height: 118px;
+  }
+
+  .diagnose-picker-card {
+    min-height: 86px;
+  }
+
+  .diagnose-picker-card img {
+    width: 72px;
+    height: 72px;
+  }
+
+  .diagnostic-history-panel > p {
+    border: 1px dashed rgba(26, 61, 46, 0.16);
+    border-radius: 18px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.62);
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
   }
 
   .diagnosis-modal,

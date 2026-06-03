@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { AuthPanel } from "./components/AuthPanel";
 import { AuthButton } from "./components/AuthButton";
 import { LegacyMigrationCard } from "./components/LegacyMigrationCard";
 import { PricingPage } from "./components/PricingPage";
@@ -41,6 +42,16 @@ import type { FlowerRecords } from "./hooks/useFlowerRecords";
 import { checkDiagnosisGate, recordDiagnosisUsage } from "./lib/diagnosisGate";
 import { captureImage, detectImageRuntime } from "./lib/imageCaptureService";
 import type { NormalizedImage } from "./lib/imageCaptureService";
+import { createTranslator } from "./lib/i18n";
+import {
+  getInitialOnboardingStep,
+  hasCompletedOnboarding,
+  markOnboardingComplete,
+  readStoredLanguage,
+  supportedLanguages,
+  writeStoredLanguage,
+} from "./lib/onboarding";
+import type { OnboardingStep, PlantieLanguage } from "./lib/onboarding";
 import {
   compareLegacyAndSupabaseHouseholdState,
   detectDataSourceMode,
@@ -128,9 +139,9 @@ const publicFlowerUrl = (baseUrl: string, flowerId: string) =>
   `${normalizeBaseUrl(baseUrl)}${flowerPath(flowerId, true)}`;
 
 const identificationLabel = {
-  confident: "ID overené z fotky",
-  likely: "Pravdepodobné ID",
-  "needs-confirmation": "ID treba potvrdiť",
+  confident: "ID overen? z fotky",
+  likely: "Pravdepodobn? ID",
+  "needs-confirmation": "ID treba potvrdi?",
 };
 
 const normalizeCareText = (value: string) =>
@@ -366,23 +377,25 @@ const riskLevelLabel = (riskLevel: PlantDiagnosticEntry["riskLevel"]) => {
 const flowerDiagnosticsCount = (flowerId: string, diagnostics: PlantDiagnosticEntry[]) =>
   diagnostics.filter((diagnostic) => diagnostic.plantId === flowerId).length;
 
-const MobileBottomNav = () => (
-  <nav className="mobile-bottom-nav" aria-label="Hlavná mobilná navigácia">
-    <a href="#/">
+type MobileBottomNavPage = "plants" | "diagnose" | "qr" | "account";
+
+const MobileBottomNav = ({ currentPage, t }: { currentPage: MobileBottomNavPage; t: ReturnType<typeof createTranslator> }) => (
+  <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+    <a className={currentPage === "plants" ? "active" : ""} href="#/">
       <Leaf size={18} aria-hidden="true" />
-      Rastliny
+      {t("nav.plants")}
     </a>
-    <a href="#/diagnose">
+    <a className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
       <Camera size={18} aria-hidden="true" />
-      Diagnóza
+      {t("nav.diagnose")}
     </a>
-    <a href="#/qr">
+    <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
       <QrCodeIcon size={18} aria-hidden="true" />
-      QR
+      {t("nav.qr")}
     </a>
-    <a href="#/account">
+    <a className={currentPage === "account" ? "active" : ""} href="#/account">
       <Home size={18} aria-hidden="true" />
-      Účet
+      {t("nav.account")}
     </a>
   </nav>
 );
@@ -475,6 +488,18 @@ export const App = () => {
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
   const [activeHousehold, setActiveHousehold] = useState<HouseholdSession | null>(() => getStoredHouseholdSession());
+  const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(window.localStorage));
+  const t = useMemo(() => createTranslator(selectedLanguage), [selectedLanguage]);
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(() =>
+    getInitialOnboardingStep({
+      hasCompleted: hasCompletedOnboarding(window.localStorage),
+      hasExistingHousehold: Boolean(getStoredHouseholdSession() || getHouseholdTokenFromUrl()),
+      hasLanguage: Boolean(readStoredLanguage(window.localStorage)),
+      hasMigratedSupabaseHousehold: false,
+    }),
+  );
+  const [onboardingStatus, setOnboardingStatus] = useState("");
+  const [isNewOnboardingHousehold, setIsNewOnboardingHousehold] = useState(false);
   const [accessStatus, setAccessStatus] = useState("");
   const [householdNameDraft, setHouseholdNameDraft] = useState("Moja domácnosť");
   const [householdLinkStatus, setHouseholdLinkStatus] = useState("");
@@ -547,6 +572,7 @@ export const App = () => {
   const effectiveReportRecipient = isUsingSupabaseReadState
     ? supabaseReadState?.reportSettings.recipientEmail ?? reportRecipient
     : reportRecipient;
+  const householdDisplayName = activeHousehold?.name ?? supabaseReadState?.household.name ?? "Plantie household";
   const flowerById = useMemo(
     () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
     [allFlowersIncludingRemoved],
@@ -596,6 +622,19 @@ export const App = () => {
   useEffect(() => {
     window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(legacyDiagnostics));
   }, [legacyDiagnostics]);
+
+  useEffect(() => {
+    if (activeHousehold || supabaseReadState) {
+      markOnboardingComplete(window.localStorage);
+      setOnboardingStep("complete");
+    }
+  }, [activeHousehold, supabaseReadState]);
+
+  useEffect(() => {
+    if (!auth.loading && auth.isAuthenticated && onboardingStep === "welcome" && !activeHousehold && !supabaseReadState) {
+      setOnboardingStep("household");
+    }
+  }, [activeHousehold, auth.isAuthenticated, auth.loading, onboardingStep, supabaseReadState]);
 
   useEffect(() => {
     if (!deleteAccountContact && auth.user?.email) {
@@ -1169,7 +1208,7 @@ export const App = () => {
   const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isCreatingHousehold) {
-      return;
+      return false;
     }
 
     try {
@@ -1195,8 +1234,10 @@ export const App = () => {
       setActiveHousehold(data.household);
       setBaseUrl(currentHouseholdBaseUrl(data.household.publicToken));
       setAccessStatus("");
+      return true;
     } catch {
       setAccessStatus("Domácnosť sa nepodarilo vytvoriť. Skontroluj Netlify backend a skús znova.");
+      return false;
     } finally {
       setIsCreatingHousehold(false);
       setIsAccessChecking(false);
@@ -1354,16 +1395,16 @@ export const App = () => {
 
   const handleNewPlantImageCapture = async (source: "camera" | "gallery", file?: File) => {
     try {
-      setNewPlantStatus("SpracĂşvam fotku...");
+      setNewPlantStatus("Spracúvam fotku...");
       const image = await captureImage({ file, source });
       if (newPlantImage?.previewUrl) {
         URL.revokeObjectURL(newPlantImage.previewUrl);
       }
       setNewPlantImage(image);
-      setNewPlantStatus("Fotka je pripravenĂˇ.");
+      setNewPlantStatus("Fotka je pripravená.");
     } catch (error) {
       setNewPlantImage(null);
-      setNewPlantStatus(error instanceof Error ? error.message : "Fotku sa nepodarilo spracovaĹĄ.");
+      setNewPlantStatus(error instanceof Error ? error.message : "Fotku sa nepodarilo spracovať.");
     }
   };
 
@@ -1539,6 +1580,34 @@ export const App = () => {
     }
   };
 
+  const selectOnboardingLanguage = (language: PlantieLanguage) => {
+    writeStoredLanguage(window.localStorage, language);
+    setSelectedLanguage(language);
+    if (onboardingStep !== "complete") {
+      setOnboardingStep("welcome");
+    }
+  };
+
+  const continueAsGuest = () => {
+    setOnboardingStatus("Guest mode uses local and household-link data only. Cloud account sync and Premium require sign-in.");
+    setOnboardingStep("household");
+  };
+
+  const continueToHouseholdSetup = () => {
+    setOnboardingStep("household");
+  };
+
+  const handleCreateOnboardingHousehold = async (event: FormEvent<HTMLFormElement>) => {
+    setIsNewOnboardingHousehold(true);
+    const created = await handleCreateHousehold(event);
+    if (created) {
+      markOnboardingComplete(window.localStorage);
+      setOnboardingStep("complete");
+    } else {
+      setIsNewOnboardingHousehold(false);
+    }
+  };
+
   const releaseEnv = {
     viteRevenueCatAndroidKey: import.meta.env.VITE_REVENUECAT_API_KEY_ANDROID,
     viteRevenueCatIosKey: import.meta.env.VITE_REVENUECAT_API_KEY_IOS,
@@ -1573,7 +1642,92 @@ export const App = () => {
         )}
       </main>
     );
-  };
+  }
+
+  if (onboardingStep !== "complete" && !activeHousehold && !supabaseReadState) {
+    if (onboardingStep === "language") {
+      return (
+        <main className="app-shell access-shell onboarding-shell">
+          <section className="access-card onboarding-card" aria-labelledby="language-title">
+            <div className="section-title">
+              <Leaf size={22} aria-hidden="true" />
+              <h1 id="language-title">{t("onboarding.languageTitle")}</h1>
+            </div>
+            <p>{t("onboarding.languageBody")}</p>
+            <div className="onboarding-language-grid">
+              {supportedLanguages.map((language) => (
+                <button type="button" key={language.code} onClick={() => selectOnboardingLanguage(language.code)}>
+                  <strong>{language.nativeName}</strong>
+                  <span>{language.label}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </main>
+      );
+    }
+
+    if (onboardingStep === "welcome") {
+      return (
+        <main className="app-shell access-shell onboarding-shell">
+          <section className="access-card onboarding-card" aria-labelledby="welcome-title">
+            <div className="section-title">
+              <Sprout size={24} aria-hidden="true" />
+              <h1 id="welcome-title">Plantie</h1>
+            </div>
+            <p>{t("onboarding.valueProp")}</p>
+            <div className="onboarding-actions">
+              {auth.isAuthenticated ? (
+                <button className="primary-action" type="button" onClick={continueToHouseholdSetup}>
+                  Continue to household setup
+                </button>
+              ) : (
+                <AuthPanel compact language={selectedLanguage} onGuest={continueAsGuest} />
+              )}
+            </div>
+            <button className="text-button" type="button" onClick={() => setOnboardingStep("language")}>
+              {t("onboarding.changeLanguage")}{selectedLanguage ? ` (${selectedLanguage})` : ""}
+            </button>
+            {onboardingStatus ? <p className="access-status">{onboardingStatus}</p> : null}
+          </section>
+        </main>
+      );
+    }
+
+    return (
+      <main className="app-shell access-shell onboarding-shell">
+        <section className="access-card onboarding-card" aria-labelledby="household-title">
+          <div className="section-title">
+            <Home size={22} aria-hidden="true" />
+            <h1 id="household-title">{t("household.createOrJoin")}</h1>
+          </div>
+          <p>Households keep plant care private. Create a household now, or open a household invite link.</p>
+          {!auth.isAuthenticated ? (
+            <p className="access-note">{t("household.guestNote")}</p>
+          ) : null}
+          <form className="access-form" onSubmit={handleCreateOnboardingHousehold}>
+            <label className="field">
+              <span>{t("household.name")}</span>
+              <input
+                type="text"
+                value={householdNameDraft}
+                maxLength={80}
+                onChange={(event) => setHouseholdNameDraft(event.target.value)}
+              />
+            </label>
+            <button type="submit" disabled={isCreatingHousehold}>
+              <Plus size={18} aria-hidden="true" />
+              {isCreatingHousehold ? "Creating..." : t("household.create")}
+            </button>
+          </form>
+          <a className="neutral-action" href="#/support">
+            {t("household.join")}
+          </a>
+          {accessStatus || onboardingStatus ? <p className="access-status">{accessStatus || onboardingStatus}</p> : null}
+        </section>
+      </main>
+    );
+  }
 
   if (isAccessChecking) {
     return (
@@ -1589,7 +1743,7 @@ export const App = () => {
     );
   }
 
-  if (!activeHousehold) {
+  if (!activeHousehold && !supabaseReadState) {
     return (
       <main className="app-shell access-shell">
         <section className="access-card" aria-labelledby="access-title">
@@ -1636,7 +1790,7 @@ export const App = () => {
           </a>
           <section className="empty-state">
             <Leaf size={34} aria-hidden="true" />
-            <h1>Rastlina sa nenašla</h1>
+            <h1>{t("detail.missing")}</h1>
             <p>Tento QR kód smeruje na rastlinu, ktorá nie je v katalógu.</p>
           </section>
         </main>
@@ -1648,7 +1802,7 @@ export const App = () => {
     const detailUrl = publicFlowerUrl(baseUrl, flower.id);
     const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
     const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
-    const quickActionLabel = route.scan ? "Naskenovaná rastlina" : "Rýchly záznam";
+    const quickActionLabel = route.scan ? t("detail.scanned") : t("detail.quickAction");
     const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
     const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays) : [];
     const isEditingName = editingNameFlowerId === flower.id;
@@ -1709,8 +1863,8 @@ export const App = () => {
         <section className="scan-action-panel" aria-labelledby="quick-action-title">
           <div>
             <span>{quickActionLabel}</span>
-            <h2 id="quick-action-title">Čo sa dnes udialo?</h2>
-            <p>Ulož dnešný dátum zálievky, presadenia alebo hnojenia jedným klepnutím.</p>
+            <h2 id="quick-action-title">{t("detail.quickAction")}</h2>
+            <p>{t("detail.quickActionBody")}</p>
           </div>
           <div className="scan-action-buttons">
             <button
@@ -1719,15 +1873,15 @@ export const App = () => {
               onClick={() => saveQuickRecord(flower.id, { lastWatered: todayIsoDate() }, "Zálievka uložená")}
             >
               <Droplets size={18} aria-hidden="true" />
-              Zaliata dnes
+              {t("detail.todayWatered")}
             </button>
             <button className="ghost-action" type="button" onClick={openDiagnosisModal}>
               <Camera size={18} aria-hidden="true" />
-              Diagnostikova? probl?m
+              {t("detail.diagnose")}
             </button>
             <a className="ghost-action action-link-button" href="#care-title">
               <Leaf size={18} aria-hidden="true" />
-              Tipy starostlivosti
+              {t("detail.careTips")}
             </a>
             <button
               className={`ghost-action ${quickRecordStatus === "Presadenie uložené" ? "quick-action-saved" : ""}`}
@@ -1856,7 +2010,7 @@ export const App = () => {
             <div>
               <dt>
                 {getCarePillVisual("Zálievka", flower.watering, intervalDays)}
-                <span>Zálievka</span>
+                <span>{t("plants.watering")}</span>
               </dt>
               <dd>{flower.watering}</dd>
             </div>
@@ -2096,7 +2250,7 @@ export const App = () => {
                 <h2 id="care-preview-title">AI návrh starostlivosti</h2>
               </div>
               <p>
-                Skontroluj zmeny pre rastlinu „{flower.displayName}”. Aktualizácia sa uloží až po potvrdení.
+                Skontroluj zmeny pre rastlinu „{flower.displayName}“. Aktualizácia sa uloží až po potvrdení.
               </p>
 
               {careDiffRows.length > 0 ? (
@@ -2166,7 +2320,7 @@ export const App = () => {
                 </span>
                 <span className="image-upload-copy">
                   <strong>Vybrat alebo odfotit problem</strong>
-                  <small>JPG, PNG, WEBP · max 8 MB</small>
+                  <small>JPG, PNG, WEBP Â· max 8 MB</small>
                 </span>
                 <input
                   type="file"
@@ -2273,7 +2427,7 @@ export const App = () => {
                 <Trash2 size={20} aria-hidden="true" />
                 <h2 id="delete-confirm-title">Naozaj si želáš danú rastlinu odstrániť?</h2>
               </div>
-              <p>Rastlina „{flower.displayName}” sa odstráni z tvojho zoznamu. Táto akcia sa nedá vrátiť späť.</p>
+              <p>Rastlina „{flower.displayName}“ sa odstráni z tvojho zoznamu. Táto akcia sa nedá vrátiť späť.</p>
               <div className="modal-actions">
                 <button className="danger-action" type="button" onClick={confirmRemoveCustomFlower}>
                   Áno, odstrániť
@@ -2297,27 +2451,64 @@ export const App = () => {
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
-            <p className="eyebrow">Plantie ??et</p>
-            <h1>??et a Premium</h1>
+            <p className="eyebrow">Plantie</p>
+            <h1>{t("account.heading")}</h1>
           </div>
           <AuthButton />
         </header>
         <section className="mobile-product-card">
-          <h2>Prihl?senie je st?le volite?n?</h2>
-          <p>Legacy dom?cnostn? link, lok?lne d?ta a Netlify Blob sync zost?vaj? akt?vne. Premium sa aktivuje a? cez serverov? entitlementy.</p>
+          <h2>{t("account.optionalLogin")}</h2>
+          <p>{t("account.optionalLoginBody")}</p>
+        </section>
+        <section className="mobile-product-card account-summary-card" aria-labelledby="account-summary-title">
+          <h2 id="account-summary-title">{t("account.status")}</h2>
+          <div className="account-summary-list">
+            <div>
+              <span>{t("account.authProvider")}</span>
+              <strong>{auth.user?.app_metadata?.provider ?? (auth.isAuthenticated ? "Email" : t("account.guest"))}</strong>
+            </div>
+            <div>
+              <span>{t("account.subscription")}</span>
+              <strong>{t("account.subscriptionServer")}</strong>
+            </div>
+            <div>
+              <span>{t("account.dataSource")}</span>
+              <strong>{dataSourceLabel[dataSourceMode]}</strong>
+            </div>
+            <div>
+              <span>{t("account.household")}</span>
+              <strong>{activeHousehold || supabaseReadState ? householdDisplayName : t("account.householdRequired")}</strong>
+            </div>
+          </div>
         </section>
         <section className="mobile-product-card">
-          <h2>Release and support</h2>
+          <h2>{t("account.legal")}</h2>
           <div className="migration-preview-grid">
-            <a href="#/privacy">Privacy Policy</a>
-            <a href="#/terms">Terms of Service</a>
-            <a href="#/support">Support</a>
-            <a href="#/delete-account">Delete Account</a>
+            <a href="#/privacy">{t("account.privacy")}</a>
+            <a href="#/terms">{t("account.terms")}</a>
+            <a href="#/support">{t("account.support")}</a>
+            <a href="#/delete-account">{t("account.delete")}</a>
             <a href="#/subscription-terms">Subscription Terms</a>
             <a href="#/health">Release Health</a>
           </div>
         </section>
-        <section className="migration-card" aria-labelledby="data-source-title">
+        <section className="mobile-product-card">
+          <h2>{t("account.language")}</h2>
+          <div className="onboarding-language-grid compact-language-grid">
+            {supportedLanguages.map((language) => (
+              <button
+                type="button"
+                key={language.code}
+                className={selectedLanguage === language.code ? "selected-language" : ""}
+                onClick={() => selectOnboardingLanguage(language.code)}
+              >
+                <strong>{language.nativeName}</strong>
+                <span>{language.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="migration-card account-operational-panel" aria-labelledby="data-source-title">
           <div className="section-title">
             <BadgeCheck size={18} aria-hidden="true" />
             <h2 id="data-source-title">Data source</h2>
@@ -2393,18 +2584,20 @@ export const App = () => {
             </div>
           ) : null}
         </section>
-        <LegacyMigrationCard
-          activeHousehold={activeHousehold}
-          allFlowers={legacyAllFlowersIncludingRemoved}
-          customFlowers={customFlowers}
-          diagnostics={legacyDiagnostics}
-          isAuthenticated={auth.isAuthenticated}
-          records={legacyRecords}
-          removedFlowerIds={removedFlowerIds}
-          reportSettings={{ recipientEmail: reportRecipient }}
-        />
+        <div className="account-operational-panel">
+          <LegacyMigrationCard
+            activeHousehold={activeHousehold}
+            allFlowers={legacyAllFlowersIncludingRemoved}
+            customFlowers={customFlowers}
+            diagnostics={legacyDiagnostics}
+            isAuthenticated={auth.isAuthenticated}
+            records={legacyRecords}
+            removedFlowerIds={removedFlowerIds}
+            reportSettings={{ recipientEmail: reportRecipient }}
+          />
+        </div>
         <PricingPage />
-        <MobileBottomNav />
+        <MobileBottomNav currentPage="account" t={t} />
       </main>
     );
   }
@@ -2418,28 +2611,37 @@ export const App = () => {
           </a>
           <div>
             <p className="eyebrow">Premium pripraven?</p>
-            <h1>Diagnostika rastliny</h1>
+            <h1>{t("diagnosis.heading")}</h1>
           </div>
         </header>
         <section className="diagnose-picker" aria-labelledby="diagnose-picker-title">
           <div className="section-title">
             <Camera size={18} aria-hidden="true" />
-            <h2 id="diagnose-picker-title">Vyber rastlinu</h2>
+            <h2 id="diagnose-picker-title">{t("diagnosis.pick")}</h2>
           </div>
-          <p>Otvor detail rastliny a pou?i akciu ?Rastlina vyzer? zle?. Prihl?sen? pou??vatelia musia ma? Premium entitlement zo Supabase.</p>
-          <div className="diagnose-picker-list">
-            {allFlowers.map((flower) => (
-              <a className="diagnose-picker-card" href={flowerPath(flower.id, true)} key={flower.id}>
-                <img src={flower.image} alt={flower.displayName} loading="lazy" />
-                <div>
-                  <strong>{flower.displayName}</strong>
-                  <span>{flowerDiagnosticsCount(flower.id, diagnostics)} ulo?en?ch diagnost?k</span>
-                </div>
-              </a>
-            ))}
-          </div>
+          <p>{t("diagnosis.pickBody")}</p>
+          {allFlowers.length > 0 ? (
+            <div className="diagnose-picker-list">
+              {allFlowers.map((flower) => (
+                <a className="diagnose-picker-card" href={flowerPath(flower.id, true)} key={flower.id}>
+                  <img src={flower.image} alt={flower.displayName} loading="lazy" />
+                  <div>
+                    <strong>{flower.displayName}</strong>
+                    <span>{flowerDiagnosticsCount(flower.id, diagnostics)} ulo?en?ch diagnost?k</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state empty-state-card">
+              <Sprout size={34} aria-hidden="true" />
+              <h2>{t("diagnosis.empty")}</h2>
+              <p>{t("diagnosis.emptyBody")}</p>
+              <a className="primary-action" href="#/">{t("qr.openDashboard")}</a>
+            </div>
+          )}
         </section>
-        <MobileBottomNav />
+        <MobileBottomNav currentPage="diagnose" t={t} />
       </main>
     );
   }
@@ -2453,7 +2655,7 @@ export const App = () => {
           </a>
           <div>
             <p className="eyebrow">Tlačiteľné štítky</p>
-            <h1>QR kódy</h1>
+            <h1>{t("qr.heading")}</h1>
           </div>
           <div className="topbar-actions">
             <button className="icon-button" type="button" onClick={handleQrPdfExport} aria-label="Exportovať PDF QR štítky">
@@ -2481,7 +2683,7 @@ export const App = () => {
         <section className="pdf-export-panel" aria-labelledby="pdf-export-title">
           <div className="section-title">
             <FileDown size={18} aria-hidden="true" />
-            <h2 id="pdf-export-title">Print QR labels</h2>
+            <h2 id="pdf-export-title">{t("qr.print")}</h2>
           </div>
           {allFlowers.length > 0 ? (
             <>
@@ -2504,17 +2706,27 @@ export const App = () => {
           )}
         </section>
 
-        <section className="qr-grid" aria-label="QR kódy pre všetky rastliny">
-          {allFlowers.map((flower) => (
-            <article className="qr-label" key={flower.id}>
-              <QrCode value={publicFlowerUrl(baseUrl, flower.id)} label={flower.displayName} size={148} />
-              <div>
-                <strong>{flower.displayName}</strong>
-                <span>{flower.id.replace("flower-", "#")}</span>
-              </div>
-            </article>
-          ))}
-        </section>
+        {allFlowers.length > 0 ? (
+          <section className="qr-grid" aria-label="QR labels for all plants">
+            {allFlowers.map((flower) => (
+              <article className="qr-label" key={flower.id}>
+                <QrCode value={publicFlowerUrl(baseUrl, flower.id)} label={flower.displayName} size={148} />
+                <div>
+                  <strong>{flower.displayName}</strong>
+                  <span>{flower.id.replace("flower-", "#")}</span>
+                </div>
+              </article>
+            ))}
+          </section>
+        ) : (
+          <section className="empty-state empty-state-card">
+            <QrCodeIcon size={34} aria-hidden="true" />
+            <h2>{t("qr.empty")}</h2>
+            <p>{t("qr.emptyBody")}</p>
+            <a className="primary-action" href="#/">{t("qr.openDashboard")}</a>
+          </section>
+        )}
+        <MobileBottomNav currentPage="qr" t={t} />
       </main>
     );
   }
@@ -2549,7 +2761,7 @@ export const App = () => {
           <div className="household-panel household-panel-compact" aria-label="Aktívna domácnosť">
             <div>
               <span>Domácnosť</span>
-              <strong>{activeHousehold.name}</strong>
+              <strong>{householdDisplayName}</strong>
               {householdLinkStatus ? <small>{householdLinkStatus}</small> : null}
             </div>
             <div className="household-actions">
@@ -2609,7 +2821,7 @@ export const App = () => {
               <div className="report-table" role="table" aria-label="Rastliny pod 20 percent zálievky">
                 <div className="report-table-row report-table-row-head" role="row">
                   <span>Rastlina</span>
-                  <span>Zálievka</span>
+                  <span>{t("plants.watering")}</span>
                   <span>Posledná zálievka</span>
                   <span>Stav</span>
                 </div>
@@ -2638,34 +2850,33 @@ export const App = () => {
     <main className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">{allFlowers.length} sledovaných rastlín</p>
-          <h1>Prehľad starostlivosti o rastliny</h1>
-          <p className="hero-copy">Otvor rastlinu, aktualizuj zálievku alebo presadenie, pridaj poznámku a vytlač QR štítky na kvetináče.</p>
+          <p className="eyebrow">{t("dashboard.tracked", { count: allFlowers.length })}</p>
+          <h1>{t("dashboard.hero")}</h1>
+          <p className="hero-copy">{t("dashboard.heroBody")}</p>
         </div>
         <div className="hero-actions">
           <AuthButton />
           <button className="qr-action add-plant-trigger" type="button" onClick={() => setIsAddPlantModalOpen(true)}>
             <Plus size={20} aria-hidden="true" />
-            Pridať rastlinu
+            {t("dashboard.addPlant")}
           </button>
           <a className="qr-action secondary-action-link" href="#/report">
             <Mail size={20} aria-hidden="true" />
-            Report
+            {t("dashboard.report")}
           </a>
           <a className="qr-action" href="#/qr">
             <QrCodeIcon size={20} aria-hidden="true" />
-            QR štítky
+            {t("qr.heading")}
           </a>
         </div>
       </header>
-
       <section className="toolbar" aria-label="Nástroje prehľadu">
         <label className="search-field">
           <Search size={18} aria-hidden="true" />
-          <span className="sr-only">Hľadať rastliny</span>
+          <span className="sr-only">{t("dashboard.search")}</span>
           <input
             type="search"
-            placeholder="Hľadať rastliny"
+            placeholder={t("dashboard.search")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -2675,7 +2886,7 @@ export const App = () => {
       <section className="household-panel" aria-label="Aktívna domácnosť">
         <div>
           <span>Domácnosť</span>
-          <strong>{activeHousehold.name}</strong>
+          <strong>{householdDisplayName}</strong>
           {householdLinkStatus ? <small>{householdLinkStatus}</small> : null}
         </div>
         <div className="household-actions">
@@ -2757,6 +2968,27 @@ export const App = () => {
         </div>
       ) : null}
 
+      {isNewOnboardingHousehold && customFlowers.length === 0 ? (
+        <section className="empty-state onboarding-empty-dashboard" aria-labelledby="empty-dashboard-title">
+          <Sprout size={36} aria-hidden="true" />
+          <h2 id="empty-dashboard-title">Your Plantie household is ready</h2>
+          <p>Add your first plant, scan an existing QR label, or import legacy household data when available.</p>
+          <div className="onboarding-empty-actions">
+            <button className="primary-action" type="button" onClick={() => setIsAddPlantModalOpen(true)}>
+              <Plus size={18} aria-hidden="true" />
+              Add first plant
+            </button>
+            <a className="neutral-action" href="#/qr">
+              <QrCodeIcon size={18} aria-hidden="true" />
+              Scan QR
+            </a>
+            <a className="neutral-action" href="#/account">
+              <FileDown size={18} aria-hidden="true" />
+              Import legacy household
+            </a>
+          </div>
+        </section>
+      ) : (
       <section className="flower-grid" aria-label="Prehľad rastlín">
         {filteredFlowers.map((flower) => {
           const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
@@ -2769,12 +3001,12 @@ export const App = () => {
               <div className="flower-card-body">
                 <div className="card-topline">
                   <span className="flower-index">{flower.id.replace("flower-", "#")}</span>
-                  <span>{flower.identification === "confident" ? "overené ID" : flower.identification === "likely" ? "pravdepodobné ID" : "overiť ID"}</span>
+                  <span>{flower.identification === "confident" ? t("plants.idConfident") : flower.identification === "likely" ? t("plants.idLikely") : t("plants.idReview")}</span>
                 </div>
                 <h2>{flower.displayName}</h2>
                 <div className={`image-watering image-watering-${wateringProgress.state}`}>
                   <div className="image-watering-label">
-                    <span>Zálievka</span>
+                    <span>{t("plants.watering")}</span>
                     <strong>{Math.round(wateringProgress.percent)} %</strong>
                   </div>
                   <div className="image-progress-track">
@@ -2782,20 +3014,25 @@ export const App = () => {
                   </div>
                   <small>{wateringProgress.statusText}</small>
                 </div>
+                <div className="plant-card-actions" aria-hidden="true">
+                  <span>{t("plants.open")}</span>
+                  <span>{t("plants.water")}</span>
+                  <span>{t("plants.qr")}</span>
+                </div>
               </div>
             </a>
           );
         })}
       </section>
+      )}
 
-      {filteredFlowers.length === 0 ? (
+      {!isNewOnboardingHousehold && filteredFlowers.length === 0 ? (
         <section className="empty-state">
           <Home size={34} aria-hidden="true" />
-          <h2>Žiadna rastlina sa nenašla</h2>
-          <p>Vymaž vyhľadávanie a zobrazí sa celý dashboard.</p>
+          <h2>{t("dashboard.emptySearch")}</h2>`r`n          <p>{t("dashboard.emptySearchBody")}</p>
         </section>
       ) : null}
-      <MobileBottomNav />
+      <MobileBottomNav currentPage="plants" t={t} />
     </main>
   );
 };

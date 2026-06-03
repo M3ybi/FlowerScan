@@ -1,10 +1,21 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
-import { createHousehold, getUserHouseholds } from "./plantieRepository";
+import { getUserHouseholds } from "./plantieRepository";
 import { supabase } from "./supabase";
+import { createAuthActions } from "./authRules";
+import type { AuthActionsClient, AuthMode } from "./authRules";
+
+export type { AuthMode };
+export {
+  createAuthActions,
+  minimumAuthPasswordLength,
+  validateAuthEmail,
+  validateAuthPassword,
+  validateLoginInput,
+  validatePasswordResetInput,
+  validateRegistrationInput,
+} from "./authRules";
 
 export type AuthStateChangeCallback = (event: AuthChangeEvent, session: Session | null) => void;
-
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const getClient = () => {
   if (!supabase) {
@@ -31,50 +42,34 @@ const profileDisplayName = (user: User) => {
   return user.email?.split("@")[0]?.slice(0, 120) ?? null;
 };
 
-export const validateAuthEmail = (email: string) => emailPattern.test(email.trim());
+const authActions = createAuthActions({
+  getClient: () => getClient() as AuthActionsClient,
+  getRedirectUrl,
+});
 
-export const signInWithMagicLink = async (email: string) => {
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!validateAuthEmail(normalizedEmail)) {
-    throw new Error("Zadaj platnú emailovú adresu.");
-  }
+export const signInWithMagicLink = async (email: string) => authActions.signInWithMagicLink(email);
 
-  const { error } = await getClient().auth.signInWithOtp({
-    email: normalizedEmail,
-    options: {
-      emailRedirectTo: getRedirectUrl(),
-    },
-  });
+export const registerWithEmailPassword = async (email: string, password: string) =>
+  authActions.registerWithEmailPassword(email, password);
 
-  if (error) {
-    throw new Error("Prihlasovací email sa nepodarilo odoslať.");
-  }
-};
+export const signInWithEmailPassword = async (email: string, password: string) =>
+  authActions.signInWithEmailPassword(email, password);
 
-export const signInWithGoogle = async () => {
-  const { error } = await getClient().auth.signInWithOAuth({
-    options: {
-      redirectTo: getRedirectUrl(),
-    },
-    provider: "google",
-  });
+export const requestPasswordReset = async (email: string) => authActions.requestPasswordReset(email);
 
-  if (error) {
-    throw new Error("Prihlásenie cez Google sa nepodarilo spustiť.");
-  }
-};
+export const signInWithGoogle = async () => authActions.signInWithGoogle();
 
 export const signOut = async () => {
   const { error } = await getClient().auth.signOut();
   if (error) {
-    throw new Error("Odhlásenie sa nepodarilo.");
+    throw new Error("Sign-out failed.");
   }
 };
 
 export const getCurrentSession = async () => {
   const { data, error } = await getClient().auth.getSession();
   if (error) {
-    throw new Error("Reláciu sa nepodarilo načítať.");
+    throw new Error("Session could not be loaded.");
   }
 
   return data.session;
@@ -83,7 +78,7 @@ export const getCurrentSession = async () => {
 export const getCurrentUser = async () => {
   const { data, error } = await getClient().auth.getUser();
   if (error) {
-    throw new Error("Používateľa sa nepodarilo načítať.");
+    throw new Error("User could not be loaded.");
   }
 
   return data.user;
@@ -103,7 +98,7 @@ export const bootstrapAuthenticatedAccount = async (user: User) => {
   );
 
   if (profileError) {
-    throw new Error("Profil sa nepodarilo pripraviť.");
+    throw new Error("Profile could not be prepared.");
   }
 
   const households = await getUserHouseholds();
@@ -111,6 +106,5 @@ export const bootstrapAuthenticatedAccount = async (user: User) => {
     return households[0];
   }
 
-  return createHousehold("Moja domácnosť");
+  return null;
 };
-
