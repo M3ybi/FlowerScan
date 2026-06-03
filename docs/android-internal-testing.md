@@ -7,7 +7,7 @@ This runbook prepares Plantie for Google Play internal testing as package `com.p
 - App name: `Plantie`
 - Package/application ID: `com.plantie.app`
 - Version name: `0.1.0`
-- Version code: `2`
+- Version code: `3`
 - Release artifact: Android App Bundle (`.aab`)
 
 Real Google Play subscription products are not required for the first internal test upload. Keep purchases disabled or in the existing store-not-configured state until products exist.
