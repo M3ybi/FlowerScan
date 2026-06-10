@@ -450,17 +450,6 @@ const AppTabNav = ({
   </nav>
 );
 
-const AppFooter = ({ t }: { t: ReturnType<typeof createTranslator> }) => (
-  <footer className="app-footer">
-    <span>Plantie</span>
-    <nav aria-label="Footer navigation">
-      <a href="#/">{t("nav.plants")}</a>
-      <a href="#/diagnose">{t("nav.diagnose")}</a>
-      <a href="#/menu">{t("nav.menu")}</a>
-    </nav>
-  </footer>
-);
-
 const useHashRoute = () => {
   const [hash, setHash] = useState(() => window.location.hash || "#/");
 
@@ -3389,7 +3378,6 @@ export const App = () => {
           <p>{t("dashboard.emptySearchBody")}</p>
         </section>
       ) : null}
-      <AppFooter t={t} />
       <MobileBottomNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
     </main>
   );
