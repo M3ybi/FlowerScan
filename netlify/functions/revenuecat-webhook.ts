@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const headers = {
   "Content-Type": "application/json; charset=utf-8",
+  "X-Plantie-Deprecated-Backend": "Supabase Edge Function revenuecat-webhook is primary; Netlify is compatibility fallback.",
 };
 
 const premiumEntitlementId = "premium";

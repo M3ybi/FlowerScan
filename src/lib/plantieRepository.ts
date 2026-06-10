@@ -54,6 +54,27 @@ type DbHousehold = {
   updated_at: string;
 };
 
+type DbHouseholdInvite = {
+  id: string;
+  household_id: string;
+  invitee_email: string;
+  role: HouseholdRole;
+  expires_at: string | null;
+  used_at?: string | null;
+  revoked_at?: string | null;
+  token?: string;
+  created_at: string;
+  created_by?: string | null;
+};
+
+type DbHouseholdMember = {
+  created_at: string;
+  email: string;
+  household_id: string;
+  role: HouseholdRole;
+  user_id: string;
+};
+
 type DbPlant = {
   id: string;
   household_id: string;
@@ -153,6 +174,30 @@ export type Household = {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type HouseholdInvite = {
+  id: string;
+  householdId: string;
+  inviteeEmail: string;
+  role: HouseholdRole;
+  expiresAt: string | null;
+  usedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  createdBy: string | null;
+};
+
+export type CreatedHouseholdInvite = HouseholdInvite & {
+  token: string;
+};
+
+export type HouseholdMember = {
+  createdAt: string;
+  email: string;
+  householdId: string;
+  role: HouseholdRole;
+  userId: string;
 };
 
 export type HouseholdPlant = {
@@ -308,6 +353,10 @@ const getClient = () => {
   return supabase;
 };
 
+export const normalizeInviteEmail = (email: string) => email.trim().toLowerCase();
+
+export const isValidInviteEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeInviteEmail(email));
+
 const byPosition = <T extends { position: number }>(items: T[] | null | undefined) =>
   [...(items ?? [])].sort((left, right) => left.position - right.position);
 
@@ -350,6 +399,31 @@ const mapHousehold = (household: DbHousehold): Household => ({
   legacyPublicToken: household.legacy_public_token,
   name: household.name,
   updatedAt: household.updated_at,
+});
+
+const mapHouseholdInvite = (invite: DbHouseholdInvite): HouseholdInvite => ({
+  createdAt: invite.created_at,
+  createdBy: invite.created_by ?? null,
+  expiresAt: invite.expires_at,
+  householdId: invite.household_id,
+  id: invite.id,
+  inviteeEmail: invite.invitee_email,
+  revokedAt: invite.revoked_at ?? null,
+  role: invite.role,
+  usedAt: invite.used_at ?? null,
+});
+
+const mapCreatedHouseholdInvite = (invite: DbHouseholdInvite): CreatedHouseholdInvite => ({
+  ...mapHouseholdInvite(invite),
+  token: invite.token ?? "",
+});
+
+const mapHouseholdMember = (member: DbHouseholdMember): HouseholdMember => ({
+  createdAt: member.created_at,
+  email: member.email,
+  householdId: member.household_id,
+  role: member.role,
+  userId: member.user_id,
 });
 
 const mapHouseholdPlant = (plant: DbPlant): HouseholdPlant => ({
@@ -557,6 +631,85 @@ export const createHousehold = async (name: string) => {
   }
 
   return mapHousehold(data as DbHousehold);
+};
+
+export const createHouseholdInvite = async (
+  householdId: string,
+  email: string,
+  role: HouseholdRole = "editor",
+  expiresAt: string | null = null,
+) => {
+  const normalizedEmail = normalizeInviteEmail(email);
+  if (!isValidInviteEmail(normalizedEmail)) {
+    throw new Error("Enter a valid family member email address.");
+  }
+
+  const { data, error } = await getClient()
+    .rpc("create_household_invite", {
+      invite_email: normalizedEmail,
+      invite_expires_at: expiresAt,
+      invite_role: role,
+      target_household_id: householdId,
+    })
+    .single<DbHouseholdInvite>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.token) {
+    throw new Error("Supabase did not return an invite token.");
+  }
+
+  return mapCreatedHouseholdInvite(data);
+};
+
+export const listHouseholdInvites = async (householdId: string) => {
+  const { data, error } = await getClient()
+    .rpc("list_household_invites", { target_household_id: householdId })
+    .returns<DbHouseholdInvite[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as DbHouseholdInvite[]).map(mapHouseholdInvite);
+};
+
+export const listHouseholdMembers = async (householdId: string) => {
+  const { data, error } = await getClient()
+    .rpc("list_household_members", { target_household_id: householdId })
+    .returns<DbHouseholdMember[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as DbHouseholdMember[]).map(mapHouseholdMember);
+};
+
+export const revokeHouseholdInvite = async (inviteId: string) => {
+  const { error } = await getClient().rpc("revoke_household_invite", { invite_id: inviteId });
+
+  if (error) {
+    throw error;
+  }
+};
+
+export const joinHouseholdByInvite = async (token: string) => {
+  const { data, error } = await getClient()
+    .rpc("join_household_by_invite", { raw_token: token })
+    .single<DbHousehold>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Supabase did not return the joined household.");
+  }
+
+  return mapHousehold(data);
 };
 
 export const createHouseholdPlant = async (input: CreateHouseholdPlantInput) => {

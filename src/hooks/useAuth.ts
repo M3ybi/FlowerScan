@@ -9,14 +9,25 @@ import { isSupabaseConfigured } from "../lib/supabase";
 
 export type AuthState = {
   isAuthenticated: boolean;
+  isPasswordRecovery: boolean;
   loading: boolean;
   session: Session | null;
   user: User | null;
 };
 
+const hasPasswordRecoveryParams = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const source = `${window.location.search}&${window.location.hash}`;
+  return source.includes("type=recovery");
+};
+
 export const useAuth = (): AuthState => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(hasPasswordRecoveryParams);
   const [loading, setLoading] = useState(isSupabaseConfigured);
 
   useEffect(() => {
@@ -53,7 +64,12 @@ export const useAuth = (): AuthState => {
         }
       });
 
-    const { data } = onAuthStateChange((_event, nextSession) => {
+    const { data } = onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsPasswordRecovery(true);
+      } else if (event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        setIsPasswordRecovery(false);
+      }
       void applySession(nextSession);
     });
 
@@ -65,9 +81,9 @@ export const useAuth = (): AuthState => {
 
   return {
     isAuthenticated: Boolean(user),
+    isPasswordRecovery,
     loading,
     session,
     user,
   };
 };
-

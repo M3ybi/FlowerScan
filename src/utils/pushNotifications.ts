@@ -1,3 +1,5 @@
+import { isLegacyNetlifyBackendEnabled } from "../lib/backendConfig.js";
+
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
@@ -16,6 +18,10 @@ const getServiceWorkerRegistration = async () => {
 };
 
 const fetchPublicKey = async () => {
+  if (!isLegacyNetlifyBackendEnabled) {
+    throw new Error("Push notifikácie vyžadujú legacy Netlify backend alebo budúcu Supabase implementáciu.");
+  }
+
   const response = await fetch("/.netlify/functions/push-public-key");
   if (!response.ok) {
     throw new Error("Push notifikácie nie sú nakonfigurované na serveri.");
@@ -62,7 +68,7 @@ export const subscribeToPushNotifications = async (householdId: string) => {
 };
 
 export const unsubscribeFromPushNotifications = async (householdId: string) => {
-  if (!isPushNotificationSupported()) {
+  if (!isPushNotificationSupported() || !isLegacyNetlifyBackendEnabled) {
     return;
   }
 

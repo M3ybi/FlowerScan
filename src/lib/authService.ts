@@ -1,7 +1,7 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import { getUserHouseholds } from "./plantieRepository";
 import { supabase } from "./supabase";
-import { createAuthActions } from "./authRules";
+import { createAuthActions, createAuthRedirectUrl } from "./authRules";
 import type { AuthActionsClient, AuthMode } from "./authRules";
 
 export type { AuthMode };
@@ -12,6 +12,7 @@ export {
   validateAuthPassword,
   validateLoginInput,
   validatePasswordResetInput,
+  validatePasswordUpdateInput,
   validateRegistrationInput,
 } from "./authRules";
 
@@ -30,7 +31,7 @@ const getRedirectUrl = () => {
     return undefined;
   }
 
-  return window.location.href;
+  return createAuthRedirectUrl(window.location.href);
 };
 
 const profileDisplayName = (user: User) => {
@@ -56,6 +57,9 @@ export const signInWithEmailPassword = async (email: string, password: string) =
   authActions.signInWithEmailPassword(email, password);
 
 export const requestPasswordReset = async (email: string) => authActions.requestPasswordReset(email);
+
+export const updatePassword = async (password: string, confirmPassword: string) =>
+  authActions.updatePassword(password, confirmPassword);
 
 export const signInWithGoogle = async () => authActions.signInWithGoogle();
 

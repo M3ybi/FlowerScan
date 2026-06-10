@@ -118,7 +118,7 @@ Current app permissions:
 6. Add privacy policy URL: deployed `#/privacy` route.
 7. Add terms URL: deployed `#/terms` route.
 8. Add support URL: deployed `#/support` route.
-9. Complete Data safety for account data, plant photos, diagnosis images, household sharing, purchases, diagnostics, and email reports.
+9. Complete Data safety for account data, plant photos, diagnosis images, household sharing, purchases, and diagnostics. Email reports are not exposed in the mobile UI.
 10. Complete content rating questionnaire.
 11. Set target audience and content.
 12. Create internal testing track.

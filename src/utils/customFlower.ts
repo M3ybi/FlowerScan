@@ -1,4 +1,5 @@
 import type { Flower } from "../data/flowers";
+import { callBackendFunction } from "../lib/backendConfig.js";
 
 export type GeneratedCare = {
   displayName: string;
@@ -74,21 +75,20 @@ export const imageSourceToDataUrl = async (imageSource: string): Promise<string>
 };
 
 export const fetchGeneratedCare = async (plantName: string, imageDataUrl: string): Promise<GeneratedCare> => {
-  const response = await fetch("/.netlify/functions/plant-care-ai", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageDataUrl, plantName }),
-  });
-
-  if (!response.ok) {
-    const errorBody = (await response.json().catch(() => null)) as { error?: string; details?: string } | null;
-    const details = errorBody?.details ? ` ${errorBody.details}` : "";
-    throw new Error(`${errorBody?.error ?? "AI starostlivosť sa nepodarilo vygenerovať."}${details}`);
+  let data: { care?: GeneratedCare };
+  try {
+    data = await callBackendFunction<{ care?: GeneratedCare }>({
+      allowNetlifyFallback: true,
+      body: { imageDataUrl, plantName },
+      functionName: "plant-care-ai",
+      netlifyPath: "/.netlify/functions/plant-care-ai",
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "AI starostlivos? sa nepodarilo vygenerova?.");
   }
 
-  const data = (await response.json()) as { care?: GeneratedCare };
   if (!data.care?.displayName || !data.care?.likelyName) {
-    throw new Error("AI nevrátila údaje o starostlivosti.");
+    throw new Error("AI nevr?tila ?daje o starostlivosti.");
   }
 
   return data.care;

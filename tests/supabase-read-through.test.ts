@@ -181,6 +181,20 @@ test("Supabase rows map back into existing App state shape and preserve legacy I
   assert.equal(state.supabasePlantIdsByLegacyId[flowers[0].id], "supabase-plant-id");
 });
 
+test("Supabase read shape preserves empty households before first plant", () => {
+  const state = mapSupabaseRowsToLegacyStateShape({
+    careRecords: [],
+    diagnostics: [],
+    household: { ...household, name: "Petzvalova" },
+    plants: [],
+    reportSettings: null,
+  });
+
+  assert.equal(state.household.name, "Petzvalova");
+  assert.deepEqual(state.allFlowers, []);
+  assert.deepEqual(state.records, {});
+});
+
 test("comparison utility detects count, legacy ID, and hidden plant mismatches", () => {
   const legacy = createLegacyState();
   const supabaseState = mapSupabaseRowsToLegacyStateShape({

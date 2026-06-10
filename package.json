@@ -31,7 +31,11 @@
     "test:release-readiness": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --jsx react-jsx --skipLibCheck --types node src/lib/releaseReadiness.ts src/components/ReleasePages.tsx netlify/functions/health.ts netlify/functions/delete-account-request.ts tests/release-readiness.test.tsx && node --test .tmp-tests/tests/release-readiness.test.js",
     "test:onboarding": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node src/lib/onboarding.ts tests/onboarding.test.ts && node --test .tmp-tests/tests/onboarding.test.js",
     "test:auth-ux": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node src/lib/authRules.ts tests/auth-ux.test.tsx && node --test .tmp-tests/tests/auth-ux.test.js",
-    "test:i18n": "tsc --outDir .tmp-tests --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node src/lib/onboarding.ts src/lib/i18n.ts tests/i18n.test.ts && node --test .tmp-tests/tests/i18n.test.js"
+    "test:i18n": "tsc --outDir .tmp-tests --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node src/lib/onboarding.ts src/lib/i18n.ts tests/i18n.test.ts && node --test .tmp-tests/tests/i18n.test.js",
+    "test:backend-migration": "tsc --outDir .tmp-tests --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node src/lib/backendConfig.ts tests/backend-migration.test.ts && node --test .tmp-tests/tests/backend-migration.test.js",
+    "test:household-invites": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/household-invites.test.ts && node --test .tmp-tests/household-invites.test.js",
+    "test:mobile-ux": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/mobile-ux-cleanup.test.ts && node --test .tmp-tests/mobile-ux-cleanup.test.js",
+    "test:menu-ux": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/menu-ux.test.ts && node --test .tmp-tests/menu-ux.test.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

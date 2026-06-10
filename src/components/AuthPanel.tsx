@@ -6,11 +6,13 @@ import {
   requestPasswordReset,
   signInWithEmailPassword,
   signInWithGoogle,
+  updatePassword,
 } from "../lib/authService";
 import {
   minimumAuthPasswordLength,
   validateLoginInput,
   validatePasswordResetInput,
+  validatePasswordUpdateInput,
   validateRegistrationInput,
 } from "../lib/authRules";
 import type { AuthMode } from "../lib/authRules";
@@ -19,14 +21,14 @@ import type { PlantieLanguage } from "../lib/onboarding";
 
 type AuthPanelProps = {
   compact?: boolean;
+  initialMode?: AuthMode;
   language?: PlantieLanguage | null;
-  onGuest?: () => void;
   onSuccess?: () => void;
 };
 
-export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess }: AuthPanelProps) => {
+export const AuthPanel = ({ compact = false, initialMode = "register", language = null, onSuccess }: AuthPanelProps) => {
   const t = createTranslator(language);
-  const [mode, setMode] = useState<AuthMode>("register");
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -47,7 +49,9 @@ export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess
         ? validateRegistrationInput({ confirmPassword, email: normalizedEmail, password })
         : mode === "login"
           ? validateLoginInput({ email: normalizedEmail, password })
-          : validatePasswordResetInput(normalizedEmail);
+          : mode === "updatePassword"
+            ? validatePasswordUpdateInput({ confirmPassword, password })
+            : validatePasswordResetInput(normalizedEmail);
 
     if (validationError) {
       setStatus(validationError);
@@ -63,6 +67,9 @@ export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess
       } else if (mode === "login") {
         await signInWithEmailPassword(normalizedEmail, password);
         setStatus("Signed in. Continue to your household setup if needed.");
+      } else if (mode === "updatePassword") {
+        await updatePassword(password, confirmPassword);
+        setStatus("Password updated. You can continue using Plantie.");
       } else {
         await requestPasswordReset(normalizedEmail);
         setStatus("Password reset email sent. Check your inbox.");
@@ -90,20 +97,22 @@ export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess
 
   return (
     <div className={compact ? "auth-panel auth-panel-compact" : "auth-panel"}>
-      <div className="auth-mode-tabs" role="tablist" aria-label="Authentication mode">
-        <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-          {t("auth.create")}
-        </button>
-        <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-          {t("auth.login")}
-        </button>
-        <button type="button" className={mode === "reset" ? "active" : ""} onClick={() => setMode("reset")}>
-          {t("auth.reset")}
-        </button>
-      </div>
+      {mode === "updatePassword" ? null : (
+        <div className="auth-mode-tabs" role="tablist" aria-label="Authentication mode">
+          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+            {t("auth.create")}
+          </button>
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+            {t("auth.login")}
+          </button>
+          <button type="button" className={mode === "reset" ? "active" : ""} onClick={() => setMode("reset")}>
+            {t("auth.reset")}
+          </button>
+        </div>
+      )}
 
       <form className="auth-form" onSubmit={submitEmailAuth}>
-        <label className="field">
+        {mode === "updatePassword" ? null : <label className="field">
           <span>{t("auth.email")}</span>
           <input
             type="email"
@@ -112,20 +121,20 @@ export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess
             autoComplete="email"
             onChange={(event) => setEmail(event.target.value)}
           />
-        </label>
+        </label>}
         {mode !== "reset" ? (
           <label className="field">
-            <span>{t("auth.password")}</span>
+            <span>{mode === "updatePassword" ? "New password" : t("auth.password")}</span>
             <input
               type="password"
               value={password}
               minLength={minimumAuthPasswordLength}
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
+              autoComplete={mode === "register" || mode === "updatePassword" ? "new-password" : "current-password"}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
         ) : null}
-        {mode === "register" ? (
+        {mode === "register" || mode === "updatePassword" ? (
           <label className="field">
             <span>{t("auth.passwordConfirm")}</span>
             <input
@@ -139,11 +148,17 @@ export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess
         ) : null}
         <button className="primary-action" type="submit" disabled={isSubmitting}>
           <Mail size={17} aria-hidden="true" />
-          {mode === "register" ? t("auth.create") : mode === "login" ? t("auth.login") : t("auth.sendReset")}
+          {mode === "register"
+            ? t("auth.create")
+            : mode === "login"
+              ? t("auth.login")
+              : mode === "updatePassword"
+                ? "Update password"
+                : t("auth.sendReset")}
         </button>
       </form>
 
-      <div className="auth-provider-list" aria-label="Sign-in providers">
+      {mode === "updatePassword" ? null : <div className="auth-provider-list" aria-label="Sign-in providers">
         <button className="neutral-action auth-google-button" type="button" onClick={startGoogle} disabled={isSubmitting}>
           <ShieldCheck size={17} aria-hidden="true" />
           {t("auth.google")}
@@ -156,13 +171,7 @@ export const AuthPanel = ({ compact = false, language = null, onGuest, onSuccess
           <KeyRound size={17} aria-hidden="true" />
           {t("auth.amazon")} <span>{t("auth.comingSoon")}</span>
         </button>
-      </div>
-
-      {onGuest ? (
-        <button className="ghost-action" type="button" onClick={onGuest}>
-          {t("auth.guest")}
-        </button>
-      ) : null}
+      </div>}
 
       <p className="auth-security-note">{t("auth.security")}</p>
       {status ? <div className="report-status" role="status">{status}</div> : null}

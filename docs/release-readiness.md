@@ -15,7 +15,7 @@ This checklist prepares Plantie for beta and store review without enabling real 
 ## Google Play requirements
 
 - Complete Google Play identity verification.
-- Prepare Data safety answers for account data, email/password authentication through Supabase Auth, Google OAuth, plant photos, AI diagnosis images, household sharing, email reports, purchases, and diagnostics.
+- Prepare Data safety answers for account data, email/password authentication through Supabase Auth, Google OAuth, plant photos, AI diagnosis images, household sharing, purchases, and diagnostics. Email reports are not exposed in the mobile UI.
 - Prepare app access instructions for reviewers.
 - Upload feature graphic, app icon, phone screenshots, and tablet screenshots if tablet support remains enabled.
 - Configure subscription products only after identity verification and production readiness are complete.
@@ -49,7 +49,7 @@ This checklist prepares Plantie for beta and store review without enabling real 
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `REVENUECAT_WEBHOOK_SECRET`
 - `OPENAI_API_KEY`
-- `RESEND_API_KEY` if email reports are enabled
+- `RESEND_API_KEY` only if a future server-side email report workflow is re-enabled
 - Public Vite variables for Supabase and native RevenueCat keys
 
 ## Remaining blockers before beta

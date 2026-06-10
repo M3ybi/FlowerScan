@@ -1,3 +1,5 @@
+import { callBackendFunction } from "../lib/backendConfig.js";
+
 export type DiagnosisRiskLevel = "low" | "medium" | "high";
 export type DiagnosisConfirmation = "confirmed" | "rejected";
 export type DiagnosisStorageMode = "local" | "supabase";
@@ -176,20 +178,21 @@ const normalizeDiagnosis = (value: unknown): PlantDiagnosisDraft | null => {
 };
 
 export const fetchPlantDiagnosis = async (plantName: string, imageDataUrl: string, symptomNotes = ""): Promise<PlantDiagnosisDraft> => {
-  const response = await fetch("/.netlify/functions/plant-diagnosis-ai", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) }),
-  });
-
-  if (!response.ok) {
-    throw new Error("AI diagnostika zlyhala. Skús to prosím znova.");
+  let data: { diagnosis?: unknown };
+  try {
+    data = await callBackendFunction<{ diagnosis?: unknown }>({
+      allowNetlifyFallback: true,
+      body: { imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) },
+      functionName: "plant-diagnosis-ai",
+      netlifyPath: "/.netlify/functions/plant-diagnosis-ai",
+    });
+  } catch {
+    throw new Error("AI diagnostika zlyhala. Sk?s to pros?m znova.");
   }
 
-  const data = (await response.json()) as { diagnosis?: unknown };
   const diagnosis = normalizeDiagnosis(data.diagnosis);
   if (!diagnosis) {
-    throw new Error("AI vrátila neúplnú diagnostiku. Skús inú fotku.");
+    throw new Error("AI vr?tila ne?pln? diagnostiku. Sk?s in? fotku.");
   }
 
   return diagnosis;

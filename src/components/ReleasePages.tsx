@@ -53,7 +53,7 @@ export const LegalPageView = ({
           ))}
         </section>
       ))}
-      {page.id === "delete-account" ? (
+      {page.id === "delete-account" && onRequestDeletion ? (
         <form
           className="release-form"
           onSubmit={(event) => {
@@ -131,8 +131,8 @@ export const HealthPage = ({ backendStatus, env }: { backendStatus?: string; env
             {check.label}: {check.ok ? "present" : "missing"}
           </span>
         ))}
-        <span>Backend health endpoint: /.netlify/functions/health</span>
-        <span>Delete request endpoint: /.netlify/functions/delete-account-request</span>
+        <span>Primary backend: Supabase Edge Functions</span>
+        <span>Legacy Netlify functions: compatibility fallback only</span>
         <span>Backend reachability: {backendStatus ?? "not checked"}</span>
       </div>
       <p className="report-status">

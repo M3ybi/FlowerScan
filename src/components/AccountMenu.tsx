@@ -1,5 +1,5 @@
 import type { User } from "@supabase/supabase-js";
-import { LogOut, Trash2, UserRound } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 import { signOut } from "../lib/authService";
 
 type AccountMenuProps = {
@@ -21,10 +21,6 @@ export const AccountMenu = ({ user }: AccountMenuProps) => {
         <UserRound size={17} aria-hidden="true" />
         {label}
       </span>
-      <a className="account-menu-link" href="#/delete-account">
-        <Trash2 size={17} aria-hidden="true" />
-        Delete account
-      </a>
       <button type="button" onClick={confirmSignOut}>
         <LogOut size={17} aria-hidden="true" />
         Sign out

@@ -125,7 +125,7 @@ These functions use the browser Supabase client and rely on RLS. They are intent
 
 ## Auth infrastructure
 
-Optional Supabase Auth infrastructure is available. First-run onboarding now asks users to choose language, choose an auth path, then explicitly create or join a household before the dashboard appears. Guest mode remains available and is local/limited.
+Optional Supabase Auth infrastructure is available. First-run onboarding now asks users to choose language, sign in or create an account, then explicitly create a household or accept a valid invite before the dashboard appears. Guest mode is not exposed in production UI.
 
 Files:
 

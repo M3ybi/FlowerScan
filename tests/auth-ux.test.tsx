@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   createAuthActions,
+  createAuthRedirectUrl,
   validateLoginInput,
   validatePasswordResetInput,
+  validatePasswordUpdateInput,
   validateRegistrationInput,
 } from "../src/lib/authRules.js";
 
@@ -32,6 +34,10 @@ const createMockAuthClient = () => {
         },
         resetPasswordForEmail: async (email: string, options: unknown) => {
           calls.push({ input: { email, options }, method: "resetPasswordForEmail" });
+          return { error: null };
+        },
+        updateUser: async (input: unknown) => {
+          calls.push({ input, method: "updateUser" });
           return { error: null };
         },
       },
@@ -80,6 +86,54 @@ test("password reset trigger calls Supabase reset only after validation", async 
   ]);
 });
 
+test("password update validates confirmation and calls Supabase updateUser", async () => {
+  assert.equal(
+    validatePasswordUpdateInput({ confirmPassword: "password124", password: "password123" }),
+    "Passwords do not match.",
+  );
+
+  const mock = createMockAuthClient();
+  const actions = createAuthActions({
+    getClient: () => mock.client as never,
+    getRedirectUrl: () => "https://plantie.example/reset",
+  });
+
+  await actions.updatePassword("password123", "password123");
+
+  assert.deepEqual(mock.calls, [
+    {
+      input: { password: "password123" },
+      method: "updateUser",
+    },
+  ]);
+});
+
+test("auth redirects strip hash routes and query parameters before Supabase callback", () => {
+  assert.equal(createAuthRedirectUrl("https://plantie.example/app?householdId=abc#/join?invite=secret"), "https://plantie.example/app");
+  assert.equal(createAuthRedirectUrl("not a url"), undefined);
+});
+
+test("registration uses a hash-free email confirmation redirect", async () => {
+  const mock = createMockAuthClient();
+  const actions = createAuthActions({
+    getClient: () => mock.client as never,
+    getRedirectUrl: () => createAuthRedirectUrl("https://plantie.example/#/menu"),
+  });
+
+  await actions.registerWithEmailPassword("USER@EXAMPLE.COM", "password123");
+
+  assert.deepEqual(mock.calls, [
+    {
+      input: {
+        email: "user@example.com",
+        options: { emailRedirectTo: "https://plantie.example/" },
+        password: "password123",
+      },
+      method: "signUp",
+    },
+  ]);
+});
+
 test("Google button flow calls OAuth with Google provider", async () => {
   const mock = createMockAuthClient();
   const actions = createAuthActions({
@@ -95,6 +149,57 @@ test("Google button flow calls OAuth with Google provider", async () => {
       method: "signInWithOAuth",
     },
   ]);
+});
+
+test("login explains when email confirmation is still required", async () => {
+  const actions = createAuthActions({
+    getClient: () =>
+      ({
+        auth: {
+          signInWithPassword: async () => ({ error: { message: "Email not confirmed" } }),
+        },
+      }) as never,
+    getRedirectUrl: () => "https://plantie.example/app",
+  });
+
+  await assert.rejects(
+    () => actions.signInWithEmailPassword("user@example.com", "password123"),
+    /Confirm your email address first/,
+  );
+});
+
+test("auth errors explain rate limiting and invalid credentials", async () => {
+  const resetActions = createAuthActions({
+    getClient: () =>
+      ({
+        auth: {
+          resetPasswordForEmail: async () => ({
+            error: { code: "over_email_send_rate_limit", message: "email rate limit exceeded", status: 429 },
+          }),
+        },
+      }) as never,
+    getRedirectUrl: () => "https://plantie.example/app",
+  });
+
+  await assert.rejects(
+    () => resetActions.requestPasswordReset("user@example.com"),
+    /Too many auth emails were requested/,
+  );
+
+  const loginActions = createAuthActions({
+    getClient: () =>
+      ({
+        auth: {
+          signInWithPassword: async () => ({ error: { message: "Invalid login credentials" } }),
+        },
+      }) as never,
+    getRedirectUrl: () => "https://plantie.example/app",
+  });
+
+  await assert.rejects(
+    () => loginActions.signInWithEmailPassword("user@example.com", "password123"),
+    /password does not match/,
+  );
 });
 
 test("Apple and Amazon login are disabled placeholders", () => {
@@ -124,16 +229,32 @@ test("no household is auto-created after password login", async () => {
   );
 });
 
-test("guest mode remains clearly marked as local and limited", () => {
+test("guest mode is no longer rendered in auth UI", () => {
   const source = readFileSync("src/components/AuthPanel.tsx", "utf8");
   const i18nSource = readFileSync("src/lib/i18n.ts", "utf8");
-  assert.match(source, /auth\.guest/);
-  assert.match(i18nSource, /Continue as guest - local and limited/);
+  assert.doesNotMatch(source, /auth\.guest|onGuest/);
+  assert.doesNotMatch(i18nSource, /Continue as guest|Guest mode|Hos\\u0165ovsk\\u00fd re\\u017eim/);
 });
 
-test("sign-out requires confirmation and exposes account deletion link", () => {
+test("header sign-out requires confirmation and does not expose account deletion", () => {
   const source = readFileSync("src/components/AccountMenu.tsx", "utf8");
-  assert.match(source, /Delete account/);
-  assert.match(source, /#\/delete-account/);
+  assert.doesNotMatch(source, /Delete account|#\/delete-account/);
   assert.match(source, /window\.confirm/);
+});
+
+test("delete account is exposed only from logged-in menu settings", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  assert.match(appSource, /auth\.isAuthenticated \? \(/);
+  assert.match(appSource, /href="#\/delete-account"/);
+});
+
+test("password recovery route renders a dedicated password update mode", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
+  const hookSource = readFileSync("src/hooks/useAuth.ts", "utf8");
+
+  assert.match(hookSource, /PASSWORD_RECOVERY/);
+  assert.match(appSource, /auth\.isPasswordRecovery/);
+  assert.match(appSource, /initialMode="updatePassword"/);
+  assert.match(authPanelSource, /updatePassword\(password, confirmPassword\)/);
 });

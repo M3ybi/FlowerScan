@@ -195,10 +195,6 @@ export const mapSupabaseRowsToLegacyStateShape = ({
 
 const loadRowsForHousehold = async (household: Household) => {
   const plants = await getHouseholdPlantsIncludingRemoved(household.id);
-  if (plants.length === 0) {
-    return null;
-  }
-
   const [careRecords, diagnostics, reportSettings] = await Promise.all([
     getHouseholdCareRecords(household.id),
     getHouseholdDiagnostics(household.id),

@@ -1,8 +1,8 @@
 import {
   ArrowLeft,
+  ArrowRight,
   BadgeCheck,
   Bell,
-  BellOff,
   Camera,
   Check,
   Copy,
@@ -10,24 +10,22 @@ import {
   FileDown,
   ImagePlus,
   Home,
+  KeyRound,
   Leaf,
-  Mail,
   Pencil,
   Plus,
   Printer,
   QrCodeIcon,
   Search,
-  Send,
   Sparkles,
   Sprout,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import { AuthPanel } from "./components/AuthPanel";
-import { AuthButton } from "./components/AuthButton";
-import { LegacyMigrationCard } from "./components/LegacyMigrationCard";
 import { PricingPage } from "./components/PricingPage";
 import { QrCode } from "./components/QrCode";
 import { HealthPage, LegalPageView, ReleaseChecklistPage } from "./components/ReleasePages";
@@ -52,12 +50,12 @@ import {
   writeStoredLanguage,
 } from "./lib/onboarding";
 import type { OnboardingStep, PlantieLanguage } from "./lib/onboarding";
+import { signOut } from "./lib/authService";
 import {
-  compareLegacyAndSupabaseHouseholdState,
   detectDataSourceMode,
   loadSupabaseReadThroughState,
 } from "./lib/supabaseReadThrough";
-import type { LegacySupabaseComparison, SupabaseReadThroughState } from "./lib/supabaseReadThrough";
+import type { SupabaseReadThroughState } from "./lib/supabaseReadThrough";
 import {
   createSupabaseDiagnosis,
   detectSupabaseWriteMode,
@@ -65,15 +63,22 @@ import {
   setSupabasePlantRemoved,
   updateSupabaseCareRecord,
   updateSupabaseDiagnosis,
-  updateSupabaseReportSettings,
   upsertSupabasePlantFromFlower,
 } from "./lib/supabaseSourceOfTruth";
 import {
+  createHousehold,
+  createHouseholdInvite,
   getHouseholdPlantByLegacyId,
   getPlantDiagnostics,
   getUserHouseholds,
+  isValidInviteEmail,
+  joinHouseholdByInvite,
+  listHouseholdInvites,
+  listHouseholdMembers,
+  normalizeInviteEmail,
+  revokeHouseholdInvite,
 } from "./lib/plantieRepository";
-import { getReminderArchitectureNote, normalizeReminderSettings } from "./lib/reminderService";
+import type { HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
 import {
   createCustomFlowerId,
   fetchGeneratedCare,
@@ -94,7 +99,6 @@ import {
 import type { HouseholdSession } from "./utils/household";
 import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
-import { createMailtoReportUrl, getWateringReportRows, reportThresholdPercent } from "./utils/report";
 import { getWateringProgress } from "./utils/watering";
 import {
   isPushNotificationSupported,
@@ -109,6 +113,7 @@ import {
 } from "./utils/diagnostics";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
 import type { LegalPageId } from "./lib/releaseReadiness";
+import { callBackendFunction, isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
 
 const todayIsoDate = () => {
   const today = new Date();
@@ -139,9 +144,9 @@ const publicFlowerUrl = (baseUrl: string, flowerId: string) =>
   `${normalizeBaseUrl(baseUrl)}${flowerPath(flowerId, true)}`;
 
 const identificationLabel = {
-  confident: "ID overen? z fotky",
-  likely: "Pravdepodobn? ID",
-  "needs-confirmation": "ID treba potvrdi?",
+  confident: "ID overené z fotky",
+  likely: "Pravdepodobné ID",
+  "needs-confirmation": "ID treba potvrdiť",
 };
 
 const normalizeCareText = (value: string) =>
@@ -377,9 +382,17 @@ const riskLevelLabel = (riskLevel: PlantDiagnosticEntry["riskLevel"]) => {
 const flowerDiagnosticsCount = (flowerId: string, diagnostics: PlantDiagnosticEntry[]) =>
   diagnostics.filter((diagnostic) => diagnostic.plantId === flowerId).length;
 
-type MobileBottomNavPage = "plants" | "diagnose" | "qr" | "account";
+type MobileBottomNavPage = "plants" | "diagnose" | "add" | "qr" | "menu";
 
-const MobileBottomNav = ({ currentPage, t }: { currentPage: MobileBottomNavPage; t: ReturnType<typeof createTranslator> }) => (
+const MobileBottomNav = ({
+  currentPage,
+  onAddPlant,
+  t,
+}: {
+  currentPage: MobileBottomNavPage;
+  onAddPlant: () => void;
+  t: ReturnType<typeof createTranslator>;
+}) => (
   <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
     <a className={currentPage === "plants" ? "active" : ""} href="#/">
       <Leaf size={18} aria-hidden="true" />
@@ -389,15 +402,63 @@ const MobileBottomNav = ({ currentPage, t }: { currentPage: MobileBottomNavPage;
       <Camera size={18} aria-hidden="true" />
       {t("nav.diagnose")}
     </a>
+    <button type="button" className="mobile-bottom-nav-action" onClick={onAddPlant}>
+      <Plus size={18} aria-hidden="true" />
+      {t("dashboard.addPlant")}
+    </button>
     <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
       <QrCodeIcon size={18} aria-hidden="true" />
       {t("nav.qr")}
     </a>
-    <a className={currentPage === "account" ? "active" : ""} href="#/account">
+    <a className={currentPage === "menu" ? "active" : ""} href="#/menu">
       <Home size={18} aria-hidden="true" />
-      {t("nav.account")}
+      {t("nav.menu")}
     </a>
   </nav>
+);
+
+const AppTabNav = ({
+  currentPage,
+  onAddPlant,
+  t,
+}: {
+  currentPage: MobileBottomNavPage;
+  onAddPlant: () => void;
+  t: ReturnType<typeof createTranslator>;
+}) => (
+  <nav className="app-tab-nav" aria-label="Main navigation">
+    <a className={currentPage === "plants" ? "active" : ""} href="#/">
+      <Leaf size={18} aria-hidden="true" />
+      {t("nav.plants")}
+    </a>
+    <a className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
+      <Camera size={18} aria-hidden="true" />
+      {t("nav.diagnose")}
+    </a>
+    <button type="button" className={currentPage === "add" ? "active app-tab-nav-action" : "app-tab-nav-action"} onClick={onAddPlant}>
+      <Plus size={18} aria-hidden="true" />
+      {t("dashboard.addPlant")}
+    </button>
+    <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
+      <QrCodeIcon size={18} aria-hidden="true" />
+      {t("nav.qr")}
+    </a>
+    <a className={currentPage === "menu" ? "active" : ""} href="#/menu">
+      <Home size={18} aria-hidden="true" />
+      {t("nav.menu")}
+    </a>
+  </nav>
+);
+
+const AppFooter = ({ t }: { t: ReturnType<typeof createTranslator> }) => (
+  <footer className="app-footer">
+    <span>Plantie</span>
+    <nav aria-label="Footer navigation">
+      <a href="#/">{t("nav.plants")}</a>
+      <a href="#/diagnose">{t("nav.diagnose")}</a>
+      <a href="#/menu">{t("nav.menu")}</a>
+    </nav>
+  </footer>
 );
 
 const useHashRoute = () => {
@@ -423,12 +484,14 @@ const useHashRoute = () => {
     return { page: "diagnose" as const };
   }
 
-  if (hash === "#/report") {
-    return { page: "report" as const };
+  if (hash === "#/account" || hash === "#/menu") {
+    return { page: "menu" as const };
   }
 
-  if (hash === "#/account") {
-    return { page: "account" as const };
+  const joinMatch = hash.match(/^#\/join(?:\?(.+))?$/);
+  if (joinMatch) {
+    const params = new URLSearchParams(joinMatch[1] ?? "");
+    return { invite: params.get("invite") ?? "", page: "join" as const };
   }
 
   const legalPageMatch = hash.match(/^#\/(privacy|terms|support|delete-account|subscription-terms)$/);
@@ -452,13 +515,57 @@ const pageTitle = (pageName: string) => `${pageName} | Plantie`;
 const isSupabaseReadThroughEnabled = import.meta.env.VITE_ENABLE_SUPABASE_READS === "true";
 const isSupabaseWriteThroughEnvEnabled = isSupabaseReadThroughEnabled && import.meta.env.VITE_ENABLE_SUPABASE_WRITES === "true";
 const supabaseWritesDisabledStorageKey = "plantie-disable-supabase-writes-v1";
+const pendingInviteStorageKey = "plantie-pending-household-invite-v1";
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const dataSourceLabel = {
-  error: "Fallback",
-  fallback: "Fallback",
-  legacy: "Legacy",
-  "supabase-readwrite": "Supabase source of truth",
-  "supabase-readonly": "Supabase preview",
+const isUuid = (value: string) => uuidPattern.test(value);
+
+const createInviteUrl = (token: string) => {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = `#/join?invite=${encodeURIComponent(token)}`;
+  return url.toString();
+};
+
+const normalizeInviteTokenInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const hashQuery = parsed.hash.match(/^#\/join(?:\?(.+))?$/)?.[1] ?? "";
+    return new URLSearchParams(hashQuery).get("invite")?.trim() ?? trimmed;
+  } catch {
+    const hashQuery = trimmed.match(/^#\/join(?:\?(.+))?$/)?.[1] ?? "";
+    return hashQuery ? new URLSearchParams(hashQuery).get("invite")?.trim() ?? "" : trimmed;
+  }
+};
+
+const isActiveInvite = (invite: HouseholdInvite) =>
+  !invite.usedAt && !invite.revokedAt && (!invite.expiresAt || new Date(invite.expiresAt).getTime() > Date.now());
+
+const inviteErrorMessage = (error: unknown) => {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+
+  if (message.includes("active invite already exists") || message.includes("duplicate")) {
+    return "Aktívna pozvánka pre tento email už existuje.";
+  }
+
+  if (message.includes("invalid invite email") || message.includes("valid family member email")) {
+    return "Zadaj platný email člena rodiny.";
+  }
+
+  if (message.includes("expiration") || message.includes("future")) {
+    return "Platnosť pozvánky musí byť v budúcnosti.";
+  }
+
+  if (message.includes("permission") || message.includes("access") || message.includes("owner") || message.includes("editor")) {
+    return "Na vytvorenie pozvánky potrebuješ oprávnenie editora alebo vlastníka domácnosti.";
+  }
+
+  return "Pozvánku sa nepodarilo vytvoriť. Skontroluj pripojenie a skús to znova.";
 };
 
 export const App = () => {
@@ -488,6 +595,7 @@ export const App = () => {
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
   const [activeHousehold, setActiveHousehold] = useState<HouseholdSession | null>(() => getStoredHouseholdSession());
+  const [previousHousehold, setPreviousHousehold] = useState<HouseholdSession | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(window.localStorage));
   const t = useMemo(() => createTranslator(selectedLanguage), [selectedLanguage]);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(() =>
@@ -503,10 +611,18 @@ export const App = () => {
   const [accessStatus, setAccessStatus] = useState("");
   const [householdNameDraft, setHouseholdNameDraft] = useState("Moja domácnosť");
   const [householdLinkStatus, setHouseholdLinkStatus] = useState("");
+  const [isHouseholdSheetOpen, setIsHouseholdSheetOpen] = useState(false);
+  const [inviteRole, setInviteRole] = useState<HouseholdRole>("editor");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteExpiresAt, setInviteExpiresAt] = useState("");
+  const [inviteStatus, setInviteStatus] = useState("");
+  const [createdInviteLink, setCreatedInviteLink] = useState("");
+  const [householdInvites, setHouseholdInvites] = useState<HouseholdInvite[]>([]);
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
+  const [joinInviteInput, setJoinInviteInput] = useState("");
   const [isAccessChecking, setIsAccessChecking] = useState(true);
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
-  const [reportRecipient, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
-  const [reportStatus, setReportStatus] = useState("Denný report sa odosiela o 19:00, keď je aplikácia nasadená cez Netlify.");
+  const [, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [qrExportStatus, setQrExportStatus] = useState("");
@@ -515,6 +631,7 @@ export const App = () => {
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
+  const [plantPage, setPlantPage] = useState(1);
   const [deleteFlowerId, setDeleteFlowerId] = useState("");
   const [carePreview, setCarePreview] = useState<CarePreview | null>(null);
   const [carePreviewStatus, setCarePreviewStatus] = useState("");
@@ -536,14 +653,13 @@ export const App = () => {
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
   const [deleteAccountContact, setDeleteAccountContact] = useState(() => auth.user?.email ?? "");
   const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
+  const [accountActionStatus, setAccountActionStatus] = useState("");
   const [healthEndpointStatus, setHealthEndpointStatus] = useState("");
   const [supabasePlantIdsByLegacyId, setSupabasePlantIdsByLegacyId] = useState<Record<string, string>>({});
   const [quickRecordStatus, setQuickRecordStatus] = useState("");
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
   const [supabaseReadError, setSupabaseReadError] = useState(false);
-  const [supabaseCompareResult, setSupabaseCompareResult] = useState<LegacySupabaseComparison | null>(null);
-  const [supabaseWriteWarning, setSupabaseWriteWarning] = useState("");
-  const [isSupabaseWritesLocallyDisabled, setIsSupabaseWritesLocallyDisabled] = useState(
+  const [isSupabaseWritesLocallyDisabled] = useState(
     () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
   );
   const isSupabaseWriteThroughEnabled = isSupabaseWriteThroughEnvEnabled && !isSupabaseWritesLocallyDisabled;
@@ -555,6 +671,14 @@ export const App = () => {
     readError: supabaseReadError,
     writesEnabled: isSupabaseWriteThroughEnabled,
   });
+  const activeSupabaseHouseholdId = supabaseReadState?.household.id ?? (activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
+  const routeInviteToken = route.page === "join" ? route.invite : "";
+  const isRouteAllowedWithoutHousehold =
+    route.page === "menu" ||
+    route.page === "join" ||
+    route.page === "legal" ||
+    route.page === "release-readiness" ||
+    route.page === "health";
   const supabaseWriteMode = detectSupabaseWriteMode({
     hasAuthenticatedUser: auth.isAuthenticated,
     hasMigratedHousehold: Boolean(supabaseReadState),
@@ -569,27 +693,11 @@ export const App = () => {
     : legacyAllFlowers;
   const records = isUsingSupabaseReadState ? supabaseReadState?.records ?? {} : legacyRecords;
   const diagnostics = isUsingSupabaseReadState ? supabaseReadState?.diagnostics ?? [] : legacyDiagnostics;
-  const effectiveReportRecipient = isUsingSupabaseReadState
-    ? supabaseReadState?.reportSettings.recipientEmail ?? reportRecipient
-    : reportRecipient;
-  const householdDisplayName = activeHousehold?.name ?? supabaseReadState?.household.name ?? "Plantie household";
+  const householdDisplayName = supabaseReadState?.household.name ?? activeHousehold?.name ?? "Plantie household";
   const flowerById = useMemo(
     () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
     [allFlowersIncludingRemoved],
   );
-  const legacyHouseholdState = useMemo(
-    () => ({
-      activeHousehold,
-      allFlowers: legacyAllFlowersIncludingRemoved,
-      customFlowers,
-      diagnostics: legacyDiagnostics,
-      records: legacyRecords,
-      removedFlowerIds,
-      reportSettings: { recipientEmail: reportRecipient },
-    }),
-    [activeHousehold, customFlowers, legacyAllFlowersIncludingRemoved, legacyDiagnostics, legacyRecords, removedFlowerIds, reportRecipient],
-  );
-
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [route.page, "flowerId" in route ? route.flowerId : ""]);
@@ -611,8 +719,18 @@ export const App = () => {
       return;
     }
 
-    if (route.page === "report") {
-      document.title = pageTitle("Denný report");
+    if (route.page === "join") {
+      document.title = pageTitle("Join household");
+      return;
+    }
+
+    if (route.page === "menu") {
+      document.title = pageTitle("Menu");
+      return;
+    }
+
+    if (route.page === "legal" || route.page === "release-readiness" || route.page === "health") {
+      document.title = pageTitle(route.page === "health" ? "Health" : route.page === "release-readiness" ? "Readiness" : "Compliance");
       return;
     }
 
@@ -643,12 +761,65 @@ export const App = () => {
   }, [auth.user?.email, deleteAccountContact]);
 
   useEffect(() => {
+    if (!routeInviteToken) {
+      return;
+    }
+
+    const token = normalizeInviteTokenInput(routeInviteToken);
+    setJoinInviteInput(token);
+    if (!auth.loading && !auth.isAuthenticated && token) {
+      window.localStorage.setItem(pendingInviteStorageKey, token);
+      setInviteStatus("Prihlás sa alebo si vytvor účet a Plantie pozvánku dokončí automaticky.");
+      setOnboardingStep("welcome");
+    }
+  }, [auth.isAuthenticated, auth.loading, routeInviteToken]);
+
+  useEffect(() => {
+    if (auth.loading || !auth.isAuthenticated) {
+      return;
+    }
+
+    const pendingInvite = window.localStorage.getItem(pendingInviteStorageKey);
+    if (!pendingInvite) {
+      return;
+    }
+
+    void handleJoinInvite(pendingInvite);
+  }, [auth.isAuthenticated, auth.loading]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+      setHouseholdInvites([]);
+      setHouseholdMembers([]);
+      return;
+    }
+
+    void Promise.all([
+      refreshHouseholdInvites().catch(() => {
+        setHouseholdInvites([]);
+      }),
+      listHouseholdMembers(activeSupabaseHouseholdId)
+        .then(setHouseholdMembers)
+        .catch(() => {
+          setHouseholdMembers([]);
+        }),
+    ]);
+  }, [activeSupabaseHouseholdId, auth.isAuthenticated]);
+
+  useEffect(() => {
     if (route.page !== "health") {
       return;
     }
 
     let cancelled = false;
     setHealthEndpointStatus("checking");
+    if (isSupabaseBackend) {
+      setHealthEndpointStatus("supabase backend selected");
+      return () => {
+        cancelled = true;
+      };
+    }
+
     void fetch("/.netlify/functions/health")
       .then((response) => {
         if (!cancelled) {
@@ -703,16 +874,9 @@ export const App = () => {
     setSupabaseReadError(false);
     if (nextState) {
       setSupabasePlantIdsByLegacyId(nextState.supabasePlantIdsByLegacyId);
-      setSupabaseCompareResult(compareLegacyAndSupabaseHouseholdState(legacyHouseholdState, nextState));
     }
 
     return nextState;
-  };
-
-  const disableSupabaseWritesLocally = () => {
-    window.localStorage.setItem(supabaseWritesDisabledStorageKey, "true");
-    setIsSupabaseWritesLocallyDisabled(true);
-    setSupabaseWriteWarning("Supabase write mode is disabled locally. Legacy writes remain intact for rollback.");
   };
 
   const writeSupabaseFirst = async <T,>(
@@ -730,17 +894,14 @@ export const App = () => {
 
     if (result.mode === "fallback") {
       setSupabaseReadError(true);
-      setSupabaseWriteWarning(fallbackMessage);
       return false;
     }
 
 
     try {
       await refreshSupabaseReadState();
-      setSupabaseWriteWarning("");
     } catch {
       setSupabaseReadError(true);
-      setSupabaseWriteWarning("Supabase write succeeded, but read-back verification failed. Legacy mirror remains available.");
     }
 
     return true;
@@ -750,7 +911,6 @@ export const App = () => {
     if (!isSupabaseReadThroughEnabled || auth.loading || !auth.isAuthenticated) {
       setSupabaseReadState(null);
       setSupabaseReadError(false);
-      setSupabaseCompareResult(null);
       return;
     }
 
@@ -762,7 +922,6 @@ export const App = () => {
         if (!cancelled) {
           setSupabaseReadState(nextState);
           setSupabaseReadError(false);
-          setSupabaseCompareResult(null);
           if (nextState) {
             setSupabasePlantIdsByLegacyId(nextState.supabasePlantIdsByLegacyId);
           }
@@ -771,7 +930,6 @@ export const App = () => {
         if (!cancelled) {
           setSupabaseReadState(null);
           setSupabaseReadError(true);
-          setSupabaseCompareResult(null);
         }
       }
     };
@@ -881,7 +1039,7 @@ export const App = () => {
       const storedHousehold = getStoredHouseholdSession();
       const token = urlToken || storedHousehold?.publicToken || "";
 
-      if (!token) {
+      if (!token && (!isSupabaseBackend || !auth.isAuthenticated)) {
         setActiveHousehold(null);
         setAccessStatus("");
         setIsAccessChecking(false);
@@ -890,13 +1048,36 @@ export const App = () => {
 
       try {
         setIsAccessChecking(true);
-        const response = await fetch(createHouseholdApiUrl("/.netlify/functions/household-access", token));
-        if (!response.ok) {
-          throw new Error("Household access failed.");
+        let household: HouseholdSession | null = null;
+
+        if (isSupabaseBackend && auth.isAuthenticated) {
+          const households = await getUserHouseholds();
+          const supabaseHousehold =
+            (token ? households.find((item) => item.id === token || item.legacyPublicToken === token) : null) ?? households[0] ?? null;
+          if (!supabaseHousehold) {
+            if (!cancelled) {
+              clearHouseholdSession();
+              setActiveHousehold(null);
+              setSupabaseReadState(null);
+              setBaseUrl(currentBaseUrl());
+              setAccessStatus("");
+            }
+            return;
+          }
+          household = supabaseHousehold ? { name: supabaseHousehold.name, publicToken: supabaseHousehold.id } : null;
+        } else if (storedHousehold?.publicToken === token) {
+          household = storedHousehold;
+        } else if (isLegacyNetlifyBackendEnabled) {
+          const response = await fetch(createHouseholdApiUrl("/.netlify/functions/household-access", token));
+          if (!response.ok) {
+            throw new Error("Household access failed.");
+          }
+
+          const data = (await response.json()) as { household?: HouseholdSession };
+          household = data.household ?? null;
         }
 
-        const data = (await response.json()) as { household?: HouseholdSession };
-        if (!data.household || !isValidHouseholdToken(data.household.publicToken)) {
+        if (!household || !isValidHouseholdToken(household.publicToken)) {
           throw new Error("Invalid household response.");
         }
 
@@ -904,9 +1085,9 @@ export const App = () => {
           return;
         }
 
-        storeHouseholdSession(data.household);
-        setActiveHousehold(data.household);
-        setBaseUrl(currentHouseholdBaseUrl(data.household.publicToken));
+        storeHouseholdSession(household);
+        setActiveHousehold(household);
+        setBaseUrl(currentHouseholdBaseUrl(household.publicToken));
         setAccessStatus("");
       } catch {
         if (!cancelled) {
@@ -927,10 +1108,10 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [auth.isAuthenticated]);
 
   useEffect(() => {
-    if (!activeHousehold) {
+    if (!activeHousehold || !isLegacyNetlifyBackendEnabled || supabaseWriteMode === "supabase-first") {
       setCloudSyncReady(false);
       return;
     }
@@ -973,11 +1154,9 @@ export const App = () => {
           replaceRecords(mergeCloudRecords(records, cloudState.records));
         }
         setCloudSyncEnabled(true);
-        setReportStatus("Cloud sync je aktívny. Denný email sa odošle o 19:00.");
       } catch {
         if (!cancelled) {
           setCloudSyncEnabled(false);
-          setReportStatus("Na tomto hostingu nie je aktívny backend. Report si vieš pozrieť a otvoriť ako email ručne.");
         }
       } finally {
         if (!cancelled) {
@@ -1009,7 +1188,7 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!activeHousehold || !cloudSyncReady || !cloudSyncEnabled) {
+    if (!activeHousehold || !cloudSyncReady || !cloudSyncEnabled || !isLegacyNetlifyBackendEnabled || supabaseWriteMode === "supabase-first") {
       return;
     }
 
@@ -1024,64 +1203,16 @@ export const App = () => {
           records: legacyRecords,
           removedFlowerIds,
         }),
-      }).catch(() => {
-        setReportStatus("Cloud sync sa nepodaril. Lokálne zmeny sú uložené v tomto zariadení.");
-      });
+      }).catch(() => undefined);
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
   }, [activeHousehold, cloudSyncEnabled, cloudSyncReady, customFlowers, legacyDiagnostics, legacyRecords, removedFlowerIds]);
 
-  const reportRows = useMemo(() => getWateringReportRows(records, allFlowers), [allFlowers, records]);
   const qrLabelValidation = useMemo(
     () => validateQrLabelLayout(createQrLabelLayout(allFlowers, baseUrl)),
     [allFlowers, baseUrl],
   );
-
-  const saveReportRecipient = async () => {
-    if (!activeHousehold) {
-      setReportStatus("Najprv otvor alebo vytvor domácnosť.");
-      return;
-    }
-
-    const recipient = reportRecipient.trim();
-    if (!recipient) {
-      setReportStatus("Najprv zadaj email príjemcu reportu.");
-      return;
-    }
-    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
-      const wroteSupabase = await writeSupabaseFirst(
-        () => updateSupabaseReportSettings(supabaseReadState.household.id, { recipientEmail: recipient }),
-        () => window.localStorage.setItem("flowscan-report-recipient-v1", recipient),
-        "Supabase report settings update failed. Recipient is saved locally for rollback.",
-      );
-      setReportStatus(
-        wroteSupabase
-          ? "Recipient saved to Supabase. Legacy mirror remains available for rollback."
-          : "Recipient saved locally. Supabase write failed and the app fell back to legacy."
-      );
-      return;
-    }
-
-
-    try {
-      const response = await fetch(createHouseholdApiUrl("/.netlify/functions/report-settings", activeHousehold.publicToken), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ householdId: activeHousehold.publicToken, recipient }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Recipient could not be saved.");
-      }
-
-      setCloudSyncEnabled(true);
-      setReportStatus("Príjemca je uložený. Denný report sa odošle každý deň o 19:00.");
-    } catch {
-      window.localStorage.setItem("flowscan-report-recipient-v1", recipient);
-      setReportStatus("Príjemca je uložený lokálne. Automatické odosielanie potrebuje Netlify backend.");
-    }
-  };
 
   const enablePushNotifications = async () => {
     if (!activeHousehold) {
@@ -1196,13 +1327,129 @@ export const App = () => {
     removeFlower(flowerId);
   };
 
-  const runSupabaseComparison = () => {
-    if (!supabaseReadState) {
-      setSupabaseCompareResult(null);
+  const refreshHouseholdInvites = async () => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+      setHouseholdInvites([]);
       return;
     }
 
-    setSupabaseCompareResult(compareLegacyAndSupabaseHouseholdState(legacyHouseholdState, supabaseReadState));
+    const invites = await listHouseholdInvites(activeSupabaseHouseholdId);
+    setHouseholdInvites(invites);
+  };
+
+  const handleCreateInvite = async () => {
+    if (!activeSupabaseHouseholdId) {
+      setInviteStatus("Supabase domácnosť nie je dostupná.");
+      return;
+    }
+
+    const normalizedEmail = normalizeInviteEmail(inviteEmail);
+    if (!isValidInviteEmail(normalizedEmail)) {
+      setInviteStatus("Zadaj platný email člena rodiny.");
+      return;
+    }
+
+    if (householdInvites.some((invite) => isActiveInvite(invite) && invite.inviteeEmail === normalizedEmail)) {
+      setInviteStatus("Aktívna pozvánka pre tento email už existuje.");
+      return;
+    }
+
+    try {
+      setInviteStatus("Vytváram emailovú pozvánku...");
+      const invite = await createHouseholdInvite(
+        activeSupabaseHouseholdId,
+        normalizedEmail,
+        inviteRole,
+        inviteExpiresAt ? new Date(inviteExpiresAt).toISOString() : null,
+      );
+      const link = createInviteUrl(invite.token);
+      setCreatedInviteLink(link);
+      setInviteEmail("");
+      setInviteStatus(`Pozvánka pre ${normalizedEmail} bola vytvorená. Skopíruj link a pošli ho členovi rodiny.`);
+      await refreshHouseholdInvites();
+    } catch (error) {
+      setInviteStatus(inviteErrorMessage(error));
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!createdInviteLink) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(createdInviteLink);
+      setInviteStatus("Invite link je skopírovaný.");
+    } catch {
+      setInviteStatus(createdInviteLink);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    try {
+      await revokeHouseholdInvite(inviteId);
+      setInviteStatus("Pozvánka bola zrušená.");
+      await refreshHouseholdInvites();
+    } catch (error) {
+      setInviteStatus(error instanceof Error ? error.message : "Pozvánku sa nepodarilo zrušiť.");
+    }
+  };
+
+  const declinePendingInvite = () => {
+    window.localStorage.removeItem(pendingInviteStorageKey);
+    setJoinInviteInput("");
+    setInviteStatus("Pozvánka bola odmietnutá.");
+    window.location.hash = "#/menu";
+  };
+
+  const handleAccountSignOut = async () => {
+    if (!window.confirm("Odhlásiť sa z Plantie?")) {
+      return;
+    }
+
+    try {
+      setAccountActionStatus("Odhlasujem...");
+      await signOut();
+      clearHouseholdSession();
+      setActiveHousehold(null);
+      setSupabaseReadState(null);
+      setAccountActionStatus("Si odhlásený.");
+    } catch (error) {
+      setAccountActionStatus(error instanceof Error ? error.message : "Odhlásenie zlyhalo.");
+    }
+  };
+
+  const handleJoinInvite = async (input = joinInviteInput) => {
+    const token = normalizeInviteTokenInput(input);
+    if (!token) {
+      setInviteStatus("Zadaj invite token alebo link.");
+      return false;
+    }
+
+    if (!auth.isAuthenticated) {
+      window.localStorage.setItem(pendingInviteStorageKey, token);
+      setJoinInviteInput(token);
+      setInviteStatus("Prihlás sa a Plantie pozvánku dokončí automaticky.");
+      setOnboardingStep("welcome");
+      return false;
+    }
+
+    try {
+      setInviteStatus("Pripájam domácnosť...");
+      const household = await joinHouseholdByInvite(token);
+      const session = { name: household.name, publicToken: household.id };
+      storeHouseholdSession(session);
+      window.localStorage.removeItem(pendingInviteStorageKey);
+      setActiveHousehold(session);
+      setBaseUrl(currentHouseholdBaseUrl(session.publicToken));
+      setInviteStatus("Domácnosť je pripojená.");
+      window.history.replaceState(null, "", createHouseholdUrl(session.publicToken));
+      await refreshSupabaseReadState().catch(() => null);
+      return true;
+    } catch (error) {
+      setInviteStatus(error instanceof Error ? error.message : "Pozvánku sa nepodarilo použiť.");
+      return false;
+    }
   };
 
   const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
@@ -1211,32 +1458,52 @@ export const App = () => {
       return false;
     }
 
+    if (!auth.isAuthenticated) {
+      setAccessStatus("Prihlás sa alebo si vytvor účet pred vytvorením domácnosti.");
+      setOnboardingStep("welcome");
+      return false;
+    }
+
     try {
       setIsCreatingHousehold(true);
-      setAccessStatus("Vytváram súkromnú domácnosť...");
-      const response = await fetch("/.netlify/functions/household-access", {
-        body: JSON.stringify({ name: householdNameDraft }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
+      setAccessStatus("Vytváram domácnosť...");
+      let household: HouseholdSession;
 
-      if (!response.ok) {
-        throw new Error("Household could not be created.");
+      if (auth.isAuthenticated && isSupabaseBackend) {
+        const created = await createHousehold(householdNameDraft);
+        household = { name: created.name, publicToken: created.id };
+      } else if (isLegacyNetlifyBackendEnabled) {
+        const response = await fetch("/.netlify/functions/household-access", {
+          body: JSON.stringify({ name: householdNameDraft }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          throw new Error("Household could not be created.");
+        }
+
+        const data = (await response.json()) as { household?: HouseholdSession };
+        if (!data.household) {
+          throw new Error("Invalid household response.");
+        }
+        household = data.household;
+      } else {
+        throw new Error("Supabase sign-in is required to create a cloud household.");
       }
 
-      const data = (await response.json()) as { household?: HouseholdSession };
-      if (!data.household || !isValidHouseholdToken(data.household.publicToken)) {
+      if (!isValidHouseholdToken(household.publicToken)) {
         throw new Error("Invalid household response.");
       }
 
-      storeHouseholdSession(data.household);
-      window.history.replaceState(null, "", createHouseholdUrl(data.household.publicToken));
-      setActiveHousehold(data.household);
-      setBaseUrl(currentHouseholdBaseUrl(data.household.publicToken));
+      storeHouseholdSession(household);
+      window.history.replaceState(null, "", createHouseholdUrl(household.publicToken));
+      setActiveHousehold(household);
+      setBaseUrl(currentHouseholdBaseUrl(household.publicToken));
       setAccessStatus("");
       return true;
     } catch {
-      setAccessStatus("Domácnosť sa nepodarilo vytvoriť. Skontroluj Netlify backend a skús znova.");
+      setAccessStatus("Domácnosť sa nepodarilo vytvoriť. Prihlás sa a skús Supabase domácnosť vytvoriť znova.");
       return false;
     } finally {
       setIsCreatingHousehold(false);
@@ -1259,11 +1526,27 @@ export const App = () => {
   };
 
   const changeHousehold = () => {
+    if (activeHousehold) {
+      setPreviousHousehold(activeHousehold);
+    }
     clearHouseholdSession();
     removeHouseholdFromCurrentUrl();
     setActiveHousehold(null);
     setCloudSyncEnabled(false);
     setCloudSyncReady(false);
+    setAccessStatus("");
+  };
+
+  const restorePreviousHousehold = () => {
+    if (!previousHousehold) {
+      return;
+    }
+
+    storeHouseholdSession(previousHousehold);
+    window.history.replaceState(null, "", createHouseholdUrl(previousHousehold.publicToken));
+    setActiveHousehold(previousHousehold);
+    setBaseUrl(currentHouseholdBaseUrl(previousHousehold.publicToken));
+    setPreviousHousehold(null);
     setAccessStatus("");
   };
 
@@ -1279,6 +1562,18 @@ export const App = () => {
       ),
     );
   }, [allFlowers, query]);
+
+  const plantPageSize = 10;
+  const plantPageCount = Math.max(1, Math.ceil(filteredFlowers.length / plantPageSize));
+  const visibleFlowers = filteredFlowers.slice((plantPage - 1) * plantPageSize, plantPage * plantPageSize);
+
+  useEffect(() => {
+    setPlantPage(1);
+  }, [query, allFlowers.length]);
+
+  useEffect(() => {
+    setPlantPage((currentPage) => Math.min(currentPage, plantPageCount));
+  }, [plantPageCount]);
 
   const handleAddCustomFlower = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1439,7 +1734,7 @@ export const App = () => {
     }
 
     setIsDiagnosing(true);
-    setDiagnosisStatus("Overujem Premium pr?stup...");
+    setDiagnosisStatus("Overujem Premium prístup...");
 
     try {
       const gate = await checkDiagnosisGate({
@@ -1457,10 +1752,10 @@ export const App = () => {
       const diagnosis = await fetchPlantDiagnosis(flower.displayName, diagnosisImageDataUrl, diagnosisSymptomNotes);
       setDiagnosisDraft(diagnosis);
       await recordDiagnosisUsage(gate.mode);
-      setDiagnosisStatus(diagnosis.confidence < 45 ? "V?sledok m? n?zku istotu. Skontroluj ho opatrne." : "");
+      setDiagnosisStatus(diagnosis.confidence < 45 ? "Výsledok má nízku istotu. Skontroluj ho opatrne." : "");
     } catch (error) {
       setDiagnosisDraft(null);
-      setDiagnosisStatus(error instanceof Error ? error.message : "AI diagnostika zlyhala. Sk?s in? fotku.");
+      setDiagnosisStatus(error instanceof Error ? error.message : "AI diagnostika zlyhala. Skús inú fotku.");
     } finally {
       setIsDiagnosing(false);
     }
@@ -1468,7 +1763,7 @@ export const App = () => {
 
   const savePlantDiagnosis = async (flower: Flower, userConfirmation: DiagnosisConfirmation) => {
     if (!diagnosisDraft || !diagnosisImageDataUrl || !flowerById.has(flower.id)) {
-      setDiagnosisStatus("Diagnostiku sa nepodarilo ulo?i?, rastlina u? nie je dostupn?.");
+      setDiagnosisStatus("Diagnostiku sa nepodarilo uložiť, rastlina už nie je dostupná.");
       return;
     }
 
@@ -1492,7 +1787,7 @@ export const App = () => {
         supabaseImagePath = saved.imagePath ?? "";
         supabaseDiagnosticId = saved.id;
       } catch {
-        setDiagnosisStatus("Supabase ulo?enie zlyhalo. Diagnostiku uklad?m lok?lne pre sp?tn? kompatibilitu.");
+        setDiagnosisStatus("Supabase uloženie zlyhalo. Diagnostiku ukladám lokálne pre spätnú kompatibilitu.");
       }
     }
 
@@ -1537,7 +1832,7 @@ export const App = () => {
         await updateSupabaseDiagnosis(diagnosticId, sanitizedPatch);
         await refreshSupabaseReadState();
       } catch {
-        setDiagnosisStatus("Zmena je ulo?en? lok?lne. Supabase synchroniz?cia zlyhala.");
+        setDiagnosisStatus("Zmena je uložená lokálne. Supabase synchronizácia zlyhala.");
       }
     }
   };
@@ -1561,18 +1856,15 @@ export const App = () => {
 
     setDeleteAccountStatus("Submitting deletion review request...");
     try {
-      const response = await fetch("/.netlify/functions/delete-account-request", {
-        body: JSON.stringify({
+      const body = await callBackendFunction<{ message?: string }>({
+        allowNetlifyFallback: true,
+        body: {
           contact,
           userId: auth.user?.id ?? null,
-        }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
+        },
+        functionName: "delete-account-request",
+        netlifyPath: "/.netlify/functions/delete-account-request",
       });
-      const body = (await response.json().catch(() => null)) as { message?: string } | null;
-      if (!response.ok) {
-        throw new Error(body?.message ?? "Deletion request could not be submitted.");
-      }
 
       setDeleteAccountStatus(body?.message ?? "Deletion request received for manual review.");
     } catch (error) {
@@ -1586,11 +1878,6 @@ export const App = () => {
     if (onboardingStep !== "complete") {
       setOnboardingStep("welcome");
     }
-  };
-
-  const continueAsGuest = () => {
-    setOnboardingStatus("Guest mode uses local and household-link data only. Cloud account sync and Premium require sign-in.");
-    setOnboardingStep("household");
   };
 
   const continueToHouseholdSetup = () => {
@@ -1614,12 +1901,79 @@ export const App = () => {
     viteSupabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
     viteSupabaseUrl: import.meta.env.VITE_SUPABASE_URL,
   };
+  const openAddPlantFromMobileNav = () => {
+    setIsAddPlantModalOpen(true);
+    if (route.page !== "dashboard") {
+      window.location.hash = "#/";
+    }
+  };
+  const navigateBack = (fallbackHash = "#/") => (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    window.location.hash = fallbackHash;
+  };
+
+  if (auth.isPasswordRecovery) {
+    return (
+      <main className="app-shell access-shell onboarding-shell">
+        <section className="access-card onboarding-card" aria-labelledby="password-recovery-title">
+          <div className="section-title">
+            <KeyRound size={22} aria-hidden="true" />
+            <h1 id="password-recovery-title">Set a new password</h1>
+          </div>
+          <p>Enter a new password for your Plantie account. Use at least 8 characters.</p>
+          <AuthPanel compact initialMode="updatePassword" language={selectedLanguage} />
+        </section>
+      </main>
+    );
+  }
+
+  if (route.page === "join") {
+    return (
+      <main className="app-shell compact">
+        <header className="topbar">
+          <a className="icon-link" href="#/menu" onClick={navigateBack("#/menu")} aria-label="Back to menu">
+            <ArrowLeft size={22} aria-hidden="true" />
+          </a>
+          <div>
+            <p className="eyebrow">Rodinná pozvánka</p>
+            <h1>Pripojiť domácnosť</h1>
+          </div>
+        </header>
+        <section className="mobile-product-card">
+          <h2>Pozvánka do domácnosti</h2>
+          <p>Pozvánku môže prijať iba prihlásený používateľ. Manuálne pripájanie domácnosti bez platnej pozvánky nie je podporované.</p>
+          <label>
+            <span>Invite link</span>
+            <input value={joinInviteInput} onChange={(event) => setJoinInviteInput(event.target.value)} placeholder="#/join?invite=..." />
+          </label>
+          {auth.isAuthenticated ? (
+            <div className="menu-action-row">
+              <button className="primary-action" type="button" onClick={() => void handleJoinInvite()}>
+                Prijať pozvánku
+              </button>
+              <button className="neutral-action" type="button" onClick={declinePendingInvite}>
+                Odmietnuť
+              </button>
+            </div>
+          ) : (
+            <AuthPanel compact language={selectedLanguage} onSuccess={() => void handleJoinInvite(joinInviteInput)} />
+          )}
+          {inviteStatus ? <p className="report-status">{inviteStatus}</p> : null}
+        </section>
+      </main>
+    );
+  }
 
   if (route.page === "legal" || route.page === "release-readiness" || route.page === "health") {
     return (
       <main className="app-shell compact">
         <header className="topbar">
-          <a className="icon-link" href="#/" aria-label="Back to Plantie">
+          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label="Back to Plantie">
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
@@ -1628,12 +1982,12 @@ export const App = () => {
           </div>
         </header>
         {route.page === "legal" ? (
-          <LegalPageView
-            deleteRequestStatus={deleteAccountStatus}
-            onRequestDeletion={requestAccountDeletion}
-            pageId={route.legalPageId}
-            requestEmail={deleteAccountContact}
-            setRequestEmail={setDeleteAccountContact}
+        <LegalPageView
+          deleteRequestStatus={deleteAccountStatus}
+          onRequestDeletion={auth.isAuthenticated ? requestAccountDeletion : undefined}
+          pageId={route.legalPageId}
+          requestEmail={deleteAccountContact}
+          setRequestEmail={setDeleteAccountContact}
           />
         ) : route.page === "release-readiness" ? (
           <ReleaseChecklistPage />
@@ -1682,7 +2036,7 @@ export const App = () => {
                   Continue to household setup
                 </button>
               ) : (
-                <AuthPanel compact language={selectedLanguage} onGuest={continueAsGuest} />
+                <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
               )}
             </div>
             <button className="text-button" type="button" onClick={() => setOnboardingStep("language")}>
@@ -1701,35 +2055,33 @@ export const App = () => {
             <Home size={22} aria-hidden="true" />
             <h1 id="household-title">{t("household.createOrJoin")}</h1>
           </div>
-          <p>Households keep plant care private. Create a household now, or open a household invite link.</p>
+          <p>Households keep plant care private. Sign in, then create a household or accept a valid family invite.</p>
           {!auth.isAuthenticated ? (
-            <p className="access-note">{t("household.guestNote")}</p>
-          ) : null}
-          <form className="access-form" onSubmit={handleCreateOnboardingHousehold}>
-            <label className="field">
-              <span>{t("household.name")}</span>
-              <input
-                type="text"
-                value={householdNameDraft}
-                maxLength={80}
-                onChange={(event) => setHouseholdNameDraft(event.target.value)}
-              />
-            </label>
-            <button type="submit" disabled={isCreatingHousehold}>
-              <Plus size={18} aria-hidden="true" />
-              {isCreatingHousehold ? "Creating..." : t("household.create")}
-            </button>
-          </form>
-          <a className="neutral-action" href="#/support">
-            {t("household.join")}
-          </a>
+            <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
+          ) : (
+            <form className="access-form" onSubmit={handleCreateOnboardingHousehold}>
+              <label className="field">
+                <span>{t("household.name")}</span>
+                <input
+                  type="text"
+                  value={householdNameDraft}
+                  maxLength={80}
+                  onChange={(event) => setHouseholdNameDraft(event.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={isCreatingHousehold}>
+                <Plus size={18} aria-hidden="true" />
+                {isCreatingHousehold ? "Creating..." : t("household.create")}
+              </button>
+            </form>
+          )}
           {accessStatus || onboardingStatus ? <p className="access-status">{accessStatus || onboardingStatus}</p> : null}
         </section>
       </main>
     );
   }
 
-  if (isAccessChecking) {
+  if (isAccessChecking && !isRouteAllowedWithoutHousehold) {
     return (
       <main className="app-shell access-shell">
         <section className="access-card" aria-live="polite">
@@ -1743,37 +2095,41 @@ export const App = () => {
     );
   }
 
-  if (!activeHousehold && !supabaseReadState) {
+  if (!activeHousehold && !supabaseReadState && !isRouteAllowedWithoutHousehold) {
     return (
       <main className="app-shell access-shell">
         <section className="access-card" aria-labelledby="access-title">
           <div className="section-title">
             <Home size={20} aria-hidden="true" />
-            <h1 id="access-title">Súkromná domácnosť</h1>
+            <h1 id="access-title">Prihlásenie a domácnosť</h1>
           </div>
-          <p>
-            Rastliny sa už nezdieľajú globálne pre celý web. Otvor zdieľaný link domácnosti alebo vytvor nový súkromný
-            link pre svoju domácnosť.
-          </p>
-          <form className="access-form" onSubmit={handleCreateHousehold}>
-            <label className="field">
-              <span>Názov domácnosti</span>
-              <input
-                type="text"
-                value={householdNameDraft}
-                maxLength={80}
-                onChange={(event) => setHouseholdNameDraft(event.target.value)}
-              />
-            </label>
-            <button type="submit" disabled={isCreatingHousehold}>
-              <Plus size={18} aria-hidden="true" />
-              {isCreatingHousehold ? "Vytváram..." : "Vytvoriť domácnosť"}
+          <p>Prihlás sa a vytvor domácnosť, alebo otvor platnú pozvánku od člena rodiny.</p>
+          {auth.isAuthenticated ? (
+            <form className="access-form" onSubmit={handleCreateHousehold}>
+              <label className="field">
+                <span>Názov domácnosti</span>
+                <input
+                  type="text"
+                  value={householdNameDraft}
+                  maxLength={80}
+                  onChange={(event) => setHouseholdNameDraft(event.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={isCreatingHousehold}>
+                <Plus size={18} aria-hidden="true" />
+                {isCreatingHousehold ? "Vytváram..." : "Vytvoriť domácnosť"}
+              </button>
+            </form>
+          ) : (
+            <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
+          )}
+          {auth.isAuthenticated && previousHousehold ? (
+            <button className="neutral-action access-return-action" type="button" onClick={restorePreviousHousehold}>
+              <ArrowLeft size={17} aria-hidden="true" />
+              Späť na {previousHousehold.name}
             </button>
-          </form>
+          ) : null}
           {accessStatus ? <p className="access-status">{accessStatus}</p> : null}
-          <p className="access-note">
-            Link bude obsahovať náhodný tajný token. Pošli ho iba ľuďom, ktorí majú mať prístup k týmto rastlinám.
-          </p>
         </section>
       </main>
     );
@@ -1784,7 +2140,7 @@ export const App = () => {
     if (!flower) {
       return (
         <main className="app-shell compact">
-          <a className="nav-link" href="#/">
+          <a className="nav-link" href="#/" onClick={navigateBack("#/")}>
             <ArrowLeft size={18} aria-hidden="true" />
             Prehľad
           </a>
@@ -1806,12 +2162,14 @@ export const App = () => {
     const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
     const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays) : [];
     const isEditingName = editingNameFlowerId === flower.id;
-    const flowerDiagnostics = diagnostics.filter((diagnosis) => diagnosis.plantId === flower.id);
+    const flowerDiagnostics = diagnostics
+      .filter((diagnosis) => diagnosis.plantId === flower.id)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
     return (
       <main className="app-shell detail-shell">
         <header className="detail-header">
-          <a className="icon-link" href="#/" aria-label="Späť na prehľad">
+          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label="Späť na prehľad">
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
@@ -1858,6 +2216,8 @@ export const App = () => {
           </div>
         </header>
 
+        <AppTabNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
+
         <img className="detail-photo" src={flower.image} alt={flower.displayName} />
 
         <section className="scan-action-panel" aria-labelledby="quick-action-title">
@@ -1875,14 +2235,6 @@ export const App = () => {
               <Droplets size={18} aria-hidden="true" />
               {t("detail.todayWatered")}
             </button>
-            <button className="ghost-action" type="button" onClick={openDiagnosisModal}>
-              <Camera size={18} aria-hidden="true" />
-              {t("detail.diagnose")}
-            </button>
-            <a className="ghost-action action-link-button" href="#care-title">
-              <Leaf size={18} aria-hidden="true" />
-              {t("detail.careTips")}
-            </a>
             <button
               className={`ghost-action ${quickRecordStatus === "Presadenie uložené" ? "quick-action-saved" : ""}`}
               type="button"
@@ -1932,18 +2284,22 @@ export const App = () => {
 
         <section className="status-band">
           <div>
-            <span>Posledná zálievka</span>
+            <Droplets size={16} aria-hidden="true" />
+            <span>Zálievka</span>
             <strong>{formatDate(record.lastWatered)}</strong>
           </div>
           <div>
-            <span>Čas od zálievky</span>
+            <Droplets size={16} aria-hidden="true" />
+            <span>Od zálievky</span>
             <strong>{formatElapsedDays(elapsedDays)}</strong>
           </div>
           <div>
+            <Sprout size={16} aria-hidden="true" />
             <span>Presadené</span>
             <strong>{formatDate(record.lastTransplanted)}</strong>
           </div>
           <div>
+            <Leaf size={16} aria-hidden="true" />
             <span>Pohnojené</span>
             <strong>{formatDate(record.lastFertilized)}</strong>
           </div>
@@ -2046,30 +2402,6 @@ export const App = () => {
             />
           </label>
           <label className="field">
-            <span>Interval z?lievky pre pripomienky</span>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={intervalDays}
-              onChange={(event) => {
-                const settings = normalizeReminderSettings({
-                  notificationsEnabled: flower.notificationsEnabled !== false,
-                  preference: "web_push",
-                  wateringIntervalDays: Number(event.target.value),
-                });
-                void saveFlower({ ...flower, wateringIntervalDays: settings.wateringIntervalDays, source: "custom" });
-              }}
-            />
-            <small>{getReminderArchitectureNote()}</small>
-          </label>
-          <label className="field">
-            <span>Preferencia pripomienok</span>
-            <select value="web_push" disabled>
-              <option value="web_push">Web push teraz, native push nesk?r</option>
-            </select>
-          </label>
-          <label className="field">
             <span>Dátum poslednej zálievky</span>
             <div className="date-row">
               <input
@@ -2143,17 +2475,19 @@ export const App = () => {
                     <div>
                       <span>{formatDate(diagnosis.createdAt.slice(0, 10))}</span>
                       <h3>{diagnosis.diagnosisTitle}</h3>
-                      <p>
-                        {diagnosis.confidence}% - {diagnosis.confidenceLabel} istota ? {riskLevelLabel(diagnosis.riskLevel)} ? {" "}
-                        {diagnosis.userConfirmation === "confirmed" ? "potvrden?" : "zamietnut?"}
-                      </p>
+                      <div className="diagnostic-card-meta" aria-label="Súhrn diagnostiky">
+                        <span>{diagnosis.confidence}% istota</span>
+                        <span>{diagnosis.confidenceLabel}</span>
+                        <span>{riskLevelLabel(diagnosis.riskLevel)}</span>
+                        <span>{diagnosis.userConfirmation === "confirmed" ? "potvrdené" : "zamietnuté"}</span>
+                      </div>
                       <button className="text-action" type="button" onClick={() => setOpenDiagnosticId(isOpen ? "" : diagnosis.id)}>
-                        {isOpen ? "Skry? detail" : "Otvori? detail"}
+                        {isOpen ? "Skryť detail" : "Otvoriť detail"}
                       </button>
                       {isOpen ? (
                         <div className="diagnostic-detail">
                           <section>
-                            <h4>Detegovan? sympt?my</h4>
+                            <h4>Detegované symptómy</h4>
                             <ul>
                               {diagnosis.observedSymptoms.map((symptom) => (
                                 <li key={symptom}>{symptom}</li>
@@ -2161,7 +2495,7 @@ export const App = () => {
                             </ul>
                           </section>
                           <section>
-                            <h4>Odpor??an? kroky</h4>
+                            <h4>Odporúčané kroky</h4>
                             <ol>
                               {diagnosis.recommendedSteps.map((step) => (
                                 <li key={step}>{step}</li>
@@ -2169,12 +2503,12 @@ export const App = () => {
                             </ol>
                           </section>
                           <section>
-                            <h4>Pravdepodobn? pr??iny</h4>
+                            <h4>Pravdepodobné príčiny</h4>
                             <p>{diagnosis.reasoningSummary}</p>
                           </section>
                           <small>{diagnosis.disclaimer}</small>
                           <label className="field">
-                            <span>Osobn? pozn?mka</span>
+                            <span>Osobná poznámka</span>
                             <textarea
                               rows={3}
                               value={diagnosis.userNote}
@@ -2187,14 +2521,14 @@ export const App = () => {
                               type="button"
                               onClick={() => void updateDiagnosticHistoryEntry(diagnosis.id, { userConfirmation: "confirmed" })}
                             >
-                              Potvrdi?
+                              Potvrdiť
                             </button>
                             <button
                               className="neutral-action"
                               type="button"
                               onClick={() => void updateDiagnosticHistoryEntry(diagnosis.id, { userConfirmation: "rejected" })}
                             >
-                              Zamietnu?
+                              Zamietnuť
                             </button>
                           </div>
                         </div>
@@ -2205,7 +2539,7 @@ export const App = () => {
                           ))}
                         </ol>
                       )}
-                      {diagnosis.userNote && !isOpen ? <small>Pozn?mka: {diagnosis.userNote}</small> : null}
+                      {diagnosis.userNote && !isOpen ? <small>Poznámka: {diagnosis.userNote}</small> : null}
                     </div>
                   </article>
                 );
@@ -2304,12 +2638,12 @@ export const App = () => {
               <p>Pridaj ostrú fotku postihnutého listu alebo časti rastliny. AI výsledok je iba odhad.</p>
 
               <label className="field">
-                <span>Sympt?my alebo pozn?mky</span>
+                <span>Symptómy alebo poznámky</span>
                 <textarea
                   rows={3}
                   value={diagnosisSymptomNotes}
                   maxLength={600}
-                  placeholder="Napr. ?lt? listy, m?kk? stonka, ?kvrny, posledn? z?lievka..."
+                  placeholder="Napr. žlté listy, mäkká stonka, škvrny, posledná zálievka..."
                   onChange={(event) => setDiagnosisSymptomNotes(event.target.value)}
                 />
               </label>
@@ -2320,7 +2654,7 @@ export const App = () => {
                 </span>
                 <span className="image-upload-copy">
                   <strong>Vybrat alebo odfotit problem</strong>
-                  <small>JPG, PNG, WEBP Â· max 8 MB</small>
+                  <small>JPG, PNG, WEBP · max 8 MB</small>
                 </span>
                 <input
                   type="file"
@@ -2443,161 +2777,227 @@ export const App = () => {
     );
   }
 
-  if (route.page === "account") {
+  if (route.page === "menu") {
     return (
       <main className="app-shell compact">
         <header className="topbar">
-          <a className="icon-link" href="#/" aria-label="Sp?? na preh?ad">
+          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label="Späť na prehľad">
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
             <p className="eyebrow">Plantie</p>
-            <h1>{t("account.heading")}</h1>
+            <h1>{t("menu.heading")}</h1>
           </div>
-          <AuthButton />
         </header>
-        <section className="mobile-product-card">
-          <h2>{t("account.optionalLogin")}</h2>
-          <p>{t("account.optionalLoginBody")}</p>
-        </section>
-        <section className="mobile-product-card account-summary-card" aria-labelledby="account-summary-title">
-          <h2 id="account-summary-title">{t("account.status")}</h2>
-          <div className="account-summary-list">
-            <div>
-              <span>{t("account.authProvider")}</span>
-              <strong>{auth.user?.app_metadata?.provider ?? (auth.isAuthenticated ? "Email" : t("account.guest"))}</strong>
+        <AppTabNav currentPage="menu" onAddPlant={openAddPlantFromMobileNav} t={t} />
+        <section className="menu-stack" aria-label="Plantie menu">
+          <details className="menu-section" open>
+            <summary>
+              <span>{t("menu.account")}</span>
+            </summary>
+            {auth.isAuthenticated ? (
+              <div className="menu-section-body">
+                <div className="account-summary-list">
+                  <div>
+                    <span>{t("account.authProvider")}</span>
+                    <strong>{auth.user?.email ?? auth.user?.app_metadata?.provider ?? "Email"}</strong>
+                  </div>
+                  <div>
+                    <span>{t("account.subscription")}</span>
+                    <strong>{t("account.subscriptionServer")}</strong>
+                  </div>
+                </div>
+                <div className="menu-action-row">
+                  <button className="neutral-action" type="button" onClick={() => void handleAccountSignOut()}>
+                    {t("account.signOut")}
+                  </button>
+                  <a className="danger-action" href="#/delete-account">
+                    {t("account.delete")}
+                  </a>
+                </div>
+                {accountActionStatus ? <p className="report-status">{accountActionStatus}</p> : null}
+              </div>
+            ) : (
+              <div className="menu-section-body">
+                <p>{t("account.loginRequiredBody")}</p>
+                <AuthPanel compact language={selectedLanguage} />
+              </div>
+            )}
+          </details>
+
+          <details className="menu-section">
+            <summary>
+              <span>{t("menu.household")}</span>
+            </summary>
+            <div className="menu-section-body">
+              <div className="account-summary-list">
+                <div>
+                  <span>{t("account.household")}</span>
+                  <strong>{activeHousehold || supabaseReadState ? householdDisplayName : t("account.householdRequired")}</strong>
+                </div>
+                <div>
+                  <span>{t("household.members")}</span>
+                  <strong>
+                    {householdMembers.length > 0
+                      ? t("household.memberCount", { count: householdMembers.length })
+                      : auth.user?.email ?? t("household.signedInUser")}
+                  </strong>
+                </div>
+              </div>
+              {householdMembers.length > 0 ? (
+                <div className="household-member-list" aria-label="Household members">
+                  {householdMembers.map((member) => (
+                    <div key={member.userId}>
+                      <strong>{member.email}</strong>
+                      <span>{member.role}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {activeSupabaseHouseholdId && auth.isAuthenticated ? (
+                <>
+                  <div className="menu-form-grid">
+                    <label className="field">
+                      <span>{t("household.inviteEmail")}</span>
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        placeholder="rodina@example.com"
+                        onChange={(event) => setInviteEmail(event.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>{t("household.role")}</span>
+                      <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)}>
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>{t("household.inviteExpiresAt")}</span>
+                      <input type="datetime-local" value={inviteExpiresAt} onChange={(event) => setInviteExpiresAt(event.target.value)} />
+                    </label>
+                    <button className="primary-action" type="button" onClick={() => void handleCreateInvite()}>
+                      {t("household.createEmailInvite")}
+                    </button>
+                  </div>
+                  {createdInviteLink ? (
+                    <div className="report-status">
+                      <span>{createdInviteLink}</span>
+                      <button type="button" onClick={() => void handleCopyInviteLink()}>
+                        {t("household.copyInvite")}
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="menu-invite-list" aria-label="Pending email invites">
+                    {householdInvites.length > 0 ? (
+                      householdInvites.map((invite) => (
+                        <div key={invite.id}>
+                          <strong>{invite.inviteeEmail}</strong>
+                          <span>
+                            {invite.revokedAt
+                              ? t("household.inviteStatusRevoked")
+                              : invite.usedAt
+                                ? t("household.inviteStatusAccepted")
+                                : invite.expiresAt
+                                  ? t("household.inviteStatusExpires", { date: formatDate(invite.expiresAt.slice(0, 10)) })
+                                  : t("household.inviteStatusPending")}
+                            {" · "}
+                            {invite.role}
+                          </span>
+                          {!invite.revokedAt && !invite.usedAt ? (
+                            <button type="button" onClick={() => void handleRevokeInvite(invite.id)}>
+                              {t("household.revokeInvite")}
+                            </button>
+                          ) : null}
+                        </div>
+                      ))
+                    ) : (
+                      <span>{t("household.noPendingInvites")}</span>
+                    )}
+                  </div>
+                </>
+              ) : auth.isAuthenticated && isSupabaseBackend ? (
+                <div className="menu-form-grid">
+                  <p>{t("household.createFirstBody")}</p>
+                  <form className="menu-form-grid" onSubmit={handleCreateHousehold}>
+                    <label className="field">
+                      <span>{t("household.name")}</span>
+                      <input
+                        type="text"
+                        value={householdNameDraft}
+                        onChange={(event) => setHouseholdNameDraft(event.target.value)}
+                        placeholder="Petzvalova"
+                      />
+                    </label>
+                    <button className="primary-action" type="submit" disabled={isCreatingHousehold}>
+                      {isCreatingHousehold ? "Creating..." : t("household.create")}
+                    </button>
+                  </form>
+                  <label className="field">
+                    <span>{t("household.inviteToken")}</span>
+                    <input
+                      value={joinInviteInput}
+                      onChange={(event) => setJoinInviteInput(event.target.value)}
+                      placeholder="#/join?invite=..."
+                    />
+                  </label>
+                  <button className="neutral-action" type="button" onClick={() => void handleJoinInvite()}>
+                    {t("household.join")}
+                  </button>
+                </div>
+              ) : (
+                <p>{t("household.inviteRequiresSupabase")}</p>
+              )}
+              {inviteStatus ? <p className="report-status">{inviteStatus}</p> : null}
             </div>
-            <div>
-              <span>{t("account.subscription")}</span>
-              <strong>{t("account.subscriptionServer")}</strong>
+          </details>
+          <details className="menu-section">
+            <summary>
+              <span>{t("menu.subscription")}</span>
+            </summary>
+            <div className="menu-section-body">
+              <PricingPage />
             </div>
-            <div>
-              <span>{t("account.dataSource")}</span>
-              <strong>{dataSourceLabel[dataSourceMode]}</strong>
+          </details>
+
+          <details className="menu-section">
+            <summary>
+              <span>{t("account.language")}</span>
+            </summary>
+            <div className="menu-section-body">
+              <div className="onboarding-language-grid compact-language-grid">
+                {supportedLanguages.map((language) => (
+                  <button
+                    type="button"
+                    key={language.code}
+                    className={selectedLanguage === language.code ? "selected-language" : ""}
+                    onClick={() => selectOnboardingLanguage(language.code)}
+                  >
+                    <strong>{language.nativeName}</strong>
+                    <span>{language.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <span>{t("account.household")}</span>
-              <strong>{activeHousehold || supabaseReadState ? householdDisplayName : t("account.householdRequired")}</strong>
+          </details>
+
+          <details className="menu-section">
+            <summary>
+              <span>{t("menu.supportLegal")}</span>
+            </summary>
+            <div className="menu-section-body">
+              <div className="menu-link-grid">
+                <a href="#/privacy">{t("account.privacy")}</a>
+                <a href="#/terms">{t("account.terms")}</a>
+                <a href="#/support">{t("account.support")}</a>
+                <a href="#/subscription-terms">Subscription Terms</a>
+                <a href="#/health">Release Health</a>
+              </div>
             </div>
-          </div>
+          </details>
         </section>
-        <section className="mobile-product-card">
-          <h2>{t("account.legal")}</h2>
-          <div className="migration-preview-grid">
-            <a href="#/privacy">{t("account.privacy")}</a>
-            <a href="#/terms">{t("account.terms")}</a>
-            <a href="#/support">{t("account.support")}</a>
-            <a href="#/delete-account">{t("account.delete")}</a>
-            <a href="#/subscription-terms">Subscription Terms</a>
-            <a href="#/health">Release Health</a>
-          </div>
-        </section>
-        <section className="mobile-product-card">
-          <h2>{t("account.language")}</h2>
-          <div className="onboarding-language-grid compact-language-grid">
-            {supportedLanguages.map((language) => (
-              <button
-                type="button"
-                key={language.code}
-                className={selectedLanguage === language.code ? "selected-language" : ""}
-                onClick={() => selectOnboardingLanguage(language.code)}
-              >
-                <strong>{language.nativeName}</strong>
-                <span>{language.label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="migration-card account-operational-panel" aria-labelledby="data-source-title">
-          <div className="section-title">
-            <BadgeCheck size={18} aria-hidden="true" />
-            <h2 id="data-source-title">Data source</h2>
-          </div>
-          <div className="migration-preview-grid">
-            <span>Current source: {dataSourceLabel[dataSourceMode]}</span>
-            <span>Supabase reads flag: {isSupabaseReadThroughEnabled ? "on" : "off"}</span>
-            <span>Supabase writes flag: {isSupabaseWriteThroughEnvEnabled ? "on" : "off"}</span>
-            <span>Local write rollback: {isSupabaseWritesLocallyDisabled ? "enabled" : "off"}</span>
-            <span>Authenticated: {auth.isAuthenticated ? "yes" : "no"}</span>
-            <span>Migrated household: {supabaseReadState ? "found" : "not found"}</span>
-            <span>Supabase plants: {supabaseReadState?.allFlowers.length ?? 0}</span>
-            <span>Report settings: {effectiveReportRecipient ? "present" : "missing"}</span>
-          </div>
-          <p className="report-status">
-            {dataSourceMode === "supabase-readonly"
-              ? "Supabase preview is read-only. Current write actions still use the legacy local and Netlify flow."
-              : dataSourceMode === "supabase-readwrite"
-                ? "Supabase is the primary read/write source. Successful writes are mirrored to legacy storage for rollback."
-              : dataSourceMode === "error"
-                ? "Supabase read failed, so the app is safely showing legacy data."
-                : "Legacy data remains the active runtime source unless Supabase reads are enabled and a migrated authenticated household is available."}
-          </p>
-          {supabaseWriteWarning ? <p className="report-status">{supabaseWriteWarning}</p> : null}
-          <button
-            className="neutral-action"
-            type="button"
-            disabled={!isSupabaseWriteThroughEnvEnabled || isSupabaseWritesLocallyDisabled}
-            onClick={disableSupabaseWritesLocally}
-          >
-            Disable Supabase write mode locally
-          </button>
-          <button
-            className="primary-action"
-            type="button"
-            disabled={!supabaseReadState}
-            onClick={runSupabaseComparison}
-          >
-            Compare legacy vs Supabase
-          </button>
-          {supabaseCompareResult ? (
-            <div className="migration-result">
-              <strong>Safe comparison summary</strong>
-              <span>
-                Plants: legacy {supabaseCompareResult.summary.legacyPlants} / Supabase{" "}
-                {supabaseCompareResult.summary.supabasePlants}
-              </span>
-              <span>
-                Care records: legacy {supabaseCompareResult.summary.legacyCareRecords} / Supabase{" "}
-                {supabaseCompareResult.summary.supabaseCareRecords}
-              </span>
-              <span>
-                Diagnostics: legacy {supabaseCompareResult.summary.legacyDiagnostics} / Supabase{" "}
-                {supabaseCompareResult.summary.supabaseDiagnostics}
-              </span>
-              <span>
-                Hidden or removed: legacy {supabaseCompareResult.summary.legacyHiddenOrRemovedPlants} / Supabase{" "}
-                {supabaseCompareResult.summary.supabaseHiddenOrRemovedPlants}
-              </span>
-              <span>Missing legacy ID references: {supabaseCompareResult.missingLegacyIds.length}</span>
-              <small>
-                Mismatches:{" "}
-                {[
-                  supabaseCompareResult.plantCountMismatch ? "plant count" : "",
-                  supabaseCompareResult.careRecordCountMismatch ? "care records" : "",
-                  supabaseCompareResult.diagnosisCountMismatch ? "diagnostics" : "",
-                  supabaseCompareResult.hiddenRemovedPlantMismatch ? "hidden/removed plants" : "",
-                  supabaseCompareResult.missingLegacyIds.length > 0 ? "legacy IDs" : "",
-                ]
-                  .filter(Boolean)
-                  .join(", ") || "none"}
-              </small>
-            </div>
-          ) : null}
-        </section>
-        <div className="account-operational-panel">
-          <LegacyMigrationCard
-            activeHousehold={activeHousehold}
-            allFlowers={legacyAllFlowersIncludingRemoved}
-            customFlowers={customFlowers}
-            diagnostics={legacyDiagnostics}
-            isAuthenticated={auth.isAuthenticated}
-            records={legacyRecords}
-            removedFlowerIds={removedFlowerIds}
-            reportSettings={{ recipientEmail: reportRecipient }}
-          />
-        </div>
-        <PricingPage />
-        <MobileBottomNav currentPage="account" t={t} />
+        <MobileBottomNav currentPage="menu" onAddPlant={openAddPlantFromMobileNav} t={t} />
       </main>
     );
   }
@@ -2606,7 +3006,7 @@ export const App = () => {
     return (
       <main className="app-shell compact">
         <header className="topbar">
-          <a className="icon-link" href="#/" aria-label="Sp?? na preh?ad">
+          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label="Späť na prehľad">
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
@@ -2614,6 +3014,7 @@ export const App = () => {
             <h1>{t("diagnosis.heading")}</h1>
           </div>
         </header>
+        <AppTabNav currentPage="diagnose" onAddPlant={openAddPlantFromMobileNav} t={t} />
         <section className="diagnose-picker" aria-labelledby="diagnose-picker-title">
           <div className="section-title">
             <Camera size={18} aria-hidden="true" />
@@ -2627,7 +3028,7 @@ export const App = () => {
                   <img src={flower.image} alt={flower.displayName} loading="lazy" />
                   <div>
                     <strong>{flower.displayName}</strong>
-                    <span>{flowerDiagnosticsCount(flower.id, diagnostics)} ulo?en?ch diagnost?k</span>
+                    <span>{flowerDiagnosticsCount(flower.id, diagnostics)} uložených diagnostík</span>
                   </div>
                 </a>
               ))}
@@ -2641,7 +3042,7 @@ export const App = () => {
             </div>
           )}
         </section>
-        <MobileBottomNav currentPage="diagnose" t={t} />
+        <MobileBottomNav currentPage="diagnose" onAddPlant={openAddPlantFromMobileNav} t={t} />
       </main>
     );
   }
@@ -2650,7 +3051,7 @@ export const App = () => {
     return (
       <main className="app-shell qr-shell">
         <header className="topbar">
-          <a className="icon-link" href="#/" aria-label="Späť na prehľad">
+          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label="Späť na prehľad">
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>
@@ -2666,6 +3067,7 @@ export const App = () => {
             </button>
           </div>
         </header>
+        <AppTabNav currentPage="qr" onAddPlant={openAddPlantFromMobileNav} t={t} />
 
         <section className="base-url-panel">
           <label className="field">
@@ -2726,122 +3128,7 @@ export const App = () => {
             <a className="primary-action" href="#/">{t("qr.openDashboard")}</a>
           </section>
         )}
-        <MobileBottomNav currentPage="qr" t={t} />
-      </main>
-    );
-  }
-
-  if (route.page === "report") {
-    return (
-      <main className="app-shell report-shell">
-        <header className="topbar">
-          <a className="icon-link" href="#/" aria-label="Späť na prehľad">
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
-          <div>
-            <p className="eyebrow">Automatický email</p>
-            <h1>Denný report</h1>
-          </div>
-        </header>
-
-        <section className="report-panel" aria-labelledby="report-title">
-          <div className="report-panel-header">
-            <div className="section-title">
-              <Mail size={18} aria-hidden="true" />
-              <h2 id="report-title">Denný email report</h2>
-            </div>
-            <span className={cloudSyncEnabled ? "sync-pill sync-pill-ok" : "sync-pill"}>
-              {cloudSyncEnabled ? "cloud aktívny" : "lokálny režim"}
-            </span>
-          </div>
-          <p>
-            Každý deň o 19:00 sa majú poslať iba rastliny pod {reportThresholdPercent} % zálievky.
-            Rastliny nad {reportThresholdPercent} % sa do reportu nezahrnú.
-          </p>
-          <div className="household-panel household-panel-compact" aria-label="Aktívna domácnosť">
-            <div>
-              <span>Domácnosť</span>
-              <strong>{householdDisplayName}</strong>
-              {householdLinkStatus ? <small>{householdLinkStatus}</small> : null}
-            </div>
-            <div className="household-actions">
-              <button type="button" onClick={copyHouseholdLink}>
-                <Copy size={17} aria-hidden="true" />
-                Kopírovať link
-              </button>
-              <button type="button" onClick={changeHousehold}>
-                Zmeniť domácnosť
-              </button>
-            </div>
-          </div>
-          <div className="push-settings">
-            <div>
-              <div className="section-title">
-                {pushEnabled ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}
-                <h2>Mobilné push notifikácie</h2>
-              </div>
-              <p>
-                Push notifikácia sa pošle ráno iba vtedy, keď sú rastliny na zálievku dnes. Prázdna notifikácia sa neposiela.
-              </p>
-              {pushStatus ? <small>{pushStatus}</small> : null}
-            </div>
-            <button type="button" onClick={pushEnabled ? disablePushNotifications : enablePushNotifications}>
-              {pushEnabled ? "Vypnúť push" : "Zapnúť push"}
-            </button>
-          </div>
-          <div className="report-settings">
-            <label className="field">
-              <span>Príjemca emailu</span>
-              <input
-                type="email"
-                value={reportRecipient}
-                placeholder="napr. meno@example.com"
-                onChange={(event) => setReportRecipient(event.target.value)}
-              />
-            </label>
-            <button type="button" onClick={saveReportRecipient}>
-              Uložiť príjemcu
-            </button>
-            <a
-              className={`report-mailto ${reportRecipient.trim() ? "" : "report-mailto-disabled"}`}
-              href={reportRecipient.trim() ? createMailtoReportUrl(reportRecipient.trim(), records, allFlowers) : undefined}
-              aria-disabled={!reportRecipient.trim()}
-            >
-              <Send size={17} aria-hidden="true" />
-              Otvoriť email
-            </a>
-          </div>
-          <div className="report-status">{reportStatus}</div>
-          <div className="report-preview" aria-label="Náhľad reportu">
-            <div className="report-preview-head">
-              <strong>Rastliny v reporte</strong>
-              <span>{reportRows.length}</span>
-            </div>
-            {reportRows.length > 0 ? (
-              <div className="report-table" role="table" aria-label="Rastliny pod 20 percent zálievky">
-                <div className="report-table-row report-table-row-head" role="row">
-                  <span>Rastlina</span>
-                  <span>{t("plants.watering")}</span>
-                  <span>Posledná zálievka</span>
-                  <span>Stav</span>
-                </div>
-                {reportRows.map((row) => (
-                  <div className="report-table-row" role="row" key={row.flower.id}>
-                    <span>
-                      <strong>{row.flower.displayName}</strong>
-                      <small>{row.flower.likelyName}</small>
-                    </span>
-                    <span>{Math.round(row.progress.percent)} %</span>
-                    <span>{row.lastWateredLabel}</span>
-                    <span>{row.progress.statusText}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="report-empty">Žiadna rastlina nie je pod {reportThresholdPercent} % zálievky.</p>
-            )}
-          </div>
-        </section>
+        <MobileBottomNav currentPage="qr" onAddPlant={openAddPlantFromMobileNav} t={t} />
       </main>
     );
   }
@@ -2855,21 +3142,13 @@ export const App = () => {
           <p className="hero-copy">{t("dashboard.heroBody")}</p>
         </div>
         <div className="hero-actions">
-          <AuthButton />
-          <button className="qr-action add-plant-trigger" type="button" onClick={() => setIsAddPlantModalOpen(true)}>
-            <Plus size={20} aria-hidden="true" />
-            {t("dashboard.addPlant")}
+          <button className="user-menu-trigger" type="button" onClick={() => setIsHouseholdSheetOpen(true)} aria-label="Open household and account menu">
+            <UserRound size={20} aria-hidden="true" />
+            <span>{auth.user?.email ?? householdDisplayName}</span>
           </button>
-          <a className="qr-action secondary-action-link" href="#/report">
-            <Mail size={20} aria-hidden="true" />
-            {t("dashboard.report")}
-          </a>
-          <a className="qr-action" href="#/qr">
-            <QrCodeIcon size={20} aria-hidden="true" />
-            {t("qr.heading")}
-          </a>
         </div>
       </header>
+      <AppTabNav currentPage={isAddPlantModalOpen ? "add" : "plants"} onAddPlant={openAddPlantFromMobileNav} t={t} />
       <section className="toolbar" aria-label="Nástroje prehľadu">
         <label className="search-field">
           <Search size={18} aria-hidden="true" />
@@ -2883,22 +3162,39 @@ export const App = () => {
         </label>
       </section>
 
-      <section className="household-panel" aria-label="Aktívna domácnosť">
-        <div>
-          <span>Domácnosť</span>
-          <strong>{householdDisplayName}</strong>
-          {householdLinkStatus ? <small>{householdLinkStatus}</small> : null}
+      {isHouseholdSheetOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="household-sheet" role="dialog" aria-modal="true" aria-labelledby="household-sheet-title">
+            <button className="modal-close" type="button" onClick={() => setIsHouseholdSheetOpen(false)} aria-label="Zavrieť">
+              <X size={20} aria-hidden="true" />
+            </button>
+            <div className="section-title">
+              <Home size={18} aria-hidden="true" />
+              <h2 id="household-sheet-title">Moja domácnosť</h2>
+            </div>
+            <p>{householdDisplayName}</p>
+            {householdLinkStatus ? <p className="report-status">{householdLinkStatus}</p> : null}
+            <div className="household-sheet-actions">
+              <button type="button" onClick={copyHouseholdLink}>
+                <Copy size={17} aria-hidden="true" />
+                Kopírovať link
+              </button>
+              <a href="#/menu" onClick={() => setIsHouseholdSheetOpen(false)}>
+                Nastavenia domácnosti
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHouseholdSheetOpen(false);
+                  changeHousehold();
+                }}
+              >
+                Zmeniť domácnosť
+              </button>
+            </div>
+          </section>
         </div>
-        <div className="household-actions">
-          <button type="button" onClick={copyHouseholdLink}>
-            <Copy size={17} aria-hidden="true" />
-            Kopírovať link
-          </button>
-          <button type="button" onClick={changeHousehold}>
-            Zmeniť domácnosť
-          </button>
-        </div>
-      </section>
+      ) : null}
 
       {isAddPlantModalOpen ? (
         <div className="modal-backdrop" role="presentation">
@@ -2982,21 +3278,40 @@ export const App = () => {
               <QrCodeIcon size={18} aria-hidden="true" />
               Scan QR
             </a>
-            <a className="neutral-action" href="#/account">
+            <a className="neutral-action" href="#/menu">
               <FileDown size={18} aria-hidden="true" />
-              Import legacy household
+              Otvoriť menu
             </a>
           </div>
         </section>
       ) : (
       <section className="flower-grid" aria-label="Prehľad rastlín">
-        {filteredFlowers.map((flower) => {
+        {visibleFlowers.map((flower) => {
           const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
           const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
           const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
 
           return (
-            <a className="flower-card" href={flowerPath(flower.id)} key={flower.id}>
+            <article
+              className="flower-card"
+              key={flower.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`Otvoriť ${flower.displayName}`}
+              onClick={(event) => {
+                if ((event.target as HTMLElement).closest("button,a")) {
+                  return;
+                }
+                window.location.hash = flowerPath(flower.id).slice(1);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") {
+                  return;
+                }
+                event.preventDefault();
+                window.location.hash = flowerPath(flower.id).slice(1);
+              }}
+            >
               <img src={flower.image} alt={flower.displayName} loading="lazy" />
               <div className="flower-card-body">
                 <div className="card-topline">
@@ -3014,25 +3329,68 @@ export const App = () => {
                   </div>
                   <small>{wateringProgress.statusText}</small>
                 </div>
-                <div className="plant-card-actions" aria-hidden="true">
-                  <span>{t("plants.open")}</span>
-                  <span>{t("plants.water")}</span>
-                  <span>{t("plants.qr")}</span>
+                <div className="plant-card-actions">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void updateCareRecord(flower.id, { lastWatered: todayIsoDate() });
+                    }}
+                  >
+                    <Droplets size={16} aria-hidden="true" />
+                    {t("plants.water")}
+                  </button>
+                  <a className="plant-card-open-action" href={flowerPath(flower.id)} onClick={(event) => event.stopPropagation()} aria-label={`Open ${flower.displayName}`}>
+                    <ArrowRight size={17} aria-hidden="true" />
+                    {t("plants.open")}
+                  </a>
                 </div>
               </div>
-            </a>
+            </article>
           );
         })}
       </section>
       )}
 
+      {!isNewOnboardingHousehold && filteredFlowers.length > plantPageSize ? (
+        <nav className="plant-pagination" aria-label="Plant pages">
+          <button type="button" disabled={plantPage === 1} onClick={() => setPlantPage(1)} aria-label="First page">
+            &lt;&lt;
+          </button>
+          <button
+            type="button"
+            disabled={plantPage === 1}
+            onClick={() => setPlantPage((currentPage) => Math.max(1, currentPage - 1))}
+            aria-label="Previous page"
+          >
+            &lt;
+          </button>
+          <span>
+            {plantPage} / {plantPageCount}
+          </span>
+          <button
+            type="button"
+            disabled={plantPage === plantPageCount}
+            onClick={() => setPlantPage((currentPage) => Math.min(plantPageCount, currentPage + 1))}
+            aria-label="Next page"
+          >
+            &gt;
+          </button>
+          <button type="button" disabled={plantPage === plantPageCount} onClick={() => setPlantPage(plantPageCount)} aria-label="Last page">
+            &gt;&gt;
+          </button>
+        </nav>
+      ) : null}
+
       {!isNewOnboardingHousehold && filteredFlowers.length === 0 ? (
         <section className="empty-state">
           <Home size={34} aria-hidden="true" />
-          <h2>{t("dashboard.emptySearch")}</h2>`r`n          <p>{t("dashboard.emptySearchBody")}</p>
+          <h2>{t("dashboard.emptySearch")}</h2>
+          <p>{t("dashboard.emptySearchBody")}</p>
         </section>
       ) : null}
-      <MobileBottomNav currentPage="plants" t={t} />
+      <AppFooter t={t} />
+      <MobileBottomNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
     </main>
   );
 };

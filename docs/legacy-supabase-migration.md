@@ -4,7 +4,7 @@ This phase adds an authenticated, user-triggered import. It does not make Supaba
 
 ## Flow
 
-1. User opens `#/account`.
+1. Operator uses the internal migration tooling. The production Menu no longer exposes legacy import controls.
 2. User signs in with Supabase Auth if needed.
 3. Migration card previews the current legacy household data.
 4. User explicitly confirms the import.
@@ -64,7 +64,7 @@ Supabase reads are guarded by `VITE_ENABLE_SUPABASE_READS` and default off. With
 2. Add `VITE_ENABLE_SUPABASE_READS=true` to `.env.local`.
 3. Start the app with `npm run dev`.
 4. Sign in with an account that already imported its legacy household.
-5. Open `#/account` and check `Data source`.
+5. Verify source mode through internal diagnostics or source-level tests. The production Menu does not expose data-source controls.
 
 ### Enable read/write source-of-truth mode locally
 
@@ -87,7 +87,7 @@ When both flags are enabled and the signed-in user has a migrated household, Sup
 
 ### Compare migrated data
 
-On `#/account`, click `Compare legacy vs Supabase`. The comparison only shows safe aggregate counts:
+Use the internal comparison utility or test harness to compare legacy vs Supabase. The production Menu does not expose this debug action. The comparison only shows safe aggregate counts:
 
 - plant count mismatch
 - care record mismatch
@@ -105,7 +105,7 @@ Rollback is immediate:
 2. Keep `VITE_ENABLE_SUPABASE_READS=true` if you only want read-only preview, or remove it too for full legacy mode.
 3. Rebuild/restart the app.
 
-The Account page also has a local `Disable Supabase write mode locally` button. It stores a browser-only rollback override and forces writes back to legacy on that device without changing deployment env vars.
+Local write rollback remains available through deployment flags or internal tooling. It is not exposed in the production Menu.
 
 If a Supabase write fails while write mode is enabled, the app saves through the legacy path, shows a non-blocking warning, and falls back away from Supabase reads for that session. Legacy localStorage and Netlify Blob data are never deleted by this mode.
 
@@ -121,7 +121,7 @@ If a Supabase write fails while write mode is enabled, the app saves through the
 ### Production cutover checklist
 
 - Confirm RLS policies for `plants`, `plant_care_records`, `plant_diagnostics`, report settings, and Storage buckets in staging.
-- Run import for a representative set of households and compare aggregate counts on `#/account`.
+- Run import for a representative set of households and compare aggregate counts through internal tooling.
 - Enable `VITE_ENABLE_SUPABASE_READS=true` first and monitor fallback/error rate.
 - Enable `VITE_ENABLE_SUPABASE_WRITES=true` for a limited cohort.
 - Verify watering, fertilizing, transplant, notes, custom plants, hidden plants, report settings, and diagnosis create/update read back from Supabase.
