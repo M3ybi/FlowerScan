@@ -1550,6 +1550,18 @@ export const App = () => {
       </div>
     ) : null;
 
+  const renderHouseholdLoading = () => (
+    <main className="app-shell access-shell">
+      <section className="access-card" aria-live="polite">
+        <div className="section-title">
+          <Home size={20} aria-hidden="true" />
+          <h1>{t("household.loading")}</h1>
+        </div>
+        <p>{t("household.loadingBody")}</p>
+      </section>
+    </main>
+  );
+
   const updateCareRecord = async (flowerId: string, patch: Partial<FlowerRecords[string]>, message = "") => {
     const supabasePlantId = supabasePlantIdsByLegacyId[flowerId];
     if (supabaseWriteMode === "supabase-first" && supabasePlantId) {
@@ -2256,6 +2268,10 @@ export const App = () => {
   };
 
   const continueToHouseholdSetup = () => {
+    if (isSupabaseBackend) {
+      setHouseholdLookupStatus("checking");
+      setIsAccessChecking(true);
+    }
     setOnboardingStep("household");
   };
 
@@ -2373,6 +2389,10 @@ export const App = () => {
     );
   }
 
+  if ((isSupabaseHouseholdPending || (!shouldUseSupabaseAccountData && isAccessChecking)) && !isRouteAllowedWithoutHousehold) {
+    return renderHouseholdLoading();
+  }
+
   if (onboardingStep !== "complete" && !activeHousehold && !supabaseReadState) {
     if (onboardingStep === "language") {
       return (
@@ -2451,20 +2471,6 @@ export const App = () => {
             </form>
           )}
           {accessStatus || onboardingStatus ? <p className="access-status">{accessStatus || onboardingStatus}</p> : null}
-        </section>
-      </main>
-    );
-  }
-
-  if ((isSupabaseHouseholdPending || (!shouldUseSupabaseAccountData && isAccessChecking)) && !isRouteAllowedWithoutHousehold) {
-    return (
-      <main className="app-shell access-shell">
-        <section className="access-card" aria-live="polite">
-          <div className="section-title">
-            <Home size={20} aria-hidden="true" />
-            <h1>{t("household.loading")}</h1>
-          </div>
-          <p>{t("household.loadingBody")}</p>
         </section>
       </main>
     );
