@@ -93,6 +93,8 @@ test("frontend repository exposes authenticated invite operations", () => {
   assert.match(repository, /\.rpc\("join_household_by_invite"/);
   assert.match(repository, /export const listHouseholdMembers/);
   assert.match(repository, /\.rpc\("list_household_members"/);
+  assert.match(repository, /export const sendHouseholdInviteEmail/);
+  assert.match(repository, /functions\.invoke\("send-household-invite-email"/);
 });
 
 test("frontend invite flow handles valid invalid duplicate and backend failure states", () => {
@@ -102,7 +104,8 @@ test("frontend invite flow handles valid invalid duplicate and backend failure s
   assert.match(appSource, /isValidInviteEmail\(normalizedEmail\)/);
   assert.match(appSource, /invite\.inviteeEmail === normalizedEmail/);
   assert.match(appSource, /createHouseholdInvite\(\s*activeSupabaseHouseholdId,\s*normalizedEmail/s);
-  assert.match(appSource, /Pozvánka pre \$\{normalizedEmail\} bola vytvorená/);
+  assert.match(appSource, /sendHouseholdInviteEmail\(/);
+  assert.match(appSource, /household\.inviteStatusSent/);
   assert.match(appSource, /inviteErrorMessage\(error\)/);
 });
 

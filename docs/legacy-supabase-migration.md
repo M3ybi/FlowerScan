@@ -52,38 +52,36 @@ This phase adds an authenticated, user-triggered import. It does not make Supaba
 
 After this import is stable, promote Supabase from read-only preview to the source of truth for authenticated migrated households. That switch should be separate from this read-through phase and must keep rollback available until write parity is proven.
 
-## Supabase Read-Through Preview
+## Supabase Read-Through
 
-Supabase reads are guarded by `VITE_ENABLE_SUPABASE_READS` and default off. With the flag off, the app continues to use legacy localStorage plus Netlify Blob sync exactly as before.
+Supabase reads are enabled by default whenever the browser Supabase env vars are configured. With write-through enabled, the production app treats Supabase as the only plant data source for authenticated households. Empty Supabase households render an empty dashboard until the user adds plants.
 
-### Enable locally
+### Enable locally and in production
 
 1. Configure the normal browser Supabase env vars:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-2. Add `VITE_ENABLE_SUPABASE_READS=true` to `.env.local`.
-3. Start the app with `npm run dev`.
-4. Sign in with an account that already imported its legacy household.
-5. Verify source mode through internal diagnostics or source-level tests. The production Menu does not expose data-source controls.
+2. Start the app with `npm run dev`, or deploy with the same env vars.
+3. Sign in with an account that has a Supabase household.
+4. Verify source mode through internal diagnostics or source-level tests. The production Menu does not expose data-source controls.
 
 ### Enable read/write source-of-truth mode locally
 
-Read/write mode requires read-through mode:
+Reads are already enabled when Supabase is configured. Write-through mode still requires an explicit flag:
 
 ```bash
-VITE_ENABLE_SUPABASE_READS=true
 VITE_ENABLE_SUPABASE_WRITES=true
 ```
 
-When both flags are enabled and the signed-in user has a migrated household, Supabase becomes the primary read/write source. Successful writes are mirrored to legacy localStorage and Netlify Blob sync so rollback remains available.
+When write-through is enabled and the signed-in user has a Supabase household, Supabase becomes the read/write source of truth. Successful writes refresh from Supabase instead of mirroring plant data into legacy localStorage or Netlify Blob sync. Failed writes are reported and are not saved to legacy fallback storage.
 
 ### Expected modes
 
-- `Legacy`: feature flag is off.
-- `Supabase preview`: feature flag is on, the user is authenticated, and a migrated household with plant rows was read successfully.
-- `Supabase source of truth`: read and write flags are on, the user is authenticated, and a migrated household with plant rows was read successfully.
-- `Fallback`: feature flag is on but there is no authenticated migrated household available.
-- `Error`: Supabase read failed; the UI falls back to legacy data.
+- `Legacy`: Supabase is not configured or reads are explicitly disabled.
+- `Supabase preview`: Supabase is configured, the user is authenticated, and a household was read successfully.
+- `Supabase source of truth`: Supabase is configured, write-through is enabled, the user is authenticated, and a household was read successfully.
+- `Fallback`: Supabase is configured but there is no authenticated household available in a non-write-through build.
+- `Error`: Supabase read or required write failed; production write-through mode does not save plant data to legacy fallback storage.
 
 ### Compare migrated data
 
@@ -102,12 +100,12 @@ It does not log or display household tokens, notes, image payloads, or secrets.
 Rollback is immediate:
 
 1. Remove `VITE_ENABLE_SUPABASE_WRITES=true`, or set it to `false`.
-2. Keep `VITE_ENABLE_SUPABASE_READS=true` if you only want read-only preview, or remove it too for full legacy mode.
+2. Set `VITE_DISABLE_SUPABASE_READS=true` only if you need to force full legacy mode.
 3. Rebuild/restart the app.
 
 Local write rollback remains available through deployment flags or internal tooling. It is not exposed in the production Menu.
 
-If a Supabase write fails while write mode is enabled, the app saves through the legacy path, shows a non-blocking warning, and falls back away from Supabase reads for that session. Legacy localStorage and Netlify Blob data are never deleted by this mode.
+If a Supabase write fails while write mode is enabled, the app reports the failure and does not write plant data to legacy localStorage or Netlify Blob storage.
 
 ### Known limitations
 
@@ -122,7 +120,7 @@ If a Supabase write fails while write mode is enabled, the app saves through the
 
 - Confirm RLS policies for `plants`, `plant_care_records`, `plant_diagnostics`, report settings, and Storage buckets in staging.
 - Run import for a representative set of households and compare aggregate counts through internal tooling.
-- Enable `VITE_ENABLE_SUPABASE_READS=true` first and monitor fallback/error rate.
+- Deploy `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` first and monitor fallback/error rate.
 - Enable `VITE_ENABLE_SUPABASE_WRITES=true` for a limited cohort.
 - Verify watering, fertilizing, transplant, notes, custom plants, hidden plants, report settings, and diagnosis create/update read back from Supabase.
 - Keep legacy mirroring enabled until rollback has not been needed across the rollout window.

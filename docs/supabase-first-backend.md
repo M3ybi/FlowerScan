@@ -19,13 +19,21 @@ VITE_ENABLE_NETLIFY_LEGACY_BACKEND=true
 
 Do not set `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `REVENUECAT_WEBHOOK_SECRET` as `VITE_*` variables.
 
+For production Supabase-only plant data, also set:
+
+```text
+VITE_ENABLE_SUPABASE_WRITES=true
+```
+
+With Supabase configured, writes enabled, and `VITE_BACKEND_PROVIDER=supabase`, the app uses Supabase as the only household plant data source. Empty households show an empty dashboard, and failed plant writes are reported instead of being saved to localStorage or Netlify Blobs.
+
 ## Netlify dependency audit
 
 | Area | Previous Netlify dependency | Supabase-first status |
 | --- | --- | --- |
 | Household creation | `/.netlify/functions/household-access` POST | Authenticated creation uses `create_household_for_current_user` RPC. Guest households are local-only. |
 | Household token join/lookup | `/.netlify/functions/household-access` GET | New sharing uses Supabase invite RPCs and `#/join?invite=<token>`. Legacy token lookup requires explicit Netlify fallback for migration compatibility. |
-| Plant-state sync | `/.netlify/functions/plant-state` and Netlify Blobs | Disabled unless legacy Netlify backend is explicitly enabled. Supabase source-of-truth handles authenticated migrated households. |
+| Plant-state sync | `/.netlify/functions/plant-state` and Netlify Blobs | Disabled unless legacy Netlify backend is explicitly enabled. Supabase source-of-truth handles authenticated households, including empty households before the first user-created plant. |
 | Report settings sync | `/.netlify/functions/report-settings` | Supabase source-of-truth writes report settings when enabled. Otherwise local fallback is used unless legacy Netlify is explicitly enabled. |
 | AI diagnosis | `/.netlify/functions/plant-diagnosis-ai` | `supabase/functions/plant-diagnosis-ai` with authenticated request, server-side entitlement check, and server-side `OPENAI_API_KEY`. |
 | AI care generation | `/.netlify/functions/plant-care-ai` | `supabase/functions/plant-care-ai` with authenticated request and server-side `OPENAI_API_KEY`. |

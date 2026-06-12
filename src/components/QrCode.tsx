@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { createTranslator } from "../lib/i18n";
+import type { PlantieLanguage } from "../lib/onboarding";
 
 type QrCodeProps = {
   value: string;
   label: string;
+  language?: PlantieLanguage | null;
   size?: number;
 };
 
-export const QrCode = ({ value, label, size = 132 }: QrCodeProps) => {
+export const QrCode = ({ value, label, language = null, size = 132 }: QrCodeProps) => {
   const [src, setSrc] = useState("");
+  const t = createTranslator(language);
 
   useEffect(() => {
     let active = true;
@@ -39,8 +43,8 @@ export const QrCode = ({ value, label, size = 132 }: QrCodeProps) => {
   }, [size, value]);
 
   if (!src) {
-    return <div className="qr-placeholder" aria-label={`Generuje sa QR kód pre ${label}`} />;
+    return <div className="qr-placeholder" aria-label={t("qr.generatingFor", { label })} />;
   }
 
-  return <img className="qr-image" src={src} width={size} height={size} alt={`QR kód pre ${label}`} />;
+  return <img className="qr-image" src={src} width={size} height={size} alt={t("qr.codeFor", { label })} />;
 };

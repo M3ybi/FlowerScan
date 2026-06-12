@@ -63,21 +63,21 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
       setStatus("");
       if (mode === "register") {
         await registerWithEmailPassword(normalizedEmail, password);
-        setStatus("Account created. Check your email if confirmation is required, then create or join a household.");
+        setStatus(t("auth.accountCreated"));
       } else if (mode === "login") {
         await signInWithEmailPassword(normalizedEmail, password);
-        setStatus("Signed in. Continue to your household setup if needed.");
+        setStatus(t("auth.signedIn"));
       } else if (mode === "updatePassword") {
         await updatePassword(password, confirmPassword);
-        setStatus("Password updated. You can continue using Plantie.");
+        setStatus(t("auth.passwordUpdated"));
       } else {
         await requestPasswordReset(normalizedEmail);
-        setStatus("Password reset email sent. Check your inbox.");
+        setStatus(t("auth.resetSent"));
       }
       resetSensitiveFields();
       onSuccess?.();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Authentication failed. Try again.");
+      setStatus(error instanceof Error ? error.message : t("auth.failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -90,7 +90,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
       await signInWithGoogle();
       onSuccess?.();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Google sign-in could not be started.");
+      setStatus(error instanceof Error ? error.message : t("auth.googleFailed"));
       setIsSubmitting(false);
     }
   };
@@ -98,7 +98,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
   return (
     <div className={compact ? "auth-panel auth-panel-compact" : "auth-panel"}>
       {mode === "updatePassword" ? null : (
-        <div className="auth-mode-tabs" role="tablist" aria-label="Authentication mode">
+        <div className="auth-mode-tabs" role="tablist" aria-label={t("auth.modeLabel")}>
           <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
             {t("auth.create")}
           </button>
@@ -124,7 +124,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
         </label>}
         {mode !== "reset" ? (
           <label className="field">
-            <span>{mode === "updatePassword" ? "New password" : t("auth.password")}</span>
+            <span>{mode === "updatePassword" ? t("auth.newPassword") : t("auth.password")}</span>
             <input
               type="password"
               value={password}
@@ -153,7 +153,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
             : mode === "login"
               ? t("auth.login")
               : mode === "updatePassword"
-                ? "Update password"
+                ? t("auth.updatePassword")
                 : t("auth.sendReset")}
         </button>
       </form>
@@ -163,11 +163,11 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
           <ShieldCheck size={17} aria-hidden="true" />
           {t("auth.google")}
         </button>
-        <button className="neutral-action" type="button" disabled title="Apple Developer setup required">
+        <button className="neutral-action" type="button" disabled title={t("auth.appleSetupRequired")}>
           <KeyRound size={17} aria-hidden="true" />
           {t("auth.apple")} <span>{t("auth.comingSoon")}</span>
         </button>
-        <button className="neutral-action" type="button" disabled title="Amazon Login is not configured">
+        <button className="neutral-action" type="button" disabled title={t("auth.amazonNotConfigured")}>
           <KeyRound size={17} aria-hidden="true" />
           {t("auth.amazon")} <span>{t("auth.comingSoon")}</span>
         </button>

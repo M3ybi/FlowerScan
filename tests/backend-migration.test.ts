@@ -16,6 +16,29 @@ test("legacy Netlify backend requires explicit provider or fallback flag", () =>
   assert.equal(resolveBackendProvider("supabase", true).isLegacyNetlifyBackendEnabled, true);
 });
 
+test("Supabase reads are default-on when the browser client is configured", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+
+  assert.match(appSource, /import \{ isSupabaseConfigured \} from "\.\/lib\/supabase"/);
+  assert.match(appSource, /const isSupabaseReadThroughEnabled = isSupabaseConfigured && import\.meta\.env\.VITE_DISABLE_SUPABASE_READS !== "true"/);
+  assert.doesNotMatch(appSource, /VITE_ENABLE_SUPABASE_READS === "true"/);
+});
+
+test("Supabase-only data mode uses empty local plant baseline", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+
+  assert.match(appSource, /const isSupabaseOnlyDataMode = isSupabaseReadThroughEnabled && isSupabaseWriteThroughEnvEnabled && isSupabaseBackend/);
+  assert.match(appSource, /isSupabaseOnlyDataMode\s*\?\s*\[\]/);
+});
+
+test("Supabase-only writes fail closed instead of saving legacy fallback data", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+
+  assert.match(appSource, /runRequiredSupabaseWrite/);
+  assert.match(appSource, /if \(isSupabaseOnlyDataMode\) \{\s*try \{\s*await runRequiredSupabaseWrite\(operation\)/);
+  assert.match(appSource, /else if \(isSupabaseOnlyDataMode\)/);
+});
+
 test("household creation uses Supabase RPC before legacy Netlify fallback", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
   const createHouseholdSection = appSource.slice(appSource.indexOf("const handleCreateHousehold"), appSource.indexOf("const copyHouseholdLink"));

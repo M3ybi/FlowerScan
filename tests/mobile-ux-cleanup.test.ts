@@ -42,6 +42,21 @@ test("dashboard plant list is paginated", () => {
   assert.match(styleSource, /bottom: calc\(84px \+ var\(--safe-area-bottom\)\)/);
 });
 
+test("diagnose plant picker has search, pagination, and open affordance", () => {
+  const diagnoseRouteStart = appSource.lastIndexOf('if (route.page === "diagnose")');
+  const diagnoseRoute = appSource.slice(diagnoseRouteStart, appSource.indexOf('if (route.page === "qr")', diagnoseRouteStart));
+
+  assert.match(diagnoseRoute, /className="toolbar diagnose-toolbar"/);
+  assert.match(diagnoseRoute, /value=\{query\}/);
+  assert.match(diagnoseRoute, /onChange=\{\(event\) => setQuery\(event\.target\.value\)\}/);
+  assert.match(diagnoseRoute, /filteredFlowers\.length > 0/);
+  assert.match(diagnoseRoute, /visibleFlowers\.map\(\(flower\) =>/);
+  assert.match(diagnoseRoute, /filteredFlowers\.length > plantPageSize/);
+  assert.match(diagnoseRoute, /setPlantPage\(plantPageCount\)/);
+  assert.match(diagnoseRoute, /className="diagnose-picker-open-icon"/);
+  assert.match(styleSource, /\.diagnose-picker-open-icon\s*\{/);
+});
+
 test("page back controls use browser history with a fallback", () => {
   assert.match(appSource, /const navigateBack = \(fallbackHash = "#\/"\)/);
   assert.match(appSource, /window\.history\.back\(\)/);

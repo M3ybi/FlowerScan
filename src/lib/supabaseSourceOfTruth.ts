@@ -6,8 +6,10 @@ import type { LegacyFlowerRecord } from "./legacyMigrationRules.js";
 import {
   createHouseholdPlant,
   createPlantDiagnostic,
+  getHouseholdPlantById,
   getHouseholdPlantByLegacyId,
   getPlantCatalogByLegacyId,
+  imageUploadValidationToken,
   updateHouseholdPlant,
   updateHouseholdReportSettings,
   updatePlantCareRecord,
@@ -38,6 +40,7 @@ export type SupabaseWriteResult<T> =
 export type SupabaseWriteDependencies = {
   createHouseholdPlant: typeof createHouseholdPlant;
   createPlantDiagnostic: typeof createPlantDiagnostic;
+  getHouseholdPlantById: typeof getHouseholdPlantById;
   getHouseholdPlantByLegacyId: typeof getHouseholdPlantByLegacyId;
   getPlantCatalogByLegacyId: typeof getPlantCatalogByLegacyId;
   toBlob: (dataUrl: string) => Promise<Blob>;
@@ -57,6 +60,7 @@ const dataUrlToBlob = async (dataUrl: string) => {
 export const defaultSupabaseWriteDependencies: SupabaseWriteDependencies = {
   createHouseholdPlant,
   createPlantDiagnostic,
+  getHouseholdPlantById,
   getHouseholdPlantByLegacyId,
   getPlantCatalogByLegacyId,
   toBlob: dataUrlToBlob,
@@ -128,9 +132,10 @@ export const upsertSupabasePlantFromFlower = async (
   const catalogPlant = builtInLegacyIds.has(flower.id) ? await deps.getPlantCatalogByLegacyId(flower.id) : null;
   const imageBlob = await maybeCreatePlantImageBlob(flower, deps);
   const input = toPlantInput(flower, householdId, catalogPlant, existing?.imagePath ?? null);
+  const uploadValidation = { validationToken: imageUploadValidationToken };
 
   if (existing) {
-    const imagePath = imageBlob ? await deps.uploadPlantImage(householdId, existing.id, imageBlob) : existing.imagePath;
+    const imagePath = imageBlob ? await deps.uploadPlantImage(householdId, existing.id, imageBlob, uploadValidation) : existing.imagePath;
     return deps.updateHouseholdPlant(existing.id, {
       carePills: input.carePills,
       careTips: input.careTips,
@@ -150,13 +155,14 @@ export const upsertSupabasePlantFromFlower = async (
     });
   }
 
-  const created = await deps.createHouseholdPlant(input);
-  if (!imageBlob) {
-    return created;
+  if (imageBlob) {
+    const temporaryPlantId = crypto.randomUUID();
+    const imagePath = await deps.uploadPlantImage(householdId, temporaryPlantId, imageBlob, uploadValidation);
+    return deps.createHouseholdPlant(toPlantInput(flower, householdId, catalogPlant, imagePath));
   }
 
-  const imagePath = await deps.uploadPlantImage(householdId, created.id, imageBlob);
-  return deps.updateHouseholdPlant(created.id, { imagePath });
+  const created = await deps.createHouseholdPlant(input);
+  return created;
 };
 
 export const updateSupabaseCareRecord = async (
@@ -207,17 +213,20 @@ export const createSupabaseDiagnosis = async (
   deps = defaultSupabaseWriteDependencies,
 ): Promise<SupabasePlantDiagnostic> => {
   const blob = await deps.toBlob(input.imageDataUrl);
+  const plant = await deps.getHouseholdPlantById(input.plantId);
+  const diagnosticId = crypto.randomUUID();
+  const imagePath = await deps.uploadDiagnosticImage(plant.householdId, diagnosticId, blob, {
+    validationToken: imageUploadValidationToken,
+  });
   const diagnostic = await deps.createPlantDiagnostic({
     ...input.diagnosis,
-    imagePath: null,
+    imagePath,
     legacyId: input.legacyId,
     plantId: input.plantId,
     userConfirmation: input.userConfirmation,
     userNote: sanitizeDiagnosticNote(input.userNote),
   });
-  const imagePath = await deps.uploadDiagnosticImage(diagnostic.householdId, diagnostic.id, blob);
-
-  return deps.updatePlantDiagnostic(diagnostic.id, { imagePath });
+  return diagnostic;
 };
 
 export const updateSupabaseDiagnosis = async (
@@ -237,6 +246,8 @@ export const runSupabaseWrite = async <T>(operation: () => Promise<T>): Promise<
     return { error, mode: "fallback" };
   }
 };
+
+export const runRequiredSupabaseWrite = async <T>(operation: () => Promise<T>): Promise<T> => operation();
 
 export const refreshPlantIdMap = (plants: HouseholdPlant[]) =>
   Object.fromEntries(plants.flatMap((plant) => (plant.legacyId ? [[plant.legacyId, plant.id] as const] : [])));

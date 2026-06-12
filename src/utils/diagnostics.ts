@@ -42,11 +42,11 @@ export const sanitizeDiagnosticNote = (value: string) =>
 
 export const validateDiagnosticImageFile = (file: File) => {
   if (!allowedDiagnosticImageTypes.has(file.type)) {
-    throw new Error("Podporovan? s? iba obr?zky JPG, PNG alebo WEBP.");
+    throw new Error("Only JPG, PNG, or WEBP images are supported.");
   }
 
   if (file.size > maxDiagnosticImageBytes) {
-    throw new Error("Obr?zok je pr?li? ve?k?. Maximum je 8 MB.");
+    throw new Error("The image is too large. Use a photo up to 8 MB.");
   }
 };
 
@@ -187,12 +187,12 @@ export const fetchPlantDiagnosis = async (plantName: string, imageDataUrl: strin
       netlifyPath: "/.netlify/functions/plant-diagnosis-ai",
     });
   } catch {
-    throw new Error("AI diagnostika zlyhala. Sk?s to pros?m znova.");
+    throw new Error("AI diagnosis failed. Try again with another photo.");
   }
 
   const diagnosis = normalizeDiagnosis(data.diagnosis);
   if (!diagnosis) {
-    throw new Error("AI vr?tila ne?pln? diagnostiku. Sk?s in? fotku.");
+    throw new Error("AI returned an incomplete diagnosis. Try a different photo.");
   }
 
   return diagnosis;

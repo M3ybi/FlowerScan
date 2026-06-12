@@ -1,55 +1,59 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBillingService, revenueCatProductIds } from "../lib/billingService";
 import type { BillingProduct, BillingStatus } from "../lib/billingService";
+import { createTranslator } from "../lib/i18n";
+import type { PlantieLanguage } from "../lib/onboarding";
 
-const fallbackPlans = [
+const createFallbackPlans = (t: ReturnType<typeof createTranslator>) => [
   {
-    description: "Pre prve testovanie Plantie bez uctu alebo platby.",
-    features: ["10 AI skenov mesacne", "10 rastlin", "10 QR stitkov"],
-    name: "Free",
-    price: "0 EUR",
+    description: t("pricing.freeBody"),
+    features: [t("pricing.freeFeatureScans"), t("pricing.freeFeaturePlants"), t("pricing.freeFeatureQr")],
+    name: t("pricing.free"),
+    price: t("pricing.freePrice"),
   },
   {
-    description: "Mesacny plan pre aktivnu domacu starostlivost.",
-    features: ["Neobmedzene AI skeny", "Neobmedzene rastliny", "AI diagnostika chorob", "Cloud backup", "Zdielanie domacnosti"],
-    name: "Premium Monthly",
+    description: t("pricing.monthlyBody"),
+    features: [t("pricing.premiumFeatureScans"), t("pricing.premiumFeaturePlants"), t("pricing.premiumFeatureDiagnosis"), t("pricing.premiumFeatureBackup"), t("pricing.premiumFeatureSharing")],
+    name: t("pricing.monthly"),
     productId: revenueCatProductIds.premiumMonthly,
-    price: "Mobile only",
+    price: t("pricing.mobileOnly"),
   },
   {
-    description: "Rovnake vyhody ako mesacny Premium, uctovane rocne.",
-    features: ["Neobmedzene QR stitky", "AI diagnostika chorob", "Cloud backup", "Zdielanie domacnosti"],
-    name: "Premium Yearly",
+    description: t("pricing.yearlyBody"),
+    features: [t("pricing.premiumFeatureQr"), t("pricing.premiumFeatureDiagnosis"), t("pricing.premiumFeatureBackup"), t("pricing.premiumFeatureSharing")],
+    name: t("pricing.yearly"),
     productId: revenueCatProductIds.premiumYearly,
-    price: "Mobile only",
+    price: t("pricing.mobileOnly"),
   },
 ];
 
 const billing = getBillingService();
 
-const billingDisabledLabel = (status: BillingStatus) => {
+const billingDisabledLabel = (status: BillingStatus, t: ReturnType<typeof createTranslator>) => {
   if (status.disabledReason === "web") {
-    return "Available in mobile app";
+    return t("pricing.mobileOnly");
   }
 
   if (status.disabledReason === "missing_config") {
-    return "Billing not configured";
+    return t("pricing.notConfigured");
   }
 
   return "";
 };
 
-export const PricingPage = () => {
+export const PricingPage = ({ language = null }: { language?: PlantieLanguage | null }) => {
+  const t = useMemo(() => createTranslator(language), [language]);
   const [billingStatus] = useState(() => billing.getStatus());
   const [products, setProducts] = useState<BillingProduct[]>([]);
   const [billingMessage, setBillingMessage] = useState("");
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const fallbackPlans = useMemo(() => createFallbackPlans(t), [t]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const billingDisabled = !billingStatus.configured;
 
   useEffect(() => {
     if (!billingStatus.configured) {
-      setBillingMessage(billingDisabledLabel(billingStatus));
+      setBillingMessage(billingDisabledLabel(billingStatus, t));
       return;
     }
 
@@ -64,28 +68,28 @@ export const PricingPage = () => {
       })
       .catch((error) => {
         if (!cancelled) {
-          setBillingMessage(error instanceof Error ? error.message : "Billing products are unavailable.");
+          setBillingMessage(error instanceof Error ? error.message : t("pricing.productsUnavailable"));
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [billingStatus]);
+  }, [billingStatus, t]);
 
   const runPurchase = async (period: "monthly" | "yearly") => {
     try {
       setIsPurchasing(true);
-      setBillingMessage("Opening secure store purchase...");
+      setBillingMessage(t("pricing.openingPurchase"));
       if (period === "monthly") {
         await billing.purchasePremiumMonthly();
       } else {
         await billing.purchasePremiumYearly();
       }
       await billing.syncEntitlements();
-      setBillingMessage("Purchase submitted. Premium activates only after server entitlement confirmation.");
+      setBillingMessage(t("pricing.purchaseSubmitted"));
     } catch (error) {
-      setBillingMessage(error instanceof Error ? error.message : "Purchase failed safely.");
+      setBillingMessage(error instanceof Error ? error.message : t("pricing.purchaseFailed"));
     } finally {
       setIsPurchasing(false);
     }
@@ -94,12 +98,12 @@ export const PricingPage = () => {
   const restorePurchases = async () => {
     try {
       setIsPurchasing(true);
-      setBillingMessage("Restoring purchases...");
+      setBillingMessage(t("pricing.restoring"));
       await billing.restorePurchases();
       await billing.syncEntitlements();
-      setBillingMessage("Restore submitted. Premium activates only after server entitlement confirmation.");
+      setBillingMessage(t("pricing.restoreSubmitted"));
     } catch (error) {
-      setBillingMessage(error instanceof Error ? error.message : "Restore failed safely.");
+      setBillingMessage(error instanceof Error ? error.message : t("pricing.restoreFailed"));
     } finally {
       setIsPurchasing(false);
     }
@@ -108,12 +112,9 @@ export const PricingPage = () => {
   return (
     <section className="pricing-page" aria-labelledby="pricing-title">
       <div className="section-title">
-        <h2 id="pricing-title">Plantie plans</h2>
+        <h2 id="pricing-title">{t("pricing.title")}</h2>
       </div>
-      <p>
-        Purchases are available only in the native mobile app. Premium access is still decided by Supabase server entitlements, not by the
-        local RevenueCat SDK result.
-      </p>
+      <p>{t("pricing.body")}</p>
       {billingMessage ? <p className="report-status">{billingMessage}</p> : null}
       <div className="pricing-grid">
         {fallbackPlans.map((plan) => {
@@ -136,11 +137,11 @@ export const PricingPage = () => {
               </ul>
               {isPremiumPlan ? (
                 <button type="button" disabled={billingDisabled || isPurchasing} onClick={() => void runPurchase(period)}>
-                  {billingDisabled ? billingDisabledLabel(billingStatus) : isPurchasing ? "Processing..." : `Choose ${plan.name}`}
+                  {billingDisabled ? billingDisabledLabel(billingStatus, t) : isPurchasing ? t("pricing.processing") : t("pricing.choose", { plan: plan.name })}
                 </button>
               ) : (
                 <button type="button" disabled>
-                  Current local default
+                  {t("pricing.currentDefault")}
                 </button>
               )}
             </article>
@@ -148,7 +149,7 @@ export const PricingPage = () => {
         })}
       </div>
       <button className="neutral-action" type="button" disabled={billingDisabled || isPurchasing} onClick={() => void restorePurchases()}>
-        Restore purchases
+        {t("pricing.restore")}
       </button>
     </section>
   );

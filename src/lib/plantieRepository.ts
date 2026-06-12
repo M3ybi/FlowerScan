@@ -327,6 +327,58 @@ export type UpdatePlantDiagnosticPatch = {
   userNote?: string;
 };
 
+export const imageUploadValidationToken = "ai-plant-image-validation-passed" as const;
+
+export type ImageUploadValidation = {
+  validationToken: typeof imageUploadValidationToken;
+};
+
+const assertImageUploadValidation = (validation?: ImageUploadValidation) => {
+  if (validation?.validationToken !== imageUploadValidationToken) {
+    throw new Error("Image upload requires AI validation.");
+  }
+};
+
+const blobToDataUrl = async (blob: Blob) => {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  return `data:${blob.type || "image/jpeg"};base64,${btoa(binary)}`;
+};
+
+const uploadValidatedImage = async ({
+  householdId,
+  imageBlob,
+  imageId,
+  kind,
+}: {
+  householdId: string;
+  imageBlob: Blob;
+  imageId: string;
+  kind: "diagnostic" | "plant";
+}) => {
+  const { data, error } = await getClient().functions.invoke("upload-validated-image", {
+    body: {
+      householdId,
+      imageDataUrl: await blobToDataUrl(imageBlob),
+      imageId,
+      kind,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || typeof (data as { path?: unknown }).path !== "string") {
+    throw new Error("Validated image upload did not return a storage path.");
+  }
+
+  return (data as { path: string }).path;
+};
+
 const plantCatalogSelect = `
   *,
   plant_care_pills(*),
@@ -618,6 +670,20 @@ export const getHouseholdPlantByLegacyId = async (householdId: string, legacyId:
   return data ? mapHouseholdPlant(data) : null;
 };
 
+export const getHouseholdPlantById = async (plantId: string) => {
+  const { data, error } = await getClient()
+    .from("plants")
+    .select(householdPlantSelect)
+    .eq("id", plantId)
+    .single<DbPlant>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapHouseholdPlant(data);
+};
+
 export const createHousehold = async (name: string) => {
   const { data, error } = await getClient()
     .rpc("create_household_for_current_user", { household_name: name });
@@ -710,6 +776,34 @@ export const joinHouseholdByInvite = async (token: string) => {
   }
 
   return mapHousehold(data);
+};
+
+export const sendHouseholdInviteEmail = async ({
+  householdId,
+  householdName,
+  inviteUrl,
+  recipientEmail,
+  role,
+}: {
+  householdId: string;
+  householdName: string;
+  inviteUrl: string;
+  recipientEmail: string;
+  role: HouseholdRole;
+}) => {
+  const { error } = await getClient().functions.invoke("send-household-invite-email", {
+    body: {
+      householdId,
+      householdName,
+      inviteUrl,
+      recipientEmail: normalizeInviteEmail(recipientEmail),
+      role,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
 };
 
 export const createHouseholdPlant = async (input: CreateHouseholdPlantInput) => {
@@ -906,32 +1000,21 @@ export const getHouseholdCareRecords = async (householdId: string) => {
   return data.map(mapPlantCareRecord).filter((record) => record.plantId);
 };
 
-export const uploadDiagnosticImage = async (householdId: string, diagnosticId: string, imageBlob: Blob) => {
-  const path = createDiagnosticImagePath(householdId, diagnosticId);
-  const { error } = await getClient().storage.from(diagnosticImagesBucket).upload(path, imageBlob, {
-    contentType: "image/jpeg",
-    upsert: true,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return path;
+export const uploadDiagnosticImage = async (
+  householdId: string,
+  diagnosticId: string,
+  imageBlob: Blob,
+  validation?: ImageUploadValidation,
+) => {
+  assertImageUploadValidation(validation);
+  createDiagnosticImagePath(householdId, diagnosticId);
+  return uploadValidatedImage({ householdId, imageBlob, imageId: diagnosticId, kind: "diagnostic" });
 };
 
-export const uploadPlantImage = async (householdId: string, plantId: string, imageBlob: Blob) => {
-  const path = createPlantImagePath(householdId, plantId);
-  const { error } = await getClient().storage.from(plantImagesBucket).upload(path, imageBlob, {
-    contentType: "image/jpeg",
-    upsert: true,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return path;
+export const uploadPlantImage = async (householdId: string, plantId: string, imageBlob: Blob, validation?: ImageUploadValidation) => {
+  assertImageUploadValidation(validation);
+  createPlantImagePath(householdId, plantId);
+  return uploadValidatedImage({ householdId, imageBlob, imageId: plantId, kind: "plant" });
 };
 
 export const updateHouseholdReportSettings = async (householdId: string, patch: UpdateHouseholdReportSettingsPatch) => {

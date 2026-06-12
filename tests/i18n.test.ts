@@ -1,6 +1,7 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { createTranslator, translate } from "../src/lib/i18n.js";
+import { createTranslator, translate, translations } from "../src/lib/i18n.js";
 import { onboardingLanguageStorageKey, readStoredLanguage, writeStoredLanguage } from "../src/lib/onboarding.js";
 
 const createStorage = () => {
@@ -21,7 +22,31 @@ test("selected language persists through existing onboarding preference", () => 
 
 test("missing translation key falls back to English", () => {
   assert.equal(translate("sk", "missing.translation.key"), "missing.translation.key");
-  assert.equal(translate("de", "qr.empty"), "No QR labels yet");
+  assert.equal(translate("de", "missing.translation.key"), "missing.translation.key");
+});
+
+test("supported non-English languages cover every English translation key", () => {
+  const englishKeys = Object.keys(translations.en);
+
+  for (const language of ["de", "fr", "es", "sk"] as const) {
+    const missing = englishKeys.filter((key) => !(key in translations[language]));
+    assert.deepEqual(missing, [], `${language} is missing translation keys`);
+  }
+});
+
+test("translated placeholders match the English source placeholders", () => {
+  const placeholderPattern = /\{[^}]+\}/g;
+  const placeholders = (value: string) => [...value.matchAll(placeholderPattern)].map((match) => match[0]).sort();
+
+  for (const language of ["de", "fr", "es", "sk"] as const) {
+    for (const key of Object.keys(translations.en)) {
+      assert.deepEqual(
+        placeholders(translations[language][key]),
+        placeholders(translations.en[key]),
+        `${language}.${key} placeholders must match English`,
+      );
+    }
+  }
 });
 
 test("Slovak text renders with valid UTF-8 diacritics", () => {
@@ -41,4 +66,15 @@ test("language switch updates UI strings", () => {
   assert.equal(slovak("nav.plants"), "Rastliny");
   assert.equal(english("auth.login"), "Sign in");
   assert.equal(slovak("auth.login"), "Prihlásiť sa");
+});
+
+test("detail screen uses translator keys for quick actions", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  const detailSource = appSource;
+
+  assert.match(detailSource, /t\("detail\.todayTransplanted"\)/);
+  assert.match(detailSource, /t\("detail\.todayFertilized"\)/);
+  assert.match(detailSource, /t\("detail\.diagnosisTitle"\)/);
+  assert.doesNotMatch(detailSource, /Presadená dnes|Pohnojená dnes|AI diagnostika problému|Rastlina vyzerá zle/);
+  assert.doesNotMatch(appSource, /plants\.idConfident/);
 });

@@ -7,6 +7,11 @@ create index if not exists household_invites_active_email_idx
   where used_at is null and revoked_at is null;
 
 drop function if exists public.create_household_invite(uuid, public.household_member_role, timestamptz);
+drop function if exists public.create_household_invite(uuid, text, public.household_member_role, timestamptz);
+drop function if exists public.join_household_by_invite(text);
+drop function if exists public.revoke_household_invite(uuid);
+drop function if exists public.list_household_invites(uuid);
+drop function if exists public.list_household_members(uuid);
 
 create or replace function public.create_household_invite(
   target_household_id uuid,
@@ -67,8 +72,8 @@ begin
     raise exception 'An active invite already exists for this email.';
   end if;
 
-  raw_token := translate(rtrim(encode(gen_random_bytes(32), 'base64'), '='), '+/', '-_');
-  token_hash_value := encode(digest(raw_token, 'sha256'), 'hex');
+  raw_token := translate(rtrim(encode(extensions.gen_random_bytes(32), 'base64'), '='), '+/', '-_');
+  token_hash_value := encode(extensions.digest(raw_token, 'sha256'), 'hex');
 
   insert into public.household_invites (household_id, invitee_email, token_hash, role, expires_at, created_by)
   values (target_household_id, normalized_email, token_hash_value, coalesce(invite_role, 'editor'), invite_expires_at, auth.uid())
@@ -108,7 +113,7 @@ begin
   select *
   into invite
   from public.household_invites
-  where token_hash = encode(digest(trim(raw_token), 'sha256'), 'hex')
+  where token_hash = encode(extensions.digest(trim(raw_token), 'sha256'), 'hex')
     and revoked_at is null
     and (expires_at is null or expires_at > now())
   limit 1;

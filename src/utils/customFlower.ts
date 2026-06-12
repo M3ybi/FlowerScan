@@ -20,15 +20,15 @@ export const createCustomFlowerId = () => `custom-${Date.now().toString(36)}-${M
 export const resizeImageFileToDataUrl = (file: File, maxSize = 900): Promise<string> =>
   new Promise((resolve, reject) => {
     if (!file.type.startsWith("image/")) {
-      reject(new Error("Vybraný súbor nie je obrázok."));
+      reject(new Error("The selected file is not an image."));
       return;
     }
 
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Obrázok sa nepodarilo načítať."));
+    reader.onerror = () => reject(new Error("The image could not be loaded."));
     reader.onload = () => {
       const image = new Image();
-      image.onerror = () => reject(new Error("Obrázok sa nepodarilo spracovať."));
+      image.onerror = () => reject(new Error("The image could not be processed."));
       image.onload = () => {
         const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
         const width = Math.max(1, Math.round(image.width * ratio));
@@ -39,7 +39,7 @@ export const resizeImageFileToDataUrl = (file: File, maxSize = 900): Promise<str
 
         const context = canvas.getContext("2d");
         if (!context) {
-          reject(new Error("Obrázok sa nepodarilo spracovať."));
+          reject(new Error("The image could not be processed."));
           return;
         }
 
@@ -58,17 +58,17 @@ export const imageSourceToDataUrl = async (imageSource: string): Promise<string>
 
   const response = await fetch(imageSource);
   if (!response.ok) {
-    throw new Error("Obrázok rastliny sa nepodarilo načítať pre AI generovanie.");
+    throw new Error("The plant image could not be loaded for AI generation.");
   }
 
   const blob = await response.blob();
   if (!blob.type.startsWith("image/")) {
-    throw new Error("Zdroj rastliny nie je obrázok.");
+    throw new Error("The plant source is not an image.");
   }
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Obrázok rastliny sa nepodarilo spracovať."));
+    reader.onerror = () => reject(new Error("The plant image could not be processed."));
     reader.onload = () => resolve(String(reader.result));
     reader.readAsDataURL(blob);
   });
@@ -84,11 +84,11 @@ export const fetchGeneratedCare = async (plantName: string, imageDataUrl: string
       netlifyPath: "/.netlify/functions/plant-care-ai",
     });
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : "AI starostlivos? sa nepodarilo vygenerova?.");
+    throw new Error(error instanceof Error ? error.message : "AI care guidance could not be generated.");
   }
 
   if (!data.care?.displayName || !data.care?.likelyName) {
-    throw new Error("AI nevr?tila ?daje o starostlivosti.");
+    throw new Error("AI did not return plant care data.");
   }
 
   return data.care;

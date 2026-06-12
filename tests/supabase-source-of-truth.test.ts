@@ -4,6 +4,7 @@ import { flowers } from "../src/data/flowers.js";
 import {
   createSupabaseDiagnosis,
   detectSupabaseWriteMode,
+  runRequiredSupabaseWrite,
   runSupabaseWrite,
   setSupabasePlantRemoved,
   updateSupabaseCareRecord,
@@ -11,6 +12,7 @@ import {
   upsertSupabasePlantFromFlower,
 } from "../src/lib/supabaseSourceOfTruth.js";
 import type { SupabaseWriteDependencies } from "../src/lib/supabaseSourceOfTruth.js";
+import { imageUploadValidationToken, uploadPlantImage } from "../src/lib/plantieRepository.js";
 import type { HouseholdPlant, PlantCatalogItem } from "../src/lib/plantieRepository.js";
 
 const basePlant: HouseholdPlant = {
@@ -76,6 +78,7 @@ const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
         userNote: input.userNote ?? "",
       };
     },
+    getHouseholdPlantById: async (plantId) => ({ ...basePlant, id: plantId }),
     getHouseholdPlantByLegacyId: async (_householdId, legacyId) => {
       calls.push(`find:${legacyId}`);
       return null;
@@ -116,11 +119,13 @@ const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
         userNote: input.userNote ?? "",
       };
     },
-    uploadDiagnosticImage: async () => {
+    uploadDiagnosticImage: async (_householdId, _diagnosticId, _imageBlob, validation) => {
+      assert.equal(validation?.validationToken, imageUploadValidationToken);
       calls.push("upload-diagnosis-image");
       return "diagnostic/path.jpg";
     },
-    uploadPlantImage: async () => {
+    uploadPlantImage: async (_householdId, _plantId, _imageBlob, validation) => {
+      assert.equal(validation?.validationToken, imageUploadValidationToken);
       calls.push("upload-plant-image");
       return "plant/path.jpg";
     },
@@ -181,6 +186,19 @@ test("Supabase write failure falls back to legacy", async () => {
   const result = await runSupabaseWrite(() => updateSupabaseCareRecord("plant-id", { lastWatered: "2026-06-01" }, deps));
 
   assert.equal(result.mode, "fallback");
+});
+
+test("required Supabase write failures are surfaced without fallback", async () => {
+  const { deps } = createDeps({
+    updatePlantCareRecord: async () => {
+      throw new Error("RLS failed");
+    },
+  });
+
+  await assert.rejects(
+    () => runRequiredSupabaseWrite(() => updateSupabaseCareRecord("plant-id", { lastWatered: "2026-06-01" }, deps)),
+    /RLS failed/,
+  );
 });
 
 test("custom plant upsert avoids duplicate rows by updating existing legacy ID", async () => {
@@ -247,7 +265,7 @@ test("diagnosis create and update use Supabase helpers", async () => {
     deps,
   );
 
-  assert.deepEqual(calls, ["create-diagnosis:legacy-diagnosis", "upload-diagnosis-image", "update-diagnosis:diagnosis-id::"]);
+  assert.deepEqual(calls, ["upload-diagnosis-image", "create-diagnosis:legacy-diagnosis"]);
 });
 
 test("rollback mode keeps writes legacy-only when local or env disables Supabase writes", () => {
@@ -259,5 +277,12 @@ test("rollback mode keeps writes legacy-only when local or env disables Supabase
       writesEnabled: false,
     }),
     "legacy-only",
+  );
+});
+
+test("direct image upload helper rejects missing AI validation", async () => {
+  await assert.rejects(
+    () => uploadPlantImage("00000000-0000-4000-8000-000000000000", "00000000-0000-4000-8000-000000000001", new Blob(["x"], { type: "image/jpeg" })),
+    /requires AI validation/,
   );
 });

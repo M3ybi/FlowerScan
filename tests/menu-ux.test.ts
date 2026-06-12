@@ -44,8 +44,9 @@ test("menu has expandable production sections", () => {
   for (const key of ["menu.account", "menu.household", "menu.subscription", "menu.supportLegal"]) {
     assert.match(appSource, new RegExp(`t\\("${key.replace(".", "\\.")}"\\)`));
   }
-  assert.match(appSource, /<details className="menu-section" open>/);
-  assert.match(appSource, /<details className="menu-section">/);
+  assert.match(appSource, /openMenuSection === "account"/);
+  assert.match(appSource, /openMenuSection === "household"/);
+  assert.match(appSource, /#\/menu\?section=household/);
 });
 
 test("logged-out account menu shows auth and hides delete account", () => {
