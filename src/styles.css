@@ -54,6 +54,389 @@ html {
     linear-gradient(180deg, #fbfaf6 0%, var(--bg) 52%, #ece5d8 100%);
 }
 
+/* Household-sheet inspired application theme */
+:root {
+  --glass-surface:
+    radial-gradient(circle at 12% 0%, rgba(47, 123, 91, 0.13), transparent 13rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(248, 252, 244, 0.92)),
+    var(--surface);
+  --glass-surface-warm:
+    radial-gradient(circle at 100% 0%, rgba(231, 168, 79, 0.14), transparent 14rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(249, 245, 235, 0.94)),
+    var(--surface);
+  --glass-border: rgba(18, 61, 49, 0.12);
+  --glass-border-strong: rgba(18, 61, 49, 0.18);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --sheet-shadow: 0 28px 70px rgba(27, 41, 33, 0.16);
+  --sheet-shadow-soft: 0 18px 44px rgba(27, 41, 33, 0.11);
+}
+
+html {
+  background:
+    radial-gradient(circle at 10% -8%, rgba(47, 123, 91, 0.16), transparent 24rem),
+    radial-gradient(circle at 96% 6%, rgba(231, 168, 79, 0.14), transparent 22rem),
+    linear-gradient(180deg, #f8f6ef 0%, #f1ece2 48%, #ebe3d6 100%);
+}
+
+body::before {
+  background-image:
+    linear-gradient(rgba(18, 61, 49, 0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 61, 49, 0.026) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 74%);
+}
+
+.hero,
+.topbar,
+.detail-header,
+.access-card,
+.onboarding-card,
+.auth-modal,
+.plant-modal,
+.confirm-modal,
+.care-preview-modal,
+.diagnosis-modal,
+.household-panel,
+.scan-action-panel,
+.editor-panel,
+.add-plant-panel,
+.care-panel,
+.diagnosis-panel,
+.diagnostic-history-panel,
+.qr-panel,
+.report-panel,
+.pdf-export-panel,
+.base-url-panel,
+.pricing-card,
+.upgrade-modal,
+.danger-panel,
+.empty-state,
+.empty-state-card,
+.account-summary-card,
+.menu-section,
+.migration-card,
+.flower-card,
+.diagnose-picker-card,
+.diagnostic-history-card,
+.qr-label,
+.mobile-product-card {
+  border-color: var(--glass-border);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-highlight), var(--sheet-shadow-soft);
+}
+
+.hero,
+.topbar,
+.detail-header,
+.access-card,
+.onboarding-card {
+  overflow: hidden;
+  border-radius: 30px;
+  box-shadow: var(--glass-highlight), var(--sheet-shadow);
+}
+
+.report-panel,
+.add-plant-panel,
+.diagnosis-panel,
+.pdf-export-panel,
+.base-url-panel {
+  background: var(--glass-surface-warm);
+}
+
+.flower-card,
+.diagnose-picker-card,
+.diagnostic-history-card,
+.qr-label,
+.menu-section,
+.account-summary-card,
+.empty-state-card {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.flower-card:hover,
+.diagnose-picker-card:hover,
+.diagnose-picker-card:focus-visible,
+.qr-label:hover,
+.menu-section:hover,
+.empty-state-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(47, 123, 91, 0.24);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(47, 123, 91, 0.16), transparent 13rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(248, 252, 244, 0.96));
+  box-shadow: var(--glass-highlight), 0 24px 56px rgba(27, 41, 33, 0.15);
+}
+
+.primary-action,
+.ghost-action,
+.neutral-action,
+.qr-action,
+.nav-link,
+.icon-link,
+.icon-button,
+.auth-trigger,
+.auth-google-button,
+.action-link-button,
+.text-button,
+.account-menu button,
+.plant-card-actions button,
+.plant-card-actions a,
+.plant-pagination button,
+.menu-invite-list button,
+.report-settings button,
+.push-settings button,
+.pdf-export-actions button,
+.date-row button,
+.diagnosis-panel button,
+.access-form button,
+.household-sheet-actions button,
+.household-sheet-actions a {
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 14px 28px rgba(18, 61, 49, 0.13);
+}
+
+.primary-action,
+.qr-action,
+.nav-link,
+.icon-link,
+.icon-button,
+.diagnosis-panel button,
+.access-form button {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent),
+    linear-gradient(135deg, #123d31 0%, #2f7b5b 100%);
+  color: #fffdf8;
+}
+
+.ghost-action,
+.neutral-action,
+.auth-google-button,
+.action-link-button,
+.plant-card-actions button,
+.plant-card-actions a,
+.plant-pagination button,
+.menu-invite-list button,
+.date-row button,
+.report-settings button,
+.push-settings button,
+.pdf-export-actions button {
+  border: 1px solid var(--glass-border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(247, 252, 246, 0.9)),
+    #fffdf8;
+  color: var(--brand);
+}
+
+.primary-action:hover,
+.ghost-action:hover,
+.neutral-action:hover,
+.qr-action:hover,
+.nav-link:hover,
+.icon-link:hover,
+.icon-button:hover,
+.auth-google-button:hover,
+.action-link-button:hover,
+.plant-card-actions button:hover,
+.plant-card-actions a:hover,
+.plant-pagination button:hover:not(:disabled),
+.menu-invite-list button:hover,
+.report-settings button:hover,
+.push-settings button:hover,
+.pdf-export-actions button:hover,
+.date-row button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(47, 123, 91, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 20px 42px rgba(18, 61, 49, 0.18);
+}
+
+.field input,
+.field textarea,
+.field select,
+.search-field,
+.plant-name-editor input,
+.toggle-field,
+.household-chip-button,
+.user-menu-trigger,
+.auth-mode-tabs,
+.account-summary-list div,
+.household-member-list div,
+.menu-link-grid a,
+.menu-invite-list > div,
+.migration-preview-grid span,
+.migration-result span,
+.diagnostic-card-meta span,
+.household-sheet-meta a,
+.household-sheet-meta-tile {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(248, 252, 244, 0.78)),
+    #fffdf8;
+  box-shadow: var(--glass-highlight), 0 10px 24px rgba(18, 61, 49, 0.07);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.search-field:focus-within,
+.plant-name-editor input:focus {
+  border-color: rgba(47, 123, 91, 0.34);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 0 0 4px rgba(47, 123, 91, 0.13),
+    var(--glass-highlight),
+    0 14px 30px rgba(18, 61, 49, 0.1);
+}
+
+.toolbar,
+.mobile-bottom-nav,
+.app-tab-nav,
+.account-menu {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(248, 252, 244, 0.82)),
+    rgba(255, 253, 248, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 18px 42px rgba(27, 41, 33, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.app-tab-nav a,
+.app-tab-nav button,
+.mobile-bottom-nav a,
+.mobile-bottom-nav button,
+.auth-mode-tabs button {
+  border-radius: 14px;
+}
+
+.app-tab-nav a.active,
+.app-tab-nav button.active,
+.mobile-bottom-nav a.active,
+.mobile-bottom-nav button.active,
+.auth-mode-tabs button.active {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent),
+    linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fffdf8;
+  box-shadow: 0 12px 26px rgba(18, 61, 49, 0.18);
+}
+
+.watering-panel,
+.diagnosis-result,
+.diagnosis-upload,
+.danger-panel,
+.diagnostic-detail {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.74), rgba(248, 252, 244, 0.62)),
+    rgba(255, 253, 248, 0.72);
+  box-shadow: var(--glass-highlight), 0 12px 28px rgba(18, 61, 49, 0.07);
+}
+
+.modal-backdrop {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 253, 248, 0.18), transparent 22rem),
+    rgba(18, 34, 27, 0.46);
+  backdrop-filter: blur(16px) saturate(1.05);
+}
+
+.modal-close {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(235, 240, 233, 0.78)),
+    rgba(18, 34, 27, 0.06);
+  box-shadow: var(--glass-highlight), 0 10px 22px rgba(18, 61, 49, 0.1);
+}
+
+.modal-close:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(242, 248, 240, 0.9)),
+    #fffdf8;
+}
+
+.flower-card img,
+.diagnose-picker-card img,
+.diagnostic-history-card img,
+.qr-image,
+.qr-placeholder,
+.diagnosis-preview,
+.detail-photo,
+.diagnostic-image-placeholder {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 14px 32px rgba(27, 41, 33, 0.12);
+}
+
+.eyebrow,
+.card-topline span,
+.account-summary-list span,
+.field span {
+  letter-spacing: 0.055em;
+}
+
+.access-status,
+.report-status,
+.care-preview-status,
+.invite-status {
+  border-radius: 16px;
+  box-shadow: var(--glass-highlight), 0 10px 24px rgba(18, 61, 49, 0.07);
+}
+
+@media (max-width: 780px) {
+  .hero,
+  .topbar,
+  .detail-header,
+  .access-card,
+  .onboarding-card,
+  .plant-modal,
+  .confirm-modal,
+  .care-preview-modal,
+  .diagnosis-modal,
+  .household-panel,
+  .scan-action-panel,
+  .editor-panel,
+  .add-plant-panel,
+  .care-panel,
+  .diagnosis-panel,
+  .diagnostic-history-panel,
+  .qr-panel,
+  .report-panel,
+  .pdf-export-panel,
+  .base-url-panel,
+  .menu-section,
+  .migration-card,
+  .flower-card,
+  .diagnose-picker-card,
+  .empty-state-card,
+  .account-summary-card {
+    border-radius: 24px;
+  }
+
+  .flower-card:hover,
+  .diagnose-picker-card:hover,
+  .qr-label:hover,
+  .menu-section:hover,
+  .empty-state-card:hover {
+    transform: none;
+  }
+
+  .toolbar,
+  .mobile-bottom-nav {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.74),
+      0 14px 34px rgba(27, 41, 33, 0.12);
+  }
+}
+
 body {
   min-width: 320px;
   margin: 0;
@@ -180,6 +563,76 @@ button {
 
 .access-note {
   font-size: 0.92rem;
+}
+
+.household-setup-card {
+  width: min(860px, 100%);
+  padding: clamp(20px, 4vw, 32px);
+}
+
+.household-setup-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.household-setup-icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(18, 61, 49, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.86);
+  color: var(--brand);
+  box-shadow: 0 10px 22px rgba(18, 61, 49, 0.08);
+}
+
+.household-setup-card h1 {
+  margin-top: 2px;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1;
+}
+
+.household-setup-card p {
+  max-width: 62ch;
+}
+
+.household-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.household-setup-option {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 100%;
+  padding: 18px;
+  border: 1px solid rgba(18, 61, 49, 0.13);
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: 0 12px 28px rgba(18, 61, 49, 0.08);
+}
+
+.household-setup-option h2 {
+  margin: 0;
+  color: var(--brand);
+  font-size: 1.12rem;
+  line-height: 1.2;
+}
+
+.household-setup-option p {
+  margin-top: 6px;
+  font-size: 0.95rem;
+}
+
+.household-setup-option .primary-action,
+.household-setup-option .ghost-action {
+  width: 100%;
 }
 
 .household-panel {
@@ -3245,6 +3698,14 @@ textarea:focus-visible {
     display: grid;
   }
 
+  .household-setup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .household-setup-header {
+    grid-template-columns: 1fr;
+  }
+
   .toolbar {
     margin: 0 -12px 14px;
     padding: 8px 12px 10px;
@@ -3952,12 +4413,42 @@ textarea:focus-visible {
   }
 
   .topbar-with-actions {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
   }
 
-  .topbar-with-actions .topbar-actions {
-    justify-self: end;
+  .topbar-with-actions > div:not(.topbar-actions) {
+    min-width: 0;
+  }
+
+  .topbar-with-actions .topbar-actions,
+  .topbar-with-actions .hero-actions {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(48px, max-content)) minmax(0, 1fr);
+    align-items: center;
+    justify-content: stretch;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .topbar-actions:has(> .hero-actions:only-child) {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-actions .hero-actions {
+    grid-column: auto;
+    min-width: 0;
+  }
+
+  .topbar-actions .icon-button {
+    width: 48px;
+    min-width: 48px;
+    padding: 0;
   }
 
   .hero h1,
@@ -3972,9 +4463,16 @@ textarea:focus-visible {
     font-size: 0.94rem;
   }
 
+  .topbar-with-actions .topbar-copy {
+    max-width: 100%;
+  }
+
   .hero-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr;
     gap: 10px;
+    width: 100%;
+    justify-content: stretch;
   }
 
   .hero-actions .user-menu-trigger {

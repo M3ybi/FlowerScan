@@ -26,7 +26,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, MouseEvent } from "react";
 import { AuthPanel } from "./components/AuthPanel";
 import { PricingPage } from "./components/PricingPage";
@@ -587,6 +587,8 @@ const normalizeInviteTokenInput = (value: string) => {
   }
 };
 
+const isLikelyInviteToken = (value: string) => value.length >= 32 && /^[A-Za-z0-9_-]+$/.test(value);
+
 const isActiveInvite = (invite: HouseholdInvite) =>
   !invite.usedAt && !invite.revokedAt && (!invite.expiresAt || new Date(invite.expiresAt).getTime() > Date.now());
 
@@ -635,6 +637,39 @@ const safeInviteDebugMessage = (error: unknown) => {
     .join(" | ")
     .slice(0, 240);
 };
+
+const joinInviteErrorMessage = (error: unknown) => {
+  const details = typeof error === "object" && error !== null ? error as { code?: string; details?: string; hint?: string; message?: string } : {};
+  const message = [details.message, details.details, details.hint, details.code]
+    .filter((item): item is string => typeof item === "string")
+    .join(" ")
+    .toLowerCase();
+
+  if (message.includes("expired") || message.includes("revoked") || message.includes("invalid") || message.includes("used")) {
+    return "household.inviteStatusInvalidOrExpired";
+  }
+
+  if (message.includes("jwt") || message.includes("auth") || message.includes("not authenticated") || message.includes("401")) {
+    return "household.inviteStatusAuthRequired";
+  }
+
+  if (message.includes("schema cache") || message.includes("pgrst202") || message.includes("could not find the function")) {
+    return "household.inviteStatusConfig";
+  }
+
+  return "household.joinFailed";
+};
+
+const areStringRecordsEqual = (left: Record<string, string>, right: Record<string, string>) => {
+  const leftEntries = Object.entries(left);
+  if (leftEntries.length !== Object.keys(right).length) {
+    return false;
+  }
+
+  return leftEntries.every(([key, value]) => right[key] === value);
+};
+
+type HouseholdLookupStatus = "idle" | "checking" | "complete";
 
 export const App = () => {
   const route = useHashRoute();
@@ -700,6 +735,7 @@ export const App = () => {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [joinInviteInput, setJoinInviteInput] = useState("");
   const [isAccessChecking, setIsAccessChecking] = useState(true);
+  const [householdLookupStatus, setHouseholdLookupStatus] = useState<HouseholdLookupStatus>("idle");
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
   const [, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
@@ -738,10 +774,12 @@ export const App = () => {
   const [quickRecordStatus, setQuickRecordStatus] = useState("");
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
   const [supabaseReadError, setSupabaseReadError] = useState(false);
+  const previousAuthUserIdRef = useRef<string | null>(null);
   const [isSupabaseWritesLocallyDisabled] = useState(
     () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
   );
   const isSupabaseWriteThroughEnabled = isSupabaseWriteThroughEnvEnabled && !isSupabaseWritesLocallyDisabled;
+  const shouldUseSupabaseAccountData = isSupabaseReadThroughEnabled && isSupabaseBackend && (auth.loading || auth.isAuthenticated);
   const isNativeImageRuntime = detectImageRuntime() !== "web";
   const dataSourceMode = detectDataSourceMode({
     featureEnabled: isSupabaseReadThroughEnabled,
@@ -750,7 +788,9 @@ export const App = () => {
     readError: supabaseReadError,
     writesEnabled: isSupabaseWriteThroughEnabled,
   });
-  const activeSupabaseHouseholdId = supabaseReadState?.household.id ?? (activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
+  const activeSupabaseHouseholdId =
+    supabaseReadState?.household.id ??
+    (!shouldUseSupabaseAccountData && activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
   const routeInviteToken = route.page === "join" ? route.invite : "";
   const isRouteAllowedWithoutHousehold =
     route.page === "menu" ||
@@ -766,13 +806,40 @@ export const App = () => {
   });
   const isUsingSupabaseReadState =
     (dataSourceMode === "supabase-readonly" || dataSourceMode === "supabase-readwrite") && Boolean(supabaseReadState);
-  const allFlowersIncludingRemoved = isUsingSupabaseReadState ? supabaseReadState?.allFlowers ?? [] : legacyAllFlowersIncludingRemoved;
-  const allFlowers = isUsingSupabaseReadState
-    ? (supabaseReadState?.allFlowers ?? []).filter((flower) => !(supabaseReadState?.removedFlowerIds ?? []).includes(flower.id))
-    : legacyAllFlowers;
-  const records = isUsingSupabaseReadState ? supabaseReadState?.records ?? {} : legacyRecords;
-  const diagnostics = isUsingSupabaseReadState ? supabaseReadState?.diagnostics ?? [] : legacyDiagnostics;
-  const householdDisplayName = supabaseReadState?.household.name ?? activeHousehold?.name ?? t("household.defaultName");
+  const allFlowersIncludingRemoved = useMemo(
+    () =>
+      isUsingSupabaseReadState
+        ? supabaseReadState?.allFlowers ?? []
+        : shouldUseSupabaseAccountData
+          ? []
+          : legacyAllFlowersIncludingRemoved,
+    [isUsingSupabaseReadState, legacyAllFlowersIncludingRemoved, shouldUseSupabaseAccountData, supabaseReadState?.allFlowers],
+  );
+  const allFlowers = useMemo(
+    () =>
+      isUsingSupabaseReadState
+        ? (supabaseReadState?.allFlowers ?? []).filter((flower) => !(supabaseReadState?.removedFlowerIds ?? []).includes(flower.id))
+        : shouldUseSupabaseAccountData
+          ? []
+          : legacyAllFlowers,
+    [
+      isUsingSupabaseReadState,
+      legacyAllFlowers,
+      shouldUseSupabaseAccountData,
+      supabaseReadState?.allFlowers,
+      supabaseReadState?.removedFlowerIds,
+    ],
+  );
+  const records = isUsingSupabaseReadState ? supabaseReadState?.records ?? {} : shouldUseSupabaseAccountData ? {} : legacyRecords;
+  const diagnostics = isUsingSupabaseReadState ? supabaseReadState?.diagnostics ?? [] : shouldUseSupabaseAccountData ? [] : legacyDiagnostics;
+  const householdDisplayName =
+    supabaseReadState?.household.name ?? (!shouldUseSupabaseAccountData ? activeHousehold?.name : null) ?? t("household.defaultName");
+  const isSupabaseHouseholdPending =
+    shouldUseSupabaseAccountData &&
+    !supabaseReadState &&
+    (auth.loading ||
+      (auth.isAuthenticated &&
+        (householdLookupStatus !== "complete" || previousAuthUserIdRef.current !== (auth.user?.id ?? null))));
   const flowerById = useMemo(
     () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
     [allFlowersIncludingRemoved],
@@ -821,6 +888,37 @@ export const App = () => {
   }, [legacyDiagnostics]);
 
   useEffect(() => {
+    if (auth.loading) {
+      return;
+    }
+
+    const nextUserId = auth.user?.id ?? null;
+    if (previousAuthUserIdRef.current === nextUserId) {
+      return;
+    }
+
+    previousAuthUserIdRef.current = nextUserId;
+    setSupabaseReadState(null);
+    setSupabaseReadError(false);
+    setSupabasePlantIdsByLegacyId({});
+    setHouseholdInvites([]);
+    setHouseholdMembers([]);
+
+    if (nextUserId && isSupabaseBackend) {
+      setHouseholdLookupStatus("checking");
+      setIsAccessChecking(true);
+      clearHouseholdSession();
+      setActiveHousehold(null);
+      setPreviousHousehold(null);
+      setCloudSyncEnabled(false);
+      setCloudSyncReady(false);
+      setAccessStatus("");
+    } else {
+      setHouseholdLookupStatus("complete");
+    }
+  }, [auth.loading, auth.user?.id]);
+
+  useEffect(() => {
     if (activeHousehold || supabaseReadState) {
       markOnboardingComplete(window.localStorage);
       setOnboardingStep("complete");
@@ -828,10 +926,32 @@ export const App = () => {
   }, [activeHousehold, supabaseReadState]);
 
   useEffect(() => {
-    if (!auth.loading && auth.isAuthenticated && onboardingStep === "welcome" && !activeHousehold && !supabaseReadState) {
+    if (
+      !isSupabaseHouseholdPending &&
+      !auth.loading &&
+      auth.isAuthenticated &&
+      onboardingStep === "welcome" &&
+      !activeHousehold &&
+      !supabaseReadState
+    ) {
       setOnboardingStep("household");
     }
-  }, [activeHousehold, auth.isAuthenticated, auth.loading, onboardingStep, supabaseReadState]);
+  }, [activeHousehold, auth.isAuthenticated, auth.loading, isSupabaseHouseholdPending, onboardingStep, supabaseReadState]);
+
+  useEffect(() => {
+    if (auth.loading || !auth.isAuthenticated) {
+      return;
+    }
+
+    setAccountActionStatus("");
+    setAccessStatus("");
+    setOnboardingStatus("");
+
+    const pendingInvite = window.localStorage.getItem(pendingInviteStorageKey);
+    if (!pendingInvite && inviteStatus === t("household.inviteStatusAuthRequired")) {
+      setInviteStatus("");
+    }
+  }, [auth.isAuthenticated, auth.loading, inviteStatus, t]);
 
   useEffect(() => {
     if (!deleteAccountContact && auth.user?.email) {
@@ -952,7 +1072,9 @@ export const App = () => {
     setSupabaseReadState(nextState);
     setSupabaseReadError(false);
     if (nextState) {
-      setSupabasePlantIdsByLegacyId(nextState.supabasePlantIdsByLegacyId);
+      setSupabasePlantIdsByLegacyId((current) =>
+        areStringRecordsEqual(current, nextState.supabasePlantIdsByLegacyId) ? current : nextState.supabasePlantIdsByLegacyId,
+      );
     }
 
     return nextState;
@@ -1017,7 +1139,9 @@ export const App = () => {
           setSupabaseReadState(nextState);
           setSupabaseReadError(false);
           if (nextState) {
-            setSupabasePlantIdsByLegacyId(nextState.supabasePlantIdsByLegacyId);
+            setSupabasePlantIdsByLegacyId((current) =>
+              areStringRecordsEqual(current, nextState.supabasePlantIdsByLegacyId) ? current : nextState.supabasePlantIdsByLegacyId,
+            );
           }
         }
       } catch {
@@ -1033,7 +1157,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeHousehold, auth.isAuthenticated, auth.loading]);
+  }, [activeHousehold, auth.isAuthenticated, auth.loading, auth.user?.id]);
 
   useEffect(() => {
     if (!auth.isAuthenticated || !activeHousehold) {
@@ -1059,7 +1183,10 @@ export const App = () => {
         );
 
         if (!cancelled) {
-          setSupabasePlantIdsByLegacyId(Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry))));
+          const nextPlantIdsByLegacyId = Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry)));
+          setSupabasePlantIdsByLegacyId((current) =>
+            areStringRecordsEqual(current, nextPlantIdsByLegacyId) ? current : nextPlantIdsByLegacyId,
+          );
         }
       } catch {
         if (!cancelled) {
@@ -1073,7 +1200,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeHousehold, allFlowers, auth.isAuthenticated]);
+  }, [activeHousehold, allFlowers, auth.isAuthenticated, auth.user?.id]);
 
   useEffect(() => {
     if (!auth.isAuthenticated) {
@@ -1123,7 +1250,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [auth.isAuthenticated, supabasePlantIdsByLegacyId]);
+  }, [auth.isAuthenticated, auth.user?.id, supabasePlantIdsByLegacyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1137,10 +1264,12 @@ export const App = () => {
         setActiveHousehold(null);
         setAccessStatus("");
         setIsAccessChecking(false);
+        setHouseholdLookupStatus("complete");
         return;
       }
 
       try {
+        setHouseholdLookupStatus("checking");
         setIsAccessChecking(true);
         let household: HouseholdSession | null = null;
 
@@ -1155,6 +1284,8 @@ export const App = () => {
               setSupabaseReadState(null);
               setBaseUrl(currentBaseUrl());
               setAccessStatus("");
+              setIsAccessChecking(false);
+              setHouseholdLookupStatus("complete");
             }
             return;
           }
@@ -1183,12 +1314,14 @@ export const App = () => {
         setActiveHousehold(household);
         setBaseUrl(currentHouseholdBaseUrl(household.publicToken));
         setAccessStatus("");
+        setHouseholdLookupStatus("complete");
       } catch {
         if (!cancelled) {
           clearHouseholdSession();
           setActiveHousehold(null);
           setCloudSyncEnabled(false);
           setAccessStatus(t("household.linkInvalid"));
+          setHouseholdLookupStatus("complete");
         }
       } finally {
         if (!cancelled) {
@@ -1202,7 +1335,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [auth.isAuthenticated]);
+  }, [auth.isAuthenticated, auth.user?.id, t]);
 
   useEffect(() => {
     if (!activeHousehold || !isLegacyNetlifyBackendEnabled || supabaseWriteMode === "supabase-first") {
@@ -1634,8 +1767,8 @@ export const App = () => {
 
   const handleJoinInvite = async (input = joinInviteInput) => {
     const token = normalizeInviteTokenInput(input);
-    if (!token) {
-      setInviteStatus(t("household.inviteStatusMissingToken"));
+    if (!token || !isLikelyInviteToken(token)) {
+      setInviteStatus(t(token ? "household.inviteStatusInvalidOrExpired" : "household.inviteStatusMissingToken"));
       return false;
     }
 
@@ -1660,7 +1793,7 @@ export const App = () => {
       await refreshSupabaseReadState().catch(() => null);
       return true;
     } catch (error) {
-      setInviteStatus(error instanceof Error ? error.message : t("household.joinFailed"));
+      setInviteStatus(t(joinInviteErrorMessage(error)));
       return false;
     }
   };
@@ -2323,7 +2456,7 @@ export const App = () => {
     );
   }
 
-  if (isAccessChecking && !isRouteAllowedWithoutHousehold) {
+  if ((isSupabaseHouseholdPending || (!shouldUseSupabaseAccountData && isAccessChecking)) && !isRouteAllowedWithoutHousehold) {
     return (
       <main className="app-shell access-shell">
         <section className="access-card" aria-live="polite">
@@ -2340,28 +2473,57 @@ export const App = () => {
   if (!activeHousehold && !supabaseReadState && !isRouteAllowedWithoutHousehold) {
     return (
       <main className="app-shell access-shell">
-        <section className="access-card" aria-labelledby="access-title">
-          <div className="section-title">
-            <Home size={20} aria-hidden="true" />
-            <h1 id="access-title">{t("household.signInAndHousehold")}</h1>
+        <section className="access-card household-setup-card" aria-labelledby="access-title">
+          <div className="household-setup-header">
+            <span className="household-setup-icon" aria-hidden="true">
+              <Home size={22} />
+            </span>
+            <div>
+              <p className="eyebrow">{t("account.household")}</p>
+              <h1 id="access-title">{t("household.setupTitle")}</h1>
+              <p>{t("household.setupBody")}</p>
+            </div>
           </div>
-          <p>{t("household.signInBody")}</p>
           {auth.isAuthenticated ? (
-            <form className="access-form" onSubmit={handleCreateHousehold}>
-              <label className="field">
-                <span>{t("household.name")}</span>
-                <input
-                  type="text"
-                  value={householdNameDraft}
-                  maxLength={80}
-                  onChange={(event) => setHouseholdNameDraft(event.target.value)}
-                />
-              </label>
-              <button type="submit" disabled={isCreatingHousehold}>
-                <Plus size={18} aria-hidden="true" />
-                {isCreatingHousehold ? t("household.creatingShort") : t("household.create")}
-              </button>
-            </form>
+            <div className="household-setup-grid">
+              <form className="household-setup-option" onSubmit={handleCreateHousehold}>
+                <div>
+                  <h2>{t("household.setupCreateTitle")}</h2>
+                  <p>{t("household.setupCreateBody")}</p>
+                </div>
+                <label className="field">
+                  <span>{t("household.name")}</span>
+                  <input
+                    type="text"
+                    value={householdNameDraft}
+                    maxLength={80}
+                    placeholder={t("household.defaultName")}
+                    onChange={(event) => setHouseholdNameDraft(event.target.value)}
+                  />
+                </label>
+                <button className="primary-action" type="submit" disabled={isCreatingHousehold}>
+                  <Plus size={18} aria-hidden="true" />
+                  {isCreatingHousehold ? t("household.creatingShort") : t("household.create")}
+                </button>
+              </form>
+              <div className="household-setup-option">
+                <div>
+                  <h2>{t("household.setupJoinTitle")}</h2>
+                  <p>{t("household.setupJoinBody")}</p>
+                </div>
+                <label className="field">
+                  <span>{t("household.inviteToken")}</span>
+                  <input
+                    value={joinInviteInput}
+                    onChange={(event) => setJoinInviteInput(event.target.value)}
+                    placeholder="#/join?invite=..."
+                  />
+                </label>
+                <button className="ghost-action" type="button" onClick={() => void handleJoinInvite()}>
+                  {t("household.continueWithInvite")}
+                </button>
+              </div>
+            </div>
           ) : (
             <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
           )}
@@ -3019,6 +3181,81 @@ export const App = () => {
 
   if (route.page === "menu") {
     const openMenuSection = route.section === "household" ? "household" : "account";
+
+    if (!auth.isAuthenticated) {
+      return (
+        <main className="app-shell compact">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">Plantie</p>
+              <h1>{t("menu.heading")}</h1>
+              <p className="topbar-copy">{t("menu.signedOutBody")}</p>
+            </div>
+          </header>
+          <section className="menu-stack" aria-label={t("menu.heading")}>
+            <details className="menu-section" open>
+              <summary>
+                <span>{t("menu.account")}</span>
+              </summary>
+              <div className="menu-section-body">
+                <p>{t("account.loginRequiredBody")}</p>
+                <AuthPanel
+                  compact
+                  language={selectedLanguage}
+                  onSuccess={() => {
+                    if (normalizeInviteTokenInput(joinInviteInput)) {
+                      void handleJoinInvite(joinInviteInput);
+                    }
+                  }}
+                />
+              </div>
+            </details>
+
+            <details className="menu-section" open={Boolean(joinInviteInput || inviteStatus)}>
+              <summary>
+                <span>{t("household.inviteTitle")}</span>
+              </summary>
+              <div className="menu-section-body">
+                <p>{t("household.invitePasteBody")}</p>
+                <label className="field">
+                  <span>{t("household.inviteToken")}</span>
+                  <input
+                    value={joinInviteInput}
+                    onChange={(event) => setJoinInviteInput(event.target.value)}
+                    placeholder="#/join?invite=..."
+                  />
+                </label>
+                <button className="primary-action" type="button" onClick={() => void handleJoinInvite()}>
+                  {t("household.continueWithInvite")}
+                </button>
+                {inviteStatus ? <p className={inviteStatusClass}>{inviteStatus}</p> : null}
+              </div>
+            </details>
+
+            <details className="menu-section">
+              <summary>
+                <span>{t("account.language")}</span>
+              </summary>
+              <div className="menu-section-body">
+                <div className="onboarding-language-grid compact-language-grid">
+                  {supportedLanguages.map((language) => (
+                    <button
+                      type="button"
+                      key={language.code}
+                      className={selectedLanguage === language.code ? "selected-language" : ""}
+                      onClick={() => selectOnboardingLanguage(language.code)}
+                    >
+                      <strong>{language.nativeName}</strong>
+                      <span>{language.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </details>
+          </section>
+        </main>
+      );
+    }
 
     return (
       <main className="app-shell compact">
