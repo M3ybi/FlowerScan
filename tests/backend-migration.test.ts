@@ -102,8 +102,37 @@ test("AI frontend calls use backend provider layer", () => {
 
   assert.match(diagnosisSource, /callBackendFunction/);
   assert.match(diagnosisSource, /functionName: "plant-diagnosis-ai"/);
+  assert.match(diagnosisSource, /error instanceof Error && error\.message \? error\.message/);
   assert.match(careSource, /callBackendFunction/);
   assert.match(careSource, /functionName: "plant-care-ai"/);
+});
+
+test("subscription UI is driven by household server plan usage", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  const pricingSource = readFileSync("src/components/PricingPage.tsx", "utf8");
+
+  assert.match(appSource, /const accountSubscriptionLabel = householdPlanUsage/);
+  assert.match(appSource, /<PricingPage householdPlanUsage=\{householdPlanUsage\} language=\{selectedLanguage\} \/>/);
+  assert.match(pricingSource, /householdPlanUsage\?: HouseholdPlanUsage \| null/);
+  assert.match(pricingSource, /const hasServerPremium = householdPlanUsage\?\.isPremium === true/);
+  assert.match(pricingSource, /pricing\.currentServerPremium/);
+});
+
+test("Supabase function errors surface safe backend messages to the UI", () => {
+  const backendSource = readFileSync("src/lib/backendConfig.ts", "utf8");
+
+  assert.match(backendSource, /const extractResponseErrorMessage = async \(response: Response\)/);
+  assert.match(backendSource, /payload\.error === "string"/);
+  assert.match(backendSource, /extractSupabaseFunctionErrorMessage/);
+});
+
+test("Supabase diagnosis confidence labels are mapped to the database enum", () => {
+  const repositorySource = readFileSync("src/lib/plantieRepository.ts", "utf8");
+
+  assert.match(repositorySource, /type DbDiagnosisConfidenceLabel = "nizka" \| "stredna" \| "vysoka"/);
+  assert.match(repositorySource, /const toDisplayConfidenceLabel/);
+  assert.match(repositorySource, /const toDbConfidenceLabel/);
+  assert.match(repositorySource, /confidence_label: toDbConfidenceLabel\(input\.confidenceLabel\)/);
 });
 
 test("frontend does not reference server-only backend secrets", () => {

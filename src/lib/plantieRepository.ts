@@ -123,7 +123,7 @@ type DbPlantDiagnostic = {
   image_path: string | null;
   diagnosis_title: string;
   confidence: number;
-  confidence_label: "nízka" | "stredná" | "vysoká";
+  confidence_label: DbDiagnosisConfidenceLabel;
   reasoning_summary: string;
   risk_level: DiagnosisRiskLevel;
   disclaimer: string;
@@ -134,6 +134,8 @@ type DbPlantDiagnostic = {
   diagnostic_observed_symptoms?: { position: number; symptom: string }[] | null;
   diagnostic_recommended_steps?: { position: number; step: string }[] | null;
 };
+
+type DbDiagnosisConfidenceLabel = "nizka" | "stredna" | "vysoka";
 
 export type CarePill = {
   id: string;
@@ -503,9 +505,21 @@ const mapHouseholdPlant = (plant: DbPlant): HouseholdPlant => ({
   wateringIntervalDays: plant.watering_interval_days,
 });
 
+const toDisplayConfidenceLabel = (label: DbDiagnosisConfidenceLabel): PlantDiagnosisDraft["confidenceLabel"] => {
+  if (label === "nizka") return "nízka";
+  if (label === "vysoka") return "vysoká";
+  return "stredná";
+};
+
+const toDbConfidenceLabel = (label: PlantDiagnosisDraft["confidenceLabel"]): DbDiagnosisConfidenceLabel => {
+  if (label === "nízka") return "nizka";
+  if (label === "vysoká") return "vysoka";
+  return "stredna";
+};
+
 const mapPlantDiagnostic = (diagnostic: DbPlantDiagnostic): SupabasePlantDiagnostic => ({
   confidence: diagnostic.confidence,
-  confidenceLabel: diagnostic.confidence_label,
+  confidenceLabel: toDisplayConfidenceLabel(diagnostic.confidence_label),
   createdAt: diagnostic.created_at,
   diagnosisTitle: diagnostic.diagnosis_title,
   disclaimer: diagnostic.disclaimer,
@@ -1105,7 +1119,7 @@ export const createPlantDiagnostic = async (input: CreatePlantDiagnosticInput) =
     .from("plant_diagnostics")
     .insert({
       confidence: input.confidence,
-      confidence_label: input.confidenceLabel,
+      confidence_label: toDbConfidenceLabel(input.confidenceLabel),
       diagnosis_title: input.diagnosisTitle,
       disclaimer: input.disclaimer,
       household_id: plant.household_id,

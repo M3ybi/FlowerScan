@@ -191,8 +191,8 @@ export const fetchPlantDiagnosis = async (
       functionName: "plant-diagnosis-ai",
       netlifyPath: "/.netlify/functions/plant-diagnosis-ai",
     });
-  } catch {
-    throw new Error("AI diagnosis failed. Try again with another photo.");
+  } catch (error) {
+    throw new Error(error instanceof Error && error.message ? error.message : "AI diagnosis failed. Try again with another photo.");
   }
 
   const diagnosis = normalizeDiagnosis(data.diagnosis);

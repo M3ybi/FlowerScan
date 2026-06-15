@@ -27,6 +27,7 @@ const freeState = (patch: Partial<HouseholdPlanState> = {}): HouseholdPlanState 
 
 test("Petzvalova migration grants household-level unlimited premium idempotently", () => {
   const migration = readFileSync("supabase/migrations/20260615120000_household_premium_usage_limits.sql", "utf8");
+  const regrantMigration = readFileSync("supabase/migrations/20260615133000_regrant_petzvalova_household_premium.sql", "utf8");
 
   assert.match(migration, /where name = 'Petzvalova'\s+or legacy_public_token = 'Petzvalova'/);
   assert.match(migration, /matched_count > 1/);
@@ -34,6 +35,10 @@ test("Petzvalova migration grants household-level unlimited premium idempotently
   assert.match(migration, /premium_source = 'manual_admin_grant'/);
   assert.match(migration, /premium_expires_at = null/);
   assert.match(migration, /raise notice 'Enabled unlimited premium for Petzvalova household %\.'/);
+  assert.match(regrantMigration, /lower\(trim\(name\)\) in \('petzvalova', 'petzvalova household'\)/);
+  assert.match(regrantMigration, /matched_count > 1/);
+  assert.match(regrantMigration, /premium_enabled = true/);
+  assert.match(regrantMigration, /premium_expires_at = null/);
 });
 
 test("premium households bypass AI, care-tip, and plant limits", () => {

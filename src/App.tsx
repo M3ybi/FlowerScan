@@ -803,6 +803,11 @@ export const App = () => {
       ? "Premium: unlimited plants"
       : `${householdPlanUsage.plantsRemaining ?? 0} / ${householdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
     : "";
+  const accountSubscriptionLabel = householdPlanUsage
+    ? householdPlanUsage.isPremium
+      ? t("account.subscriptionPremium")
+      : t("account.subscriptionFree")
+    : t("account.subscriptionServer");
   const routeInviteToken = route.page === "join" ? route.invite : "";
   const isRouteAllowedWithoutHousehold =
     route.page === "menu" ||
@@ -3363,7 +3368,7 @@ export const App = () => {
                   </div>
                   <div>
                     <span>{t("account.subscription")}</span>
-                    <strong>{t("account.subscriptionServer")}</strong>
+                    <strong>{accountSubscriptionLabel}</strong>
                   </div>
                 </div>
                 <div className="menu-action-row">
@@ -3516,7 +3521,7 @@ export const App = () => {
               <span>{t("menu.subscription")}</span>
             </summary>
             <div className="menu-section-body">
-              <PricingPage language={selectedLanguage} />
+              <PricingPage householdPlanUsage={householdPlanUsage} language={selectedLanguage} />
             </div>
           </details>
 

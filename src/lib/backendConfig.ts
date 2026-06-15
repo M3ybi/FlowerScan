@@ -30,6 +30,28 @@ export const resolveBackendProvider = (
   provider,
 });
 
+const extractResponseErrorMessage = async (response: Response) => {
+  try {
+    const payload = (await response.clone().json()) as { error?: unknown; message?: unknown };
+    const message = typeof payload.error === "string" ? payload.error : typeof payload.message === "string" ? payload.message : "";
+    return message.trim();
+  } catch {
+    return "";
+  }
+};
+
+const extractSupabaseFunctionErrorMessage = async (error: unknown) => {
+  const context = (error as { context?: unknown }).context;
+  if (context instanceof Response) {
+    const message = await extractResponseErrorMessage(context);
+    if (message) {
+      return message;
+    }
+  }
+
+  return error instanceof Error ? error.message : "";
+};
+
 export const callBackendFunction = async <T>({
   allowNetlifyFallback = false,
   body,
@@ -48,7 +70,7 @@ export const callBackendFunction = async <T>({
       }
 
       if (!allowNetlifyFallback || !isLegacyNetlifyBackendEnabled) {
-        throw new Error(error.message || "Supabase backend request failed.");
+        throw new Error((await extractSupabaseFunctionErrorMessage(error)) || "Supabase backend request failed.");
       }
     }
   }
@@ -64,7 +86,7 @@ export const callBackendFunction = async <T>({
   });
 
   if (!response.ok) {
-    throw new Error(`Legacy Netlify backend request failed with status ${response.status}.`);
+    throw new Error((await extractResponseErrorMessage(response)) || `Legacy Netlify backend request failed with status ${response.status}.`);
   }
 
   return (await response.json()) as T;

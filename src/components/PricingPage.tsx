@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getBillingService, revenueCatProductIds } from "../lib/billingService";
 import type { BillingProduct, BillingStatus } from "../lib/billingService";
 import { createTranslator } from "../lib/i18n";
+import type { HouseholdPlanUsage } from "../lib/householdPlanService";
 import type { PlantieLanguage } from "../lib/onboarding";
 
 const createFallbackPlans = (t: ReturnType<typeof createTranslator>) => [
@@ -41,7 +42,13 @@ const billingDisabledLabel = (status: BillingStatus, t: ReturnType<typeof create
   return "";
 };
 
-export const PricingPage = ({ language = null }: { language?: PlantieLanguage | null }) => {
+export const PricingPage = ({
+  householdPlanUsage = null,
+  language = null,
+}: {
+  householdPlanUsage?: HouseholdPlanUsage | null;
+  language?: PlantieLanguage | null;
+}) => {
   const t = useMemo(() => createTranslator(language), [language]);
   const [billingStatus] = useState(() => billing.getStatus());
   const [products, setProducts] = useState<BillingProduct[]>([]);
@@ -50,6 +57,7 @@ export const PricingPage = ({ language = null }: { language?: PlantieLanguage | 
   const fallbackPlans = useMemo(() => createFallbackPlans(t), [t]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const billingDisabled = !billingStatus.configured;
+  const hasServerPremium = householdPlanUsage?.isPremium === true;
 
   useEffect(() => {
     if (!billingStatus.configured) {
@@ -137,11 +145,17 @@ export const PricingPage = ({ language = null }: { language?: PlantieLanguage | 
               </ul>
               {isPremiumPlan ? (
                 <button type="button" disabled={billingDisabled || isPurchasing} onClick={() => void runPurchase(period)}>
-                  {billingDisabled ? billingDisabledLabel(billingStatus, t) : isPurchasing ? t("pricing.processing") : t("pricing.choose", { plan: plan.name })}
+                  {hasServerPremium
+                    ? t("pricing.currentServerPremium")
+                    : billingDisabled
+                      ? billingDisabledLabel(billingStatus, t)
+                      : isPurchasing
+                        ? t("pricing.processing")
+                        : t("pricing.choose", { plan: plan.name })}
                 </button>
               ) : (
                 <button type="button" disabled>
-                  {t("pricing.currentDefault")}
+                  {hasServerPremium ? t("pricing.freeAvailable") : t("pricing.currentDefault")}
                 </button>
               )}
             </article>
