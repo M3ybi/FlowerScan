@@ -42,7 +42,7 @@ export const sanitizeDiagnosticNote = (value: string) =>
 
 export const validateDiagnosticImageFile = (file: File) => {
   if (!allowedDiagnosticImageTypes.has(file.type)) {
-    throw new Error("Only JPG, PNG, or WEBP images are supported.");
+    throw new Error("PodporovanĂ© sĂş iba JPG, PNG alebo WEBP obrĂˇzky.");
   }
 
   if (file.size > maxDiagnosticImageBytes) {
@@ -177,12 +177,17 @@ const normalizeDiagnosis = (value: unknown): PlantDiagnosisDraft | null => {
   };
 };
 
-export const fetchPlantDiagnosis = async (plantName: string, imageDataUrl: string, symptomNotes = ""): Promise<PlantDiagnosisDraft> => {
+export const fetchPlantDiagnosis = async (
+  plantName: string,
+  imageDataUrl: string,
+  symptomNotes = "",
+  householdId = "",
+): Promise<PlantDiagnosisDraft> => {
   let data: { diagnosis?: unknown };
   try {
     data = await callBackendFunction<{ diagnosis?: unknown }>({
       allowNetlifyFallback: true,
-      body: { imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) },
+      body: { householdId, imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) },
       functionName: "plant-diagnosis-ai",
       netlifyPath: "/.netlify/functions/plant-diagnosis-ai",
     });

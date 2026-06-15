@@ -40,7 +40,6 @@ import { useAuth } from "./hooks/useAuth";
 import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
-import { checkDiagnosisGate, recordDiagnosisUsage } from "./lib/diagnosisGate";
 import { captureImage, detectImageRuntime } from "./lib/imageCaptureService";
 import type { NormalizedImage } from "./lib/imageCaptureService";
 import { createTranslator, defaultLanguage, translate } from "./lib/i18n";
@@ -85,6 +84,12 @@ import {
   sendHouseholdInviteEmail,
 } from "./lib/plantieRepository";
 import type { HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
+import {
+  assertCanAddPlant,
+  getHouseholdPlanUsage,
+  recordCareTipGeneration,
+} from "./lib/householdPlanService";
+import type { HouseholdPlanUsage } from "./lib/householdPlanService";
 import {
   createCustomFlowerId,
   fetchGeneratedCare,
@@ -774,6 +779,7 @@ export const App = () => {
   const [quickRecordStatus, setQuickRecordStatus] = useState("");
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
   const [supabaseReadError, setSupabaseReadError] = useState(false);
+  const [householdPlanUsage, setHouseholdPlanUsage] = useState<HouseholdPlanUsage | null>(null);
   const previousAuthUserIdRef = useRef<string | null>(null);
   const [isSupabaseWritesLocallyDisabled] = useState(
     () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
@@ -791,6 +797,12 @@ export const App = () => {
   const activeSupabaseHouseholdId =
     supabaseReadState?.household.id ??
     (!shouldUseSupabaseAccountData && activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
+  const plantLimitReached = householdPlanUsage?.plantsRemaining === 0;
+  const plantLimitLabel = householdPlanUsage
+    ? householdPlanUsage.isPremium
+      ? "Premium: unlimited plants"
+      : `${householdPlanUsage.plantsRemaining ?? 0} / ${householdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
+    : "";
   const routeInviteToken = route.page === "join" ? route.invite : "";
   const isRouteAllowedWithoutHousehold =
     route.page === "menu" ||
@@ -1080,6 +1092,17 @@ export const App = () => {
     return nextState;
   };
 
+  const refreshHouseholdPlanUsage = async () => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+      setHouseholdPlanUsage(null);
+      return null;
+    }
+
+    const usage = await getHouseholdPlanUsage(activeSupabaseHouseholdId);
+    setHouseholdPlanUsage(usage);
+    return usage;
+  };
+
   const writeSupabaseFirst = async <T,>(
     operation: () => Promise<T>,
     mirrorLegacy: () => void,
@@ -1098,6 +1121,7 @@ export const App = () => {
       try {
         await runRequiredSupabaseWrite(operation);
         await refreshSupabaseReadState();
+        await refreshHouseholdPlanUsage().catch(() => null);
         return true;
       } catch {
         setSupabaseReadError(true);
@@ -1116,6 +1140,7 @@ export const App = () => {
 
     try {
       await refreshSupabaseReadState();
+      await refreshHouseholdPlanUsage().catch(() => null);
     } catch {
       setSupabaseReadError(true);
     }
@@ -1201,6 +1226,17 @@ export const App = () => {
       cancelled = true;
     };
   }, [activeHousehold, allFlowers, auth.isAuthenticated, auth.user?.id]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+      setHouseholdPlanUsage(null);
+      return;
+    }
+
+    void refreshHouseholdPlanUsage().catch(() => {
+      setHouseholdPlanUsage(null);
+    });
+  }, [activeSupabaseHouseholdId, auth.isAuthenticated]);
 
   useEffect(() => {
     if (!auth.isAuthenticated) {
@@ -1947,10 +1983,16 @@ export const App = () => {
     setNewPlantStatus(t("image.validatingSafety"));
 
     try {
+      if (activeSupabaseHouseholdId) {
+        await assertCanAddPlant(activeSupabaseHouseholdId);
+      }
       const imageDataUrl = newPlantImage.dataUrl;
       await validatePlantImageForUpload(imageDataUrl);
       setNewPlantStatus(t("plantForm.generatingCare"));
-      const care = await fetchGeneratedCare(plantName, imageDataUrl);
+      const care = await fetchGeneratedCare(plantName, imageDataUrl, {
+        generationSource: "initial_plant_add",
+        householdId: activeSupabaseHouseholdId,
+      });
       const { displayName: aiCareDisplayName, identificationConfidence, ...careProfile } = care;
       const aiDisplayName = aiCareDisplayName.trim();
 
@@ -1964,6 +2006,13 @@ export const App = () => {
       };
 
       await addFlower(customFlower);
+      if (activeSupabaseHouseholdId) {
+        const createdPlant = await getHouseholdPlantByLegacyId(activeSupabaseHouseholdId, customFlower.id);
+        if (createdPlant) {
+          await recordCareTipGeneration(activeSupabaseHouseholdId, createdPlant.id, "initial_plant_add");
+        }
+        await refreshHouseholdPlanUsage().catch(() => null);
+      }
       setNewPlantStatus(t("plantForm.added", { plant: customFlower.displayName }));
       setNewPlantName("");
       URL.revokeObjectURL(newPlantImage.previewUrl);
@@ -1982,8 +2031,16 @@ export const App = () => {
     setCarePreviewStatus(t("detail.aiCarePreparing"));
 
     try {
+      const supabasePlantId = supabasePlantIdsByLegacyId[flower.id];
+      if (auth.isAuthenticated && !supabasePlantId) {
+        throw new Error("Supabase plant is not available for AI care refresh.");
+      }
       const imageDataUrl = await imageSourceToDataUrl(flower.image);
-      const nextCare = await fetchGeneratedCare(flower.displayName, imageDataUrl);
+      const nextCare = await fetchGeneratedCare(flower.displayName, imageDataUrl, {
+        generationSource: "manual_refresh",
+        householdId: activeSupabaseHouseholdId,
+        plantId: supabasePlantId,
+      });
       setCarePreview({ flowerId: flower.id, nextCare });
       setCarePreviewStatus("");
     } catch (error) {
@@ -2115,21 +2172,29 @@ export const App = () => {
       setDiagnosisStatus(t("image.validatingSafety"));
       await validatePlantImageForUpload(diagnosisImageDataUrl);
 
-      const gate = await checkDiagnosisGate({
-        isAuthenticated: auth.isAuthenticated,
-        wasLegacyDiagnosisAvailable: true,
-      });
+      if (auth.isAuthenticated && !activeSupabaseHouseholdId) {
+        const message = "Open a household before running AI plant health analysis.";
+        setDiagnosisUpgradeReason(message);
+        setDiagnosisStatus(message);
+        return;
+      }
 
-      if (!gate.allowed) {
-        setDiagnosisUpgradeReason(gate.message);
-        setDiagnosisStatus(gate.message);
+      if (householdPlanUsage?.aiAnalyzesRemaining === 0) {
+        const message = "Free households can run 5 plant health AI analyzes per month. Upgrade for unlimited analyzes.";
+        setDiagnosisUpgradeReason(message);
+        setDiagnosisStatus(message);
         return;
       }
 
       setDiagnosisStatus(t("diagnosis.aiAnalyzing"));
-      const diagnosis = await fetchPlantDiagnosis(flower.displayName, diagnosisImageDataUrl, diagnosisSymptomNotes);
+      const diagnosis = await fetchPlantDiagnosis(
+        flower.displayName,
+        diagnosisImageDataUrl,
+        diagnosisSymptomNotes,
+        activeSupabaseHouseholdId,
+      );
       setDiagnosisDraft(diagnosis);
-      await recordDiagnosisUsage(gate.mode);
+      await refreshHouseholdPlanUsage().catch(() => null);
       setDiagnosisStatus(diagnosis.confidence < 45 ? t("diagnosis.lowConfidence") : "");
     } catch (error) {
       setDiagnosisDraft(null);
@@ -2572,6 +2637,12 @@ export const App = () => {
     const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
     const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays, t) : [];
     const isEditingName = editingNameFlowerId === flower.id;
+    const diagnosisLimitReached = householdPlanUsage?.aiAnalyzesRemaining === 0;
+    const diagnosisUsageLabel = householdPlanUsage
+      ? householdPlanUsage.isPremium
+        ? "Premium: unlimited AI plant health analyzes"
+        : `${householdPlanUsage.aiAnalyzesRemaining ?? 0} / ${householdPlanUsage.aiAnalyzesMonthlyLimit ?? 5} AI analyzes remaining this month`
+      : "";
     const flowerDiagnostics = diagnostics
       .filter((diagnosis) => diagnosis.plantId === flower.id)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -3044,6 +3115,7 @@ export const App = () => {
                 <h2 id="diagnosis-modal-title">{t("detail.diagnosisAction")}</h2>
               </div>
               <p>{t("diagnosis.modalBody")}</p>
+              {diagnosisUsageLabel ? <p className="care-preview-status">{diagnosisUsageLabel}</p> : null}
 
               <label className="field">
                 <span>{t("diagnosis.symptoms")}</span>
@@ -3094,7 +3166,7 @@ export const App = () => {
               <button
                 className="primary-action diagnosis-run-button"
                 type="button"
-                disabled={!diagnosisImageDataUrl || isDiagnosing}
+                disabled={!diagnosisImageDataUrl || isDiagnosing || diagnosisLimitReached}
                 onClick={() => runPlantDiagnosis(flower)}
               >
                 {isDiagnosing ? t("diagnosis.analyzing") : t("diagnosis.run")}
@@ -3711,6 +3783,7 @@ export const App = () => {
               <h2 id="add-plant-title">{t("plantForm.title")}</h2>
             </div>
             <p>{t("plantForm.body")}</p>
+            {plantLimitLabel ? <p className="care-preview-status">{plantLimitLabel}</p> : null}
             <form className="add-plant-form modal-form" onSubmit={handleAddCustomFlower}>
               <label className="field">
                 <span>{t("plantForm.name")}</span>
@@ -3755,7 +3828,7 @@ export const App = () => {
                 ) : null}
                 {newPlantImage ? <img className="diagnosis-preview" src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
               </label>
-              <button type="submit" disabled={isAddingPlant}>
+              <button type="submit" disabled={isAddingPlant || plantLimitReached}>
                 <Plus size={18} aria-hidden="true" />
                 {isAddingPlant ? t("plantForm.adding") : t("dashboard.addPlant")}
               </button>

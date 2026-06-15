@@ -15,6 +15,12 @@ export type GeneratedCare = {
   identificationNote: string;
 };
 
+export type GenerateCareOptions = {
+  generationSource?: "initial_plant_add" | "manual_refresh";
+  householdId?: string;
+  plantId?: string;
+};
+
 export const createCustomFlowerId = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const resizeImageFileToDataUrl = (file: File, maxSize = 900): Promise<string> =>
@@ -74,12 +80,22 @@ export const imageSourceToDataUrl = async (imageSource: string): Promise<string>
   });
 };
 
-export const fetchGeneratedCare = async (plantName: string, imageDataUrl: string): Promise<GeneratedCare> => {
+export const fetchGeneratedCare = async (
+  plantName: string,
+  imageDataUrl: string,
+  options: GenerateCareOptions = {},
+): Promise<GeneratedCare> => {
   let data: { care?: GeneratedCare };
   try {
     data = await callBackendFunction<{ care?: GeneratedCare }>({
       allowNetlifyFallback: true,
-      body: { imageDataUrl, plantName },
+      body: {
+        generationSource: options.generationSource ?? "initial_plant_add",
+        householdId: options.householdId ?? "",
+        imageDataUrl,
+        plantId: options.plantId ?? "",
+        plantName,
+      },
       functionName: "plant-care-ai",
       netlifyPath: "/.netlify/functions/plant-care-ai",
     });

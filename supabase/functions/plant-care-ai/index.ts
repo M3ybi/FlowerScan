@@ -105,6 +105,8 @@ const parseCare = (outputText: string) => {
   return care;
 };
 
+const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
@@ -115,17 +117,33 @@ Deno.serve(async (request) => {
   const auth = await requireUser(request.headers.get("authorization") ?? "");
   if (!auth) return json(401, { error: "Authentication is required." });
 
-  let body: { imageDataUrl?: string; plantName?: string };
+  let body: { generationSource?: string; householdId?: string; imageDataUrl?: string; plantId?: string; plantName?: string };
   try {
     body = await request.json();
   } catch {
     return json(400, { error: "Invalid JSON body." });
   }
 
+  const householdId = typeof body.householdId === "string" ? body.householdId : "";
+  const plantId = typeof body.plantId === "string" ? body.plantId : "";
+  const generationSource = body.generationSource === "manual_refresh" ? "manual_refresh" : "initial_plant_add";
   const plantName = sanitizeText(body.plantName, 90);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
-  if (!plantName || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 1_600_000) {
+  if (!uuidLike.test(householdId) || !plantName || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 1_600_000) {
     return json(400, { error: "Plant name and image are required." });
+  }
+
+  if (generationSource === "initial_plant_add") {
+    const { error } = await auth.client.rpc("assert_can_add_plant", { target_household_id: householdId });
+    if (error) return json(403, { error: error.message || "Plant limit reached." });
+  } else {
+    if (!uuidLike.test(plantId)) return json(400, { error: "Plant ID is required for care tip refresh." });
+    const { error } = await auth.client.rpc("assert_can_generate_care_tip", {
+      generation_source: generationSource,
+      target_household_id: householdId,
+      target_plant_id: plantId,
+    });
+    if (error) return json(403, { error: error.message || "AI care tip limit reached." });
   }
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -153,9 +171,17 @@ Deno.serve(async (request) => {
 
   try {
     const care = parseCare(extractOutputText(await response.json()));
-    return care ? json(200, { care }) : json(502, { error: "AI returned incomplete or invalid care data." });
+    if (!care) return json(502, { error: "AI returned incomplete or invalid care data." });
+    if (generationSource === "manual_refresh") {
+      const { error } = await auth.client.rpc("record_care_tip_generation", {
+        generation_source: generationSource,
+        target_household_id: householdId,
+        target_plant_id: plantId,
+      });
+      if (error) return json(409, { error: "AI care tip usage could not be recorded." });
+    }
+    return json(200, { care });
   } catch {
     return json(502, { error: "AI returned invalid JSON." });
   }
 });
-

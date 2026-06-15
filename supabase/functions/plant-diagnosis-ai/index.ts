@@ -70,6 +70,8 @@ const parseDiagnosis = (outputText: string) => {
   return diagnosis.diagnosis_title && diagnosis.reasoning_summary ? diagnosis : null;
 };
 
+const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
@@ -80,23 +82,28 @@ Deno.serve(async (request) => {
   const auth = await requireUser(request.headers.get("authorization") ?? "");
   if (!auth) return json(401, { error: "Authentication is required." });
 
-  const { data: canUse, error: entitlementError } = await auth.client.rpc("can_use_feature", { feature_key: "ai_diagnosis" });
-  if (entitlementError || !canUse) return json(403, { error: "Premium AI diagnosis entitlement is required." });
-
-  let body: { imageDataUrl?: string; plantName?: string; symptomNotes?: string };
+  let body: { householdId?: string; imageDataUrl?: string; plantName?: string; symptomNotes?: string };
   try {
     body = await request.json();
   } catch {
     return json(400, { error: "Invalid JSON body." });
   }
 
+  const householdId = typeof body.householdId === "string" ? body.householdId : "";
   const plantName = sanitizeText(body.plantName, 90);
   const symptomNotes = sanitizeText(body.symptomNotes, 600);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
   const isSupportedImage = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl);
-  if (!plantName || !isSupportedImage || imageDataUrl.length > 1_600_000) {
+  if (!uuidLike.test(householdId) || !plantName || !isSupportedImage || imageDataUrl.length > 1_600_000) {
     return json(400, { error: "Valid plant name and image are required." });
   }
+
+  const { data: reservationId, error: reservationError } = await auth.client.rpc("reserve_ai_analyze_usage", {
+    analyze_type: "plant_unwell_ai_analyze",
+    generation_source: "plant_unwell_flow",
+    target_household_id: householdId,
+  });
+  if (reservationError) return json(403, { error: reservationError.message || "AI analyze limit reached." });
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     body: JSON.stringify({
@@ -119,15 +126,46 @@ Deno.serve(async (request) => {
 
   if (!response.ok) {
     console.error("Supabase diagnosis AI request failed", { status: response.status, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
+    if (reservationId) {
+      await auth.client.rpc("release_ai_analyze_reservation", {
+        analyze_type: "plant_unwell_ai_analyze",
+        reservation_id: reservationId,
+        target_household_id: householdId,
+      }).catch(() => undefined);
+    }
     return json(502, { error: "AI diagnosis failed." });
   }
 
   try {
     const diagnosis = parseDiagnosis(extractOutputText(await response.json()));
-    if (!diagnosis) return json(502, { error: "AI returned incomplete diagnosis data." });
-    await auth.client.rpc("increment_usage_counter", { counter_type: "ai_scan" }).catch(() => undefined);
+    if (!diagnosis) {
+      if (reservationId) {
+        await auth.client.rpc("release_ai_analyze_reservation", {
+          analyze_type: "plant_unwell_ai_analyze",
+          reservation_id: reservationId,
+          target_household_id: householdId,
+        }).catch(() => undefined);
+      }
+      return json(502, { error: "AI returned incomplete diagnosis data." });
+    }
+    if (reservationId) {
+      const { error: commitError } = await auth.client.rpc("commit_ai_analyze_usage", {
+        analyze_type: "plant_unwell_ai_analyze",
+        generation_source: "plant_unwell_flow",
+        reservation_id: reservationId,
+        target_household_id: householdId,
+      });
+      if (commitError) return json(409, { error: "AI analyze usage could not be recorded." });
+    }
     return json(200, { diagnosis });
   } catch {
+    if (reservationId) {
+      await auth.client.rpc("release_ai_analyze_reservation", {
+        analyze_type: "plant_unwell_ai_analyze",
+        reservation_id: reservationId,
+        target_household_id: householdId,
+      }).catch(() => undefined);
+    }
     return json(502, { error: "AI returned invalid JSON." });
   }
 });

@@ -92,7 +92,7 @@ test("public menu and compliance routes are not blocked by household gate", () =
   assert.match(appSource, /const isRouteAllowedWithoutHousehold/);
   assert.match(appSource, /route\.page === "menu"/);
   assert.match(appSource, /route\.page === "legal"/);
-  assert.match(appSource, /isAccessChecking && !isRouteAllowedWithoutHousehold/);
+  assert.match(appSource, /\(!shouldUseSupabaseAccountData && isAccessChecking\)\) && !isRouteAllowedWithoutHousehold/);
   assert.match(appSource, /!activeHousehold && !supabaseReadState && !isRouteAllowedWithoutHousehold/);
 });
 
@@ -125,7 +125,8 @@ test("Supabase Edge Functions declare server-only secret usage", () => {
   const revenueCatEdge = readFileSync("supabase/functions/revenuecat-webhook/index.ts", "utf8");
 
   assert.match(diagnosisEdge, /Deno\.env\.get\("OPENAI_API_KEY"\)/);
-  assert.match(diagnosisEdge, /can_use_feature/);
+  assert.match(diagnosisEdge, /reserve_ai_analyze_usage/);
+  assert.match(diagnosisEdge, /commit_ai_analyze_usage/);
   assert.match(revenueCatEdge, /Deno\.env\.get\("REVENUECAT_WEBHOOK_SECRET"\)/);
   assert.match(revenueCatEdge, /createServiceClient/);
 });
