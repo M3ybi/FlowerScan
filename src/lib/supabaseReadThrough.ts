@@ -34,6 +34,10 @@ export type SupabaseReadThroughState = {
   supabasePlantIdsByLegacyId: Record<string, string>;
 };
 
+export type SupabaseReadThroughOptions = {
+  force?: boolean;
+};
+
 export type DataSourceDetectionInput = {
   featureEnabled: boolean;
   hasAuthenticatedUser: boolean;
@@ -71,9 +75,28 @@ type SupabaseReadRows = {
 };
 
 const builtInFlowerById = new Map(builtInFlowers.map((flower) => [flower.id, flower]));
+const readThroughCacheTtlMs = 60_000;
+const readThroughCache = new Map<string, { loadedAt: number; state: SupabaseReadThroughState | null }>();
+const readThroughRequests = new Map<string, Promise<SupabaseReadThroughState | null>>();
+
+const readThroughCacheKey = (activeHousehold: HouseholdSession | null) => activeHousehold?.publicToken ?? "__default_household__";
+
+export const invalidateSupabaseReadThroughCache = (activeHousehold?: HouseholdSession | null) => {
+  if (activeHousehold === undefined) {
+    readThroughCache.clear();
+    readThroughRequests.clear();
+    return;
+  }
+
+  const key = readThroughCacheKey(activeHousehold);
+  readThroughCache.delete(key);
+  readThroughRequests.delete(key);
+};
 
 const fromSupabaseIdentification = (value: HouseholdPlant["identification"]): Flower["identification"] =>
   value === "needs_confirmation" ? "needs-confirmation" : value;
+
+const getLegacyStatePlantId = (plant: HouseholdPlant) => plant.legacyId ?? `supabase-${plant.id}`;
 
 const mapSupabasePlantToFlower = (plant: HouseholdPlant, signedImageUrl?: string): Flower => {
   const builtInFallback = plant.legacyId ? builtInFlowerById.get(plant.legacyId) : undefined;
@@ -86,7 +109,7 @@ const mapSupabasePlantToFlower = (plant: HouseholdPlant, signedImageUrl?: string
     })),
     careTips: plant.careTips.map((tip) => tip.tip),
     displayName: plant.displayName,
-    id: plant.legacyId ?? `supabase-${plant.id}`,
+    id: getLegacyStatePlantId(plant),
     identification: fromSupabaseIdentification(plant.identification),
     identificationNote: plant.identificationNote,
     image: signedImageUrl ?? builtInFallback?.image ?? "",
@@ -138,9 +161,9 @@ export const mapSupabaseRowsToLegacyStateShape = ({
 }: SupabaseReadRows): SupabaseReadThroughState => {
   const flowers = plants.map((plant) => mapSupabasePlantToFlower(plant, plant.imagePath ? plantImageUrls[plant.imagePath] : undefined));
   const supabasePlantIdsByLegacyId = Object.fromEntries(
-    plants.flatMap((plant) => (plant.legacyId ? [[plant.legacyId, plant.id] as const] : [])),
+    plants.map((plant) => [getLegacyStatePlantId(plant), plant.id] as const),
   );
-  const legacyIdBySupabasePlantId = new Map(plants.map((plant) => [plant.id, plant.legacyId ?? `supabase-${plant.id}`]));
+  const legacyIdBySupabasePlantId = new Map(plants.map((plant) => [plant.id, getLegacyStatePlantId(plant)]));
 
   const records = Object.fromEntries(
     careRecords.flatMap((record) => {
@@ -183,7 +206,7 @@ export const mapSupabaseRowsToLegacyStateShape = ({
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     household,
     records,
-    removedFlowerIds: plants.flatMap((plant) => (plant.isRemoved ? [plant.legacyId ?? `supabase-${plant.id}`] : [])),
+    removedFlowerIds: plants.flatMap((plant) => (plant.isRemoved ? [getLegacyStatePlantId(plant)] : [])),
     reportSettings: {
       lastPushNotificationDate: reportSettings?.lastPushNotificationDate,
       lastSentDate: reportSettings?.lastSentDate,
@@ -226,10 +249,38 @@ const loadRowsForHousehold = async (household: Household) => {
 
 export const loadSupabaseReadThroughState = async (
   activeHousehold: HouseholdSession | null,
+  options: SupabaseReadThroughOptions = {},
+): Promise<SupabaseReadThroughState | null> => {
+  const cacheKey = readThroughCacheKey(activeHousehold);
+  const cached = readThroughCache.get(cacheKey);
+  if (!options.force && cached && Date.now() - cached.loadedAt < readThroughCacheTtlMs) {
+    return cached.state;
+  }
+
+  const inFlight = readThroughRequests.get(cacheKey);
+  if (!options.force && inFlight) {
+    return inFlight;
+  }
+
+  const request = loadSupabaseReadThroughStateUncached(activeHousehold)
+    .then((state) => {
+      readThroughCache.set(cacheKey, { loadedAt: Date.now(), state });
+      return state;
+    })
+    .finally(() => {
+      readThroughRequests.delete(cacheKey);
+    });
+
+  readThroughRequests.set(cacheKey, request);
+  return request;
+};
+
+const loadSupabaseReadThroughStateUncached = async (
+  activeHousehold: HouseholdSession | null,
 ): Promise<SupabaseReadThroughState | null> => {
   const households = await getUserHouseholds();
   const preferredHousehold = activeHousehold?.publicToken
-    ? households.find((household) => household.legacyPublicToken === activeHousehold.publicToken)
+    ? households.find((household) => household.id === activeHousehold.publicToken || household.legacyPublicToken === activeHousehold.publicToken)
     : null;
   const candidates = [
     ...(preferredHousehold ? [preferredHousehold] : []),

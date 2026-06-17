@@ -181,6 +181,44 @@ test("Supabase rows map back into existing App state shape and preserve legacy I
   assert.equal(state.supabasePlantIdsByLegacyId[flowers[0].id], "supabase-plant-id");
 });
 
+test("Supabase-only plants keep a write mapping for generated App IDs", () => {
+  const supabaseOnlyPlantId = "supabase-only-plant-id";
+  const generatedAppPlantId = `supabase-${supabaseOnlyPlantId}`;
+  const state = mapSupabaseRowsToLegacyStateShape({
+    careRecords: [
+      {
+        lastFertilized: "",
+        lastTransplanted: "",
+        lastWatered: "2026-06-17",
+        note: "recently watered",
+        plantId: supabaseOnlyPlantId,
+      },
+    ],
+    diagnostics: [
+      createDiagnostic({
+        id: "diagnostic-for-supabase-only-plant",
+        legacyId: null,
+        plantId: supabaseOnlyPlantId,
+      }),
+    ],
+    household,
+    plants: [
+      createPlant({
+        displayName: "Custom Supabase Plant",
+        id: supabaseOnlyPlantId,
+        legacyId: null,
+        source: "custom",
+      }),
+    ],
+    reportSettings: null,
+  });
+
+  assert.equal(state.allFlowers[0].id, generatedAppPlantId);
+  assert.equal(state.records[generatedAppPlantId].lastWatered, "2026-06-17");
+  assert.equal(state.diagnostics[0].plantId, generatedAppPlantId);
+  assert.equal(state.supabasePlantIdsByLegacyId[generatedAppPlantId], supabaseOnlyPlantId);
+});
+
 test("Supabase read shape preserves empty households before first plant", () => {
   const state = mapSupabaseRowsToLegacyStateShape({
     careRecords: [],

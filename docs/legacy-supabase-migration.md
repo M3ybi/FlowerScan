@@ -65,21 +65,17 @@ Supabase reads are enabled by default whenever the browser Supabase env vars are
 3. Sign in with an account that has a Supabase household.
 4. Verify source mode through internal diagnostics or source-level tests. The production Menu does not expose data-source controls.
 
-### Enable read/write source-of-truth mode locally
+### Read/write source-of-truth mode locally
 
-Reads are already enabled when Supabase is configured. Write-through mode still requires an explicit flag:
+Reads are enabled when Supabase is configured. Write-through mode is also enabled by default for the Supabase backend.
 
-```bash
-VITE_ENABLE_SUPABASE_WRITES=true
-```
-
-When write-through is enabled and the signed-in user has a Supabase household, Supabase becomes the read/write source of truth. Successful writes refresh from Supabase instead of mirroring plant data into legacy localStorage or Netlify Blob sync. Failed writes are reported and are not saved to legacy fallback storage.
+When the signed-in user has a Supabase household, Supabase becomes the read/write source of truth. Successful writes refresh from Supabase instead of mirroring plant data into legacy localStorage or Netlify Blob sync. Failed writes are reported and are not saved to legacy fallback storage.
 
 ### Expected modes
 
 - `Legacy`: Supabase is not configured or reads are explicitly disabled.
 - `Supabase preview`: Supabase is configured, the user is authenticated, and a household was read successfully.
-- `Supabase source of truth`: Supabase is configured, write-through is enabled, the user is authenticated, and a household was read successfully.
+- `Supabase source of truth`: Supabase is configured, write-through is not explicitly disabled, the user is authenticated, and a household was read successfully.
 - `Fallback`: Supabase is configured but there is no authenticated household available in a non-write-through build.
 - `Error`: Supabase read or required write failed; production write-through mode does not save plant data to legacy fallback storage.
 
@@ -99,7 +95,7 @@ It does not log or display household tokens, notes, image payloads, or secrets.
 
 Rollback is immediate:
 
-1. Remove `VITE_ENABLE_SUPABASE_WRITES=true`, or set it to `false`.
+1. Set `VITE_DISABLE_SUPABASE_WRITES=true`, or set the legacy flag `VITE_ENABLE_SUPABASE_WRITES=false`.
 2. Set `VITE_DISABLE_SUPABASE_READS=true` only if you need to force full legacy mode.
 3. Rebuild/restart the app.
 

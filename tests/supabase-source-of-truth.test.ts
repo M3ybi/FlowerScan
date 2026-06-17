@@ -91,11 +91,22 @@ const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
     },
     updateHouseholdReportSettings: async (_householdId, input) => {
       calls.push(`report:${input.recipientEmail ?? ""}`);
-      return {};
+      return {
+        householdId: "household-id",
+        lastPushNotificationDate: input.lastPushNotificationDate ?? "",
+        lastSentDate: input.lastSentDate ?? "",
+        recipientEmail: input.recipientEmail ?? "",
+      };
     },
     updatePlantCareRecord: async (plantId, input) => {
       calls.push(`care:${plantId}:${input.lastWatered ?? ""}:${input.note ?? ""}`);
-      return {};
+      return {
+        lastFertilized: input.lastFertilized ?? "",
+        lastTransplanted: input.lastTransplanted ?? "",
+        lastWatered: input.lastWatered ?? "",
+        note: input.note ?? "",
+        plantId,
+      };
     },
     updatePlantDiagnostic: async (id, input) => {
       calls.push(`update-diagnosis:${id}:${input.userConfirmation ?? ""}:${input.userNote ?? ""}`);

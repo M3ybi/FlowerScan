@@ -27,7 +27,9 @@ test("Supabase reads are default-on when the browser client is configured", () =
 test("Supabase-only data mode uses empty local plant baseline", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
 
-  assert.match(appSource, /const isSupabaseOnlyDataMode = isSupabaseReadThroughEnabled && isSupabaseWriteThroughEnvEnabled && isSupabaseBackend/);
+  assert.match(appSource, /VITE_DISABLE_SUPABASE_WRITES !== "true"/);
+  assert.match(appSource, /VITE_ENABLE_SUPABASE_WRITES !== "false"/);
+  assert.match(appSource, /const isSupabaseOnlyDataMode = isSupabaseReadThroughEnabled && isSupabaseBackend/);
   assert.match(appSource, /isSupabaseOnlyDataMode\s*\?\s*\[\]/);
 });
 
@@ -133,6 +135,41 @@ test("Supabase diagnosis confidence labels are mapped to the database enum", () 
   assert.match(repositorySource, /const toDisplayConfidenceLabel/);
   assert.match(repositorySource, /const toDbConfidenceLabel/);
   assert.match(repositorySource, /confidence_label: toDbConfidenceLabel\(input\.confidenceLabel\)/);
+});
+
+test("Supabase startup avoids duplicate per-plant PostgREST reads", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  const readThroughSource = readFileSync("src/lib/supabaseReadThrough.ts", "utf8");
+
+  assert.doesNotMatch(appSource, /getPlantDiagnostics/);
+  assert.doesNotMatch(appSource, /loadSupabaseLinkedPlants/);
+  assert.doesNotMatch(appSource, /loadSupabaseDiagnostics/);
+  assert.match(readThroughSource, /const readThroughCacheTtlMs = 60_000/);
+  assert.match(readThroughSource, /const readThroughRequests = new Map/);
+  assert.match(readThroughSource, /export const invalidateSupabaseReadThroughCache/);
+  assert.match(readThroughSource, /household\.id === activeHousehold\.publicToken \|\| household\.legacyPublicToken === activeHousehold\.publicToken/);
+});
+
+test("high-frequency Supabase reads use explicit columns and debug logging", () => {
+  const repositorySource = readFileSync("src/lib/plantieRepository.ts", "utf8");
+
+  assert.doesNotMatch(repositorySource, /\.select\(\s*["']\*["']\s*\)/);
+  assert.match(repositorySource, /const householdSelect = "id,name,legacy_public_token,created_by,created_at,updated_at"/);
+  assert.match(repositorySource, /plant_care_pills\(id,label,position,tone,value\)/);
+  assert.match(repositorySource, /diagnostic_observed_symptoms\(position,symptom\)/);
+  assert.match(repositorySource, /plantie-debug-supabase-reads/);
+});
+
+test("PostgREST egress hardening revokes anon private table reads and adds common indexes", () => {
+  const migration = readFileSync("supabase/migrations/20260615143000_tighten_postgrest_egress_access.sql", "utf8");
+
+  assert.match(migration, /revoke all on table public\.plants from anon/);
+  assert.match(migration, /revoke all on table public\.plant_diagnostics from anon/);
+  assert.match(migration, /grant select on table public\.plant_catalog to anon/);
+  assert.match(migration, /using \(is_active = true\)/);
+  assert.match(migration, /plants_household_legacy_id_idx/);
+  assert.match(migration, /plant_diagnostics_household_created_at_idx/);
+  assert.match(migration, /plant_care_records_household_plant_idx/);
 });
 
 test("frontend does not reference server-only backend secrets", () => {

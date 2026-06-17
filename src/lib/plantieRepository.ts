@@ -381,23 +381,86 @@ const uploadValidatedImage = async ({
   return (data as { path: string }).path;
 };
 
+const isSupabaseReadDebugEnabled = () =>
+  Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) &&
+  typeof globalThis.localStorage !== "undefined" &&
+  globalThis.localStorage.getItem("plantie-debug-supabase-reads") === "true";
+
+const logSupabaseRead = (table: string, operation: string) => {
+  if (!isSupabaseReadDebugEnabled()) {
+    return;
+  }
+
+  console.debug("[plantie:supabase-read]", { operation, table });
+};
+
+const householdSelect = "id,name,legacy_public_token,created_by,created_at,updated_at";
+
 const plantCatalogSelect = `
-  *,
-  plant_care_pills(*),
-  plant_care_tips(*)
+  id,
+  legacy_id,
+  display_name,
+  likely_name,
+  identification,
+  identification_note,
+  image_path,
+  short_care,
+  light,
+  watering,
+  watering_interval_days,
+  soil,
+  is_active,
+  plant_care_pills(id,label,position,tone,value),
+  plant_care_tips(id,position,tip)
 `;
 
 const householdPlantSelect = `
-  *,
-  plant_care_pills(*),
-  plant_care_tips(*)
+  id,
+  household_id,
+  catalog_plant_id,
+  legacy_id,
+  source,
+  display_name,
+  likely_name,
+  identification,
+  identification_note,
+  image_path,
+  short_care,
+  light,
+  watering,
+  watering_interval_days,
+  notifications_enabled,
+  soil,
+  is_removed,
+  created_by,
+  created_at,
+  updated_at,
+  plant_care_pills(id,label,position,tone,value),
+  plant_care_tips(id,position,tip)
 `;
 
 const plantDiagnosticSelect = `
-  *,
-  diagnostic_observed_symptoms(*),
-  diagnostic_recommended_steps(*)
+  id,
+  household_id,
+  plant_id,
+  legacy_id,
+  image_path,
+  diagnosis_title,
+  confidence,
+  confidence_label,
+  reasoning_summary,
+  risk_level,
+  disclaimer,
+  user_confirmation,
+  user_note,
+  created_at,
+  updated_at,
+  diagnostic_observed_symptoms(position,symptom),
+  diagnostic_recommended_steps(position,step)
 `;
+
+const plantCareRecordSelect = "plant_id,last_fertilized,last_transplanted,last_watered,note";
+const householdReportSettingsSelect = "household_id,last_push_notification_date,last_sent_date,recipient_email";
 
 const getClient = () => {
   if (!supabase) {
@@ -596,6 +659,7 @@ const recordPatchToUpsert = (patch: UpdatePlantCareRecordPatch): DbPlantCareReco
 });
 
 export const getPlantCatalog = async () => {
+  logSupabaseRead("plant_catalog", "list");
   const { data, error } = await getClient()
     .from("plant_catalog")
     .select(plantCatalogSelect)
@@ -611,6 +675,7 @@ export const getPlantCatalog = async () => {
 };
 
 export const getPlantCatalogByLegacyId = async (legacyId: string) => {
+  logSupabaseRead("plant_catalog", "by_legacy_id");
   const { data, error } = await getClient()
     .from("plant_catalog")
     .select(plantCatalogSelect)
@@ -625,9 +690,10 @@ export const getPlantCatalogByLegacyId = async (legacyId: string) => {
 };
 
 export const getUserHouseholds = async () => {
+  logSupabaseRead("households", "list_for_current_user");
   const { data, error } = await getClient()
     .from("households")
-    .select("*")
+    .select(householdSelect)
     .order("created_at", { ascending: true })
     .returns<DbHousehold[]>();
 
@@ -639,6 +705,7 @@ export const getUserHouseholds = async () => {
 };
 
 export const getHouseholdPlants = async (householdId: string) => {
+  logSupabaseRead("plants", "list_active_by_household");
   const { data, error } = await getClient()
     .from("plants")
     .select(householdPlantSelect)
@@ -655,6 +722,7 @@ export const getHouseholdPlants = async (householdId: string) => {
 };
 
 export const getHouseholdPlantsIncludingRemoved = async (householdId: string) => {
+  logSupabaseRead("plants", "list_all_by_household");
   const { data, error } = await getClient()
     .from("plants")
     .select(householdPlantSelect)
@@ -670,6 +738,7 @@ export const getHouseholdPlantsIncludingRemoved = async (householdId: string) =>
 };
 
 export const getHouseholdPlantByLegacyId = async (householdId: string, legacyId: string) => {
+  logSupabaseRead("plants", "by_household_legacy_id");
   const { data, error } = await getClient()
     .from("plants")
     .select(householdPlantSelect)
@@ -685,6 +754,7 @@ export const getHouseholdPlantByLegacyId = async (householdId: string, legacyId:
 };
 
 export const getHouseholdPlantById = async (plantId: string) => {
+  logSupabaseRead("plants", "by_id");
   const { data, error } = await getClient()
     .from("plants")
     .select(householdPlantSelect)
@@ -961,7 +1031,7 @@ export const updateHouseholdLegacyToken = async (householdId: string, legacyPubl
     .from("households")
     .update({ legacy_public_token: legacyPublicToken })
     .eq("id", householdId)
-    .select("*")
+    .select(householdSelect)
     .single<DbHousehold>();
 
   if (error) {
@@ -990,20 +1060,21 @@ export const updatePlantCareRecord = async (plantId: string, patch: UpdatePlantC
       plant_id: plant.id,
       ...recordPatchToUpsert(patch),
     })
-    .select("*")
+    .select(plantCareRecordSelect)
     .single();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  return mapPlantCareRecord(data as DbPlantCareRecord);
 };
 
 export const getHouseholdCareRecords = async (householdId: string) => {
+  logSupabaseRead("plant_care_records", "list_by_household");
   const { data, error } = await getClient()
     .from("plant_care_records")
-    .select("*")
+    .select(plantCareRecordSelect)
     .eq("household_id", householdId)
     .returns<DbPlantCareRecord[]>();
 
@@ -1040,20 +1111,21 @@ export const updateHouseholdReportSettings = async (householdId: string, patch: 
       ...(patch.lastSentDate !== undefined ? { last_sent_date: patch.lastSentDate } : {}),
       ...(patch.recipientEmail !== undefined ? { recipient_email: patch.recipientEmail } : {}),
     })
-    .select("*")
+    .select(householdReportSettingsSelect)
     .single();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  return mapHouseholdReportSettings(data as DbHouseholdReportSettings);
 };
 
 export const getHouseholdReportSettings = async (householdId: string) => {
+  logSupabaseRead("household_report_settings", "by_household");
   const { data, error } = await getClient()
     .from("household_report_settings")
-    .select("*")
+    .select(householdReportSettingsSelect)
     .eq("household_id", householdId)
     .maybeSingle<DbHouseholdReportSettings>();
 
@@ -1065,6 +1137,7 @@ export const getHouseholdReportSettings = async (householdId: string) => {
 };
 
 export const getHouseholdDiagnostics = async (householdId: string) => {
+  logSupabaseRead("plant_diagnostics", "list_by_household");
   const { data, error } = await getClient()
     .from("plant_diagnostics")
     .select(plantDiagnosticSelect)
@@ -1089,6 +1162,7 @@ export const getDiagnosticImageSignedUrl = (imagePath: string, expiresInSeconds 
   createPrivateImageSignedUrl(getClient(), diagnosticImagesBucket, imagePath, expiresInSeconds);
 
 export const getPlantDiagnostics = async (plantId: string) => {
+  logSupabaseRead("plant_diagnostics", "list_by_plant");
   const { data, error } = await getClient()
     .from("plant_diagnostics")
     .select(plantDiagnosticSelect)

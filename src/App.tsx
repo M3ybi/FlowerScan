@@ -56,6 +56,7 @@ import { signOut } from "./lib/authService";
 import { isSupabaseConfigured } from "./lib/supabase";
 import {
   detectDataSourceMode,
+  invalidateSupabaseReadThroughCache,
   loadSupabaseReadThroughState,
 } from "./lib/supabaseReadThrough";
 import type { SupabaseReadThroughState } from "./lib/supabaseReadThrough";
@@ -73,7 +74,6 @@ import {
   createHousehold,
   createHouseholdInvite,
   getHouseholdPlantByLegacyId,
-  getPlantDiagnostics,
   getUserHouseholds,
   isValidInviteEmail,
   joinHouseholdByInvite,
@@ -561,8 +561,11 @@ const useHashRoute = () => {
 const pageTitle = (pageName: string) => `${pageName} | Plantie`;
 
 const isSupabaseReadThroughEnabled = isSupabaseConfigured && import.meta.env.VITE_DISABLE_SUPABASE_READS !== "true";
-const isSupabaseWriteThroughEnvEnabled = isSupabaseReadThroughEnabled && import.meta.env.VITE_ENABLE_SUPABASE_WRITES === "true";
-const isSupabaseOnlyDataMode = isSupabaseReadThroughEnabled && isSupabaseWriteThroughEnvEnabled && isSupabaseBackend;
+const isSupabaseWriteThroughEnvEnabled =
+  isSupabaseReadThroughEnabled &&
+  import.meta.env.VITE_DISABLE_SUPABASE_WRITES !== "true" &&
+  import.meta.env.VITE_ENABLE_SUPABASE_WRITES !== "false";
+const isSupabaseOnlyDataMode = isSupabaseReadThroughEnabled && isSupabaseBackend;
 const supabaseWritesDisabledStorageKey = "plantie-disable-supabase-writes-v1";
 const pendingInviteStorageKey = "plantie-pending-household-invite-v1";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -1085,7 +1088,8 @@ export const App = () => {
       return null;
     }
 
-    const nextState = await loadSupabaseReadThroughState(activeHousehold);
+    invalidateSupabaseReadThroughCache(activeHousehold);
+    const nextState = await loadSupabaseReadThroughState(activeHousehold, { force: true });
     setSupabaseReadState(nextState);
     setSupabaseReadError(false);
     if (nextState) {
@@ -1190,49 +1194,6 @@ export const App = () => {
   }, [activeHousehold, auth.isAuthenticated, auth.loading, auth.user?.id]);
 
   useEffect(() => {
-    if (!auth.isAuthenticated || !activeHousehold) {
-      setSupabasePlantIdsByLegacyId({});
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadSupabaseLinkedPlants = async () => {
-      try {
-        const households = await getUserHouseholds();
-        const household = households.find((item) => item.legacyPublicToken === activeHousehold.publicToken) ?? households[0];
-        if (!household) {
-          return;
-        }
-
-        const entries = await Promise.all(
-          allFlowers.map(async (flower) => {
-            const plant = await getHouseholdPlantByLegacyId(household.id, flower.id);
-            return plant ? ([flower.id, plant.id] as const) : null;
-          }),
-        );
-
-        if (!cancelled) {
-          const nextPlantIdsByLegacyId = Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry)));
-          setSupabasePlantIdsByLegacyId((current) =>
-            areStringRecordsEqual(current, nextPlantIdsByLegacyId) ? current : nextPlantIdsByLegacyId,
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setSupabasePlantIdsByLegacyId({});
-        }
-      }
-    };
-
-    void loadSupabaseLinkedPlants();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeHousehold, allFlowers, auth.isAuthenticated, auth.user?.id]);
-
-  useEffect(() => {
     if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
       setHouseholdPlanUsage(null);
       return;
@@ -1242,56 +1203,6 @@ export const App = () => {
       setHouseholdPlanUsage(null);
     });
   }, [activeSupabaseHouseholdId, auth.isAuthenticated]);
-
-  useEffect(() => {
-    if (!auth.isAuthenticated) {
-      return;
-    }
-
-    const supabasePlantIds = Object.values(supabasePlantIdsByLegacyId);
-    if (supabasePlantIds.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadSupabaseDiagnostics = async () => {
-      try {
-        const supabaseDiagnostics = (await Promise.all(supabasePlantIds.map((plantId) => getPlantDiagnostics(plantId)))).flat();
-        if (cancelled || supabaseDiagnostics.length === 0) {
-          return;
-        }
-
-        setDiagnostics((current) => {
-          const byId = new Map(current.map((diagnostic) => [diagnostic.id, diagnostic]));
-          for (const diagnostic of supabaseDiagnostics) {
-            const legacyPlantId = Object.entries(supabasePlantIdsByLegacyId).find(([, plantId]) => plantId === diagnostic.plantId)?.[0];
-            if (!legacyPlantId) {
-              continue;
-            }
-
-            byId.set(diagnostic.id, {
-              ...diagnostic,
-              imageDataUrl: "",
-              imagePath: diagnostic.imagePath ?? undefined,
-              plantId: legacyPlantId,
-              storageMode: "supabase",
-            });
-          }
-
-          return [...byId.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-        });
-      } catch {
-        // Supabase history is additive. Legacy local history remains the source of truth when it cannot be loaded.
-      }
-    };
-
-    void loadSupabaseDiagnostics();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [auth.isAuthenticated, auth.user?.id, supabasePlantIdsByLegacyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1592,39 +1503,80 @@ export const App = () => {
     ) : null;
 
   const renderHouseholdLoading = () => (
-    <main className="app-shell access-shell">
-      <section className="access-card" aria-live="polite">
-        <div className="section-title">
-          <Home size={20} aria-hidden="true" />
-          <h1>{t("household.loading")}</h1>
+    <main className="app-shell">
+      <header className="hero">
+        <div>
+          <p className="eyebrow">Plantie</p>
+          <h1>{t("dashboard.hero")}</h1>
+          <p className="hero-copy">{t("household.loadingBody")}</p>
         </div>
-        <p>{t("household.loadingBody")}</p>
+        {renderHeroActions()}
+      </header>
+      <AppTabNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
+      <section className="household-loading-panel" aria-busy="true" aria-live="polite">
+        <span className="loading-wheel" aria-hidden="true" />
+        <div>
+          <h2>{t("household.loading")}</h2>
+          <p>{t("household.loadingBody")}</p>
+        </div>
       </section>
+      {renderHouseholdSheet()}
+      <MobileBottomNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
     </main>
   );
 
   const updateCareRecord = async (flowerId: string, patch: Partial<FlowerRecords[string]>, message = "") => {
     const supabasePlantId = supabasePlantIdsByLegacyId[flowerId];
+    let saved = false;
+
     if (supabaseWriteMode === "supabase-first" && supabasePlantId) {
-      await writeSupabaseFirst(
+      saved = await writeSupabaseFirst(
         () => updateSupabaseCareRecord(supabasePlantId, patch),
         () => updateRecord(flowerId, patch),
         t("sync.careWriteFallback"),
       );
+      if (!saved) {
+        setQuickRecordStatus(t("sync.careWriteFallback"));
+      }
     } else if (isSupabaseOnlyDataMode) {
       setSupabaseReadError(true);
       setQuickRecordStatus(t("sync.plantUnavailable"));
     } else {
       updateRecord(flowerId, patch);
+      saved = true;
     }
 
-    if (message) {
+    if (saved && message) {
       setQuickRecordStatus(message);
     }
+
+    if (saved && isUsingSupabaseReadState) {
+      const emptyCareRecord = { lastFertilized: "", lastTransplanted: "", lastWatered: "", note: "" };
+      setSupabaseReadState((current) =>
+        current
+          ? {
+              ...current,
+              records: {
+                ...current.records,
+                [flowerId]: {
+                  ...emptyCareRecord,
+                  ...(current.records[flowerId] ?? {}),
+                  ...patch,
+                },
+              },
+            }
+          : current,
+      );
+    }
+
+    return saved;
   };
 
   const saveQuickRecord = (flowerId: string, patch: Partial<FlowerRecords[string]>, message: string) => {
-    void updateCareRecord(flowerId, patch, message);
+    void updateCareRecord(flowerId, patch, message).catch(() => {
+      setSupabaseReadError(true);
+      setQuickRecordStatus(t("sync.careWriteFallback"));
+    });
   };
 
   const saveFlower = async (flower: Flower, message = "") => {
@@ -2645,8 +2597,11 @@ export const App = () => {
     const diagnosisLimitReached = householdPlanUsage?.aiAnalyzesRemaining === 0;
     const diagnosisUsageLabel = householdPlanUsage
       ? householdPlanUsage.isPremium
-        ? "Premium: unlimited AI plant health analyzes"
-        : `${householdPlanUsage.aiAnalyzesRemaining ?? 0} / ${householdPlanUsage.aiAnalyzesMonthlyLimit ?? 5} AI analyzes remaining this month`
+        ? t("diagnosis.premiumUnlimited")
+        : t("diagnosis.usageRemaining", {
+            limit: householdPlanUsage.aiAnalyzesMonthlyLimit ?? 5,
+            remaining: householdPlanUsage.aiAnalyzesRemaining ?? 0,
+          })
       : "";
     const flowerDiagnostics = diagnostics
       .filter((diagnosis) => diagnosis.plantId === flower.id)
@@ -2896,7 +2851,7 @@ export const App = () => {
                 max="9999-12-31"
                 onChange={(event) => void updateCareRecord(flower.id, { lastWatered: event.target.value })}
               />
-              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastWatered: todayIsoDate() })}>
+              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}>
                 {t("date.today")}
               </button>
             </div>
@@ -3912,7 +3867,7 @@ export const App = () => {
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      void updateCareRecord(flower.id, { lastWatered: todayIsoDate() });
+                      void updateCareRecord(flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"));
                     }}
                   >
                     <Droplets size={16} aria-hidden="true" />

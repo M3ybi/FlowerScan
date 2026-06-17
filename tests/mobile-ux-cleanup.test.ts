@@ -15,7 +15,10 @@ test("mobile dashboard removes report and reminder configuration clutter", () =>
 test("plant cards are clickable with watering and open quick actions", () => {
   assert.doesNotMatch(appSource, /<a className="flower-card"/);
   assert.match(appSource, /className="flower-card"[\s\S]*role="link"[\s\S]*onKeyDown=/);
-  assert.match(appSource, /event\.stopPropagation\(\);[\s\S]*updateCareRecord\(flower\.id, \{ lastWatered: todayIsoDate\(\) \}\)/);
+  assert.match(
+    appSource,
+    /event\.stopPropagation\(\);[\s\S]*updateCareRecord\(flower\.id, \{ lastWatered: todayIsoDate\(\) \}, t\("detail\.savedWatered"\)\)/,
+  );
   assert.match(appSource, /className="plant-card-open-action"[\s\S]*href=\{flowerPath\(flower\.id\)\}/);
   assert.match(appSource, /<ArrowRight size=\{17\}/);
   assert.doesNotMatch(appSource, /<QrCodeIcon size=\{16\}/);
@@ -67,7 +70,7 @@ test("household actions are behind a compact sheet", () => {
   assert.match(appSource, /isHouseholdSheetOpen/);
   assert.match(appSource, /className="user-menu-trigger"/);
   assert.match(appSource, /className="household-sheet"/);
-  assert.match(appSource, /Nastavenia domácnosti/);
+  assert.match(appSource, /t\("household\.settings"\)/);
   assert.doesNotMatch(appSource, /className="household-chip-button"/);
 });
 

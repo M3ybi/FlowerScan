@@ -49,13 +49,19 @@ const mapUsage = (usage: DbHouseholdPlanUsage): HouseholdPlanUsage => ({
 export const getHouseholdPlanUsage = async (householdId: string) => {
   const { data, error } = await getClient()
     .rpc("get_household_plan_usage", { target_household_id: householdId })
-    .single<DbHouseholdPlanUsage>();
+    .returns<DbHouseholdPlanUsage[]>();
 
   if (error) {
     throw error;
   }
 
-  return mapUsage(data);
+  const rows = (data ?? []) as DbHouseholdPlanUsage[];
+  const [usage] = rows;
+  if (!usage) {
+    throw new Error("Supabase did not return household plan usage.");
+  }
+
+  return mapUsage(usage);
 };
 
 export const isHouseholdPremium = async (householdId: string) => {

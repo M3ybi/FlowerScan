@@ -19,13 +19,15 @@ VITE_ENABLE_NETLIFY_LEGACY_BACKEND=true
 
 Do not set `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, or `REVENUECAT_WEBHOOK_SECRET` as `VITE_*` variables.
 
-For production Supabase-only plant data, also set:
+With Supabase configured and `VITE_BACKEND_PROVIDER=supabase`, the app uses Supabase as the only household plant data source. Empty households show an empty dashboard, and failed plant writes are reported instead of being saved to localStorage or Netlify Blobs.
+
+Supabase writes are enabled by default in Supabase backend mode. To force a rollback build that does not write household plant data to Supabase, set:
 
 ```text
-VITE_ENABLE_SUPABASE_WRITES=true
+VITE_DISABLE_SUPABASE_WRITES=true
 ```
 
-With Supabase configured, writes enabled, and `VITE_BACKEND_PROVIDER=supabase`, the app uses Supabase as the only household plant data source. Empty households show an empty dashboard, and failed plant writes are reported instead of being saved to localStorage or Netlify Blobs.
+The legacy `VITE_ENABLE_SUPABASE_WRITES=false` flag also disables write-through for compatibility.
 
 ## Netlify dependency audit
 
