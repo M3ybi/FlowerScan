@@ -38,7 +38,7 @@ export const UpgradeModal = ({ limitReason = "Tato funkcia bude sucastou Plantie
         await billing.purchasePremiumYearly();
       }
       await billing.syncEntitlements();
-      setStatusMessage("Purchase submitted. Premium activates only after server entitlement confirmation.");
+      setStatusMessage("Purchase submitted. Premium activates after secure server confirmation.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Purchase failed safely.");
     } finally {

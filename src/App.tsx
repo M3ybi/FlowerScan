@@ -6,7 +6,6 @@ import {
   Camera,
   Check,
   ChevronRight,
-  Copy,
   Droplets,
   FileDown,
   ImagePlus,
@@ -80,16 +79,22 @@ import {
   listHouseholdInvites,
   listHouseholdMembers,
   normalizeInviteEmail,
+  removeHouseholdViewer,
+  renameHousehold,
   revokeHouseholdInvite,
   sendHouseholdInviteEmail,
 } from "./lib/plantieRepository";
-import type { HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
+import type { Household, HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
+import { householdNameMaxLength, validateHouseholdName } from "./lib/householdNameValidation";
+import { resolveAiDiagnosisAccess } from "./lib/aiDiagnosisAccess";
+import type { AiDiagnosisAccessResult } from "./lib/aiDiagnosisAccess";
 import {
   assertCanAddPlant,
   getHouseholdPlanUsage,
   recordCareTipGeneration,
 } from "./lib/householdPlanService";
 import type { HouseholdPlanUsage } from "./lib/householdPlanService";
+import { PLAN_LIMITS } from "./lib/householdPlanRules";
 import {
   createCustomFlowerId,
   fetchGeneratedCare,
@@ -570,7 +575,19 @@ const supabaseWritesDisabledStorageKey = "plantie-disable-supabase-writes-v1";
 const pendingInviteStorageKey = "plantie-pending-household-invite-v1";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+type HouseholdNameEditSurface = "sheet" | "menu";
+
 const isUuid = (value: string) => uuidPattern.test(value);
+
+const getSupabaseDiagnosticId = (diagnostic: PlantDiagnosticEntry) =>
+  diagnostic.supabaseId ?? (isUuid(diagnostic.id) ? diagnostic.id : "");
+
+const logTechnicalError = (message: string, error: unknown) => {
+  console.error(message, {
+    error: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : "UnknownError",
+  });
+};
 
 const createInviteUrl = (token: string) => {
   const url = new URL(window.location.href);
@@ -597,8 +614,7 @@ const normalizeInviteTokenInput = (value: string) => {
 
 const isLikelyInviteToken = (value: string) => value.length >= 32 && /^[A-Za-z0-9_-]+$/.test(value);
 
-const isActiveInvite = (invite: HouseholdInvite) =>
-  !invite.usedAt && !invite.revokedAt && (!invite.expiresAt || new Date(invite.expiresAt).getTime() > Date.now());
+const isActiveInvite = (invite: HouseholdInvite) => !invite.usedAt && !invite.revokedAt;
 
 const inviteErrorMessage = (error: unknown) => {
   const details = typeof error === "object" && error !== null ? error as { code?: string; details?: string; hint?: string; message?: string } : {};
@@ -613,10 +629,6 @@ const inviteErrorMessage = (error: unknown) => {
 
   if (message.includes("invalid invite email") || message.includes("valid family member email") || message.includes("invalid email")) {
     return "household.inviteStatusInvalidEmail";
-  }
-
-  if (message.includes("expiration") || message.includes("future")) {
-    return "household.inviteStatusExpiry";
   }
 
   if (message.includes("permission") || message.includes("access") || message.includes("owner") || message.includes("editor") || message.includes("42501")) {
@@ -653,8 +665,8 @@ const joinInviteErrorMessage = (error: unknown) => {
     .join(" ")
     .toLowerCase();
 
-  if (message.includes("expired") || message.includes("revoked") || message.includes("invalid") || message.includes("used")) {
-    return "household.inviteStatusInvalidOrExpired";
+  if (message.includes("revoked") || message.includes("invalid") || message.includes("used")) {
+    return "household.inviteStatusInvalidInvite";
   }
 
   if (message.includes("jwt") || message.includes("auth") || message.includes("not authenticated") || message.includes("401")) {
@@ -730,11 +742,14 @@ export const App = () => {
   const [isNewOnboardingHousehold, setIsNewOnboardingHousehold] = useState(false);
   const [accessStatus, setAccessStatus] = useState("");
   const [householdNameDraft, setHouseholdNameDraft] = useState(() => translate(readStoredLanguage(window.localStorage), "household.defaultName"));
-  const [householdLinkStatus, setHouseholdLinkStatus] = useState("");
+  const [householdNameEditDraft, setHouseholdNameEditDraft] = useState("");
+  const [householdNameEditSurface, setHouseholdNameEditSurface] = useState<HouseholdNameEditSurface | null>(null);
+  const [householdNameEditStatus, setHouseholdNameEditStatus] = useState("");
+  const [householdNameEditStatusTone, setHouseholdNameEditStatusTone] = useState<"error" | "info" | "success">("info");
+  const [isSavingHouseholdName, setIsSavingHouseholdName] = useState(false);
   const [isHouseholdSheetOpen, setIsHouseholdSheetOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<HouseholdRole>("editor");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteExpiresAt, setInviteExpiresAt] = useState("");
   const [inviteStatus, setInviteStatus] = useState("");
   const [inviteStatusTone, setInviteStatusTone] = useState<"error" | "info" | "success">("info");
   const inviteStatusClass = inviteStatus ? `report-status invite-status invite-status-${inviteStatusTone}` : "";
@@ -771,6 +786,7 @@ export const App = () => {
   const [diagnosisUserNote, setDiagnosisUserNote] = useState("");
   const [diagnosisStatus, setDiagnosisStatus] = useState("");
   const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [isSavingDiagnosis, setIsSavingDiagnosis] = useState(false);
   const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
@@ -783,7 +799,10 @@ export const App = () => {
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
   const [supabaseReadError, setSupabaseReadError] = useState(false);
   const [householdPlanUsage, setHouseholdPlanUsage] = useState<HouseholdPlanUsage | null>(null);
+  const [householdPlanUsageHouseholdId, setHouseholdPlanUsageHouseholdId] = useState("");
   const previousAuthUserIdRef = useRef<string | null>(null);
+  const activeSupabaseHouseholdIdRef = useRef("");
+  const transientMessageGenerationRef = useRef(0);
   const [isSupabaseWritesLocallyDisabled] = useState(
     () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
   );
@@ -800,17 +819,48 @@ export const App = () => {
   const activeSupabaseHouseholdId =
     supabaseReadState?.household.id ??
     (!shouldUseSupabaseAccountData && activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
-  const plantLimitReached = householdPlanUsage?.plantsRemaining === 0;
-  const plantLimitLabel = householdPlanUsage
-    ? householdPlanUsage.isPremium
+  activeSupabaseHouseholdIdRef.current = activeSupabaseHouseholdId;
+  const currentHouseholdPlanUsage = householdPlanUsageHouseholdId === activeSupabaseHouseholdId ? householdPlanUsage : null;
+  const plantLimitReached = currentHouseholdPlanUsage?.plantsRemaining === 0;
+  const plantLimitLabel = currentHouseholdPlanUsage
+    ? currentHouseholdPlanUsage.isPremium
       ? "Premium: unlimited plants"
-      : `${householdPlanUsage.plantsRemaining ?? 0} / ${householdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
+      : `${currentHouseholdPlanUsage.plantsRemaining ?? 0} / ${currentHouseholdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
     : "";
-  const accountSubscriptionLabel = householdPlanUsage
-    ? householdPlanUsage.isPremium
+  const accountSubscriptionLabel = currentHouseholdPlanUsage
+    ? currentHouseholdPlanUsage.isPremium
       ? t("account.subscriptionPremium")
       : t("account.subscriptionFree")
     : t("account.subscriptionServer");
+  const freeAiDiagnosisMonthlyLimit = PLAN_LIMITS.free.monthlyPlantUnwellAiAnalyzes ?? 10;
+  const resolveCurrentAiDiagnosisAccess = () =>
+    resolveAiDiagnosisAccess({
+      activeHouseholdId: activeSupabaseHouseholdId,
+      householdPlanUsage: currentHouseholdPlanUsage,
+      isAuthenticated: auth.isAuthenticated,
+      requiresSupabaseHousehold: isSupabaseBackend,
+    });
+  const aiDiagnosisAccessMessage = (access: AiDiagnosisAccessResult) => {
+    if (access.allowed) {
+      return "";
+    }
+
+    if (access.status === "auth_required") {
+      return t("diagnosis.authRequired");
+    }
+
+    if (access.status === "household_required") {
+      return t("diagnosis.householdRequired");
+    }
+
+    if (access.status === "limit_reached") {
+      return t("diagnosis.limitReached", { limit: freeAiDiagnosisMonthlyLimit });
+    }
+
+    return t("diagnosis.accessChecking");
+  };
+  const aiDiagnosisDisabledActionLabel = (access: AiDiagnosisAccessResult) =>
+    access.status === "limit_reached" ? t("diagnosis.limitReachedAction") : t("diagnosis.unavailableAction");
   const routeInviteToken = route.page === "join" ? route.invite : "";
   const isRouteAllowedWithoutHousehold =
     route.page === "menu" ||
@@ -854,6 +904,15 @@ export const App = () => {
   const diagnostics = isUsingSupabaseReadState ? supabaseReadState?.diagnostics ?? [] : shouldUseSupabaseAccountData ? [] : legacyDiagnostics;
   const householdDisplayName =
     supabaseReadState?.household.name ?? (!shouldUseSupabaseAccountData ? activeHousehold?.name : null) ?? t("household.defaultName");
+  const currentUserEmail = auth.user?.email ?? t("account.noEmail");
+  const currentHouseholdMember = householdMembers.find((member) => member.userId === auth.user?.id);
+  const isCurrentHouseholdOwner = currentHouseholdMember?.role === "owner";
+  const canRenameHousehold = auth.isAuthenticated && Boolean(activeSupabaseHouseholdId) && isCurrentHouseholdOwner;
+  const householdNameEditStatusClass = householdNameEditStatus
+    ? `household-name-edit-status household-name-edit-status-${householdNameEditStatusTone}`
+    : "";
+  const householdRoleLabel = (role: HouseholdRole) =>
+    role === "editor" ? t("household.roleEditor") : role === "viewer" ? t("household.roleViewer") : t("household.roleOwner");
   const isSupabaseHouseholdPending =
     shouldUseSupabaseAccountData &&
     !supabaseReadState &&
@@ -864,6 +923,48 @@ export const App = () => {
     () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
     [allFlowersIncludingRemoved],
   );
+  const routeLifecycleKey =
+    route.page === "detail"
+      ? `detail:${route.flowerId}:${route.scan ? "scan" : "view"}`
+      : route.page === "menu"
+        ? `menu:${route.section}`
+        : route.page === "join"
+          ? `join:${route.invite}`
+          : route.page === "legal"
+            ? `legal:${route.legalPageId}`
+            : route.page;
+  const householdLifecycleKey = activeSupabaseHouseholdId || activeHousehold?.publicToken || "";
+
+  const clearTransientMessages = () => {
+    transientMessageGenerationRef.current += 1;
+    setAccessStatus("");
+    setAccountActionStatus("");
+    setCarePreviewStatus("");
+    setCreatedInviteLink("");
+    setDeleteAccountStatus("");
+    setDiagnosisStatus("");
+    setDiagnosisUpgradeReason("");
+    setHouseholdNameEditDraft("");
+    setHouseholdNameEditStatus("");
+    setHouseholdNameEditStatusTone("info");
+    setHouseholdNameEditSurface(null);
+    setInviteStatus("");
+    setInviteStatusTone("info");
+    setNewPlantStatus("");
+    setOnboardingStatus("");
+    setPushStatus("");
+    setQrExportStatus("");
+    setQuickRecordStatus("");
+    setCarePreview(null);
+    setDeleteFlowerId("");
+    setIsCreatingHousehold(false);
+    setIsHouseholdSheetOpen(false);
+    setIsSavingHouseholdName(false);
+  };
+
+  const isTransientMessageGenerationCurrent = (generation: number) =>
+    generation === transientMessageGenerationRef.current;
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [route.page, "flowerId" in route ? route.flowerId : ""]);
@@ -904,6 +1005,14 @@ export const App = () => {
   }, [flowerById, route.page, "flowerId" in route ? route.flowerId : "", t]);
 
   useEffect(() => {
+    clearTransientMessages();
+  }, [routeLifecycleKey]);
+
+  useEffect(() => {
+    clearTransientMessages();
+  }, [householdLifecycleKey]);
+
+  useEffect(() => {
     window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(legacyDiagnostics));
   }, [legacyDiagnostics]);
 
@@ -918,9 +1027,12 @@ export const App = () => {
     }
 
     previousAuthUserIdRef.current = nextUserId;
+    clearTransientMessages();
     setSupabaseReadState(null);
     setSupabaseReadError(false);
     setSupabasePlantIdsByLegacyId({});
+    setHouseholdPlanUsage(null);
+    setHouseholdPlanUsageHouseholdId("");
     setHouseholdInvites([]);
     setHouseholdMembers([]);
 
@@ -1101,14 +1213,18 @@ export const App = () => {
     return nextState;
   };
 
-  const refreshHouseholdPlanUsage = async () => {
-    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+  const refreshHouseholdPlanUsage = async (householdId = activeSupabaseHouseholdId) => {
+    if (!auth.isAuthenticated || !householdId) {
       setHouseholdPlanUsage(null);
+      setHouseholdPlanUsageHouseholdId("");
       return null;
     }
 
-    const usage = await getHouseholdPlanUsage(activeSupabaseHouseholdId);
-    setHouseholdPlanUsage(usage);
+    const usage = await getHouseholdPlanUsage(householdId);
+    if (activeSupabaseHouseholdIdRef.current === householdId) {
+      setHouseholdPlanUsage(usage);
+      setHouseholdPlanUsageHouseholdId(householdId);
+    }
     return usage;
   };
 
@@ -1194,15 +1310,23 @@ export const App = () => {
   }, [activeHousehold, auth.isAuthenticated, auth.loading, auth.user?.id]);
 
   useEffect(() => {
-    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+    const householdId = activeSupabaseHouseholdId;
+    setHouseholdPlanUsage(null);
+    setHouseholdPlanUsageHouseholdId("");
+
+    if (!auth.isAuthenticated || !householdId) {
       setHouseholdPlanUsage(null);
+      setHouseholdPlanUsageHouseholdId("");
       return;
     }
 
-    void refreshHouseholdPlanUsage().catch(() => {
-      setHouseholdPlanUsage(null);
+    void refreshHouseholdPlanUsage(householdId).catch(() => {
+      if (activeSupabaseHouseholdIdRef.current === householdId) {
+        setHouseholdPlanUsage(null);
+        setHouseholdPlanUsageHouseholdId("");
+      }
     });
-  }, [activeSupabaseHouseholdId, auth.isAuthenticated]);
+  }, [activeSupabaseHouseholdId, auth.isAuthenticated, auth.user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1440,6 +1564,171 @@ export const App = () => {
     }
   };
 
+  const applyRenamedHousehold = (household: Household) => {
+    setSupabaseReadState((current) =>
+      current?.household.id === household.id
+        ? {
+            ...current,
+            household,
+          }
+        : current,
+    );
+    setActiveHousehold((current) => {
+      if (!current || (current.publicToken !== household.id && current.publicToken !== household.legacyPublicToken)) {
+        return current;
+      }
+
+      const next = { ...current, name: household.name };
+      storeHouseholdSession(next);
+      return next;
+    });
+    setPreviousHousehold((current) =>
+      current && (current.publicToken === household.id || current.publicToken === household.legacyPublicToken)
+        ? { ...current, name: household.name }
+        : current,
+    );
+    setHouseholdNameDraft(household.name);
+    invalidateSupabaseReadThroughCache();
+  };
+
+  const startHouseholdNameEdit = (surface: HouseholdNameEditSurface) => {
+    setHouseholdNameEditDraft(householdDisplayName);
+    setHouseholdNameEditStatus("");
+    setHouseholdNameEditStatusTone("info");
+    setHouseholdNameEditSurface(surface);
+  };
+
+  const cancelHouseholdNameEdit = () => {
+    setHouseholdNameEditDraft("");
+    setHouseholdNameEditStatus("");
+    setHouseholdNameEditStatusTone("info");
+    setHouseholdNameEditSurface(null);
+  };
+
+  const handleSaveHouseholdName = async () => {
+    if (!activeSupabaseHouseholdId || !isCurrentHouseholdOwner) {
+      setHouseholdNameEditStatus(t("household.renamePermission"));
+      setHouseholdNameEditStatusTone("error");
+      return;
+    }
+
+    const nameValidation = validateHouseholdName(householdNameEditDraft);
+    if (!nameValidation.valid && nameValidation.reason === "required") {
+      setHouseholdNameEditStatus(t("household.renameRequired"));
+      setHouseholdNameEditStatusTone("error");
+      return;
+    }
+
+    if (!nameValidation.valid && nameValidation.reason === "too_long") {
+      setHouseholdNameEditStatus(t("household.renameTooLong", { count: householdNameMaxLength }));
+      setHouseholdNameEditStatusTone("error");
+      return;
+    }
+
+    if (!nameValidation.valid) {
+      setHouseholdNameEditStatus(t("household.renameUnsafe"));
+      setHouseholdNameEditStatusTone("error");
+      return;
+    }
+
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
+    try {
+      setIsSavingHouseholdName(true);
+      setHouseholdNameEditStatus(t("household.renameSaving"));
+      setHouseholdNameEditStatusTone("info");
+      const household = await renameHousehold(activeSupabaseHouseholdId, nameValidation.name);
+      applyRenamedHousehold(household);
+      if (!isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        return;
+      }
+      setHouseholdNameEditStatus(t("household.renameSaved"));
+      setHouseholdNameEditStatusTone("success");
+      setHouseholdNameEditSurface(null);
+    } catch {
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setHouseholdNameEditStatus(t("household.renameFailed"));
+        setHouseholdNameEditStatusTone("error");
+      }
+    } finally {
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setIsSavingHouseholdName(false);
+      }
+    }
+  };
+
+  const renderHouseholdNameEditor = (surface: HouseholdNameEditSurface, headingId?: string) => {
+    const isEditing = householdNameEditSurface === surface;
+    const inputId = `household-name-${surface}`;
+    const statusId = `household-name-status-${surface}`;
+
+    if (isEditing) {
+      return (
+        <form
+          className="household-name-edit-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSaveHouseholdName();
+          }}
+        >
+          <label className="sr-only" htmlFor={inputId}>
+            {t("household.renameLabel")}
+          </label>
+          <input
+            aria-describedby={householdNameEditStatus ? statusId : undefined}
+            aria-invalid={householdNameEditStatusTone === "error"}
+            autoFocus
+            disabled={isSavingHouseholdName}
+            id={inputId}
+            maxLength={householdNameMaxLength}
+            type="text"
+            value={householdNameEditDraft}
+            onChange={(event) => setHouseholdNameEditDraft(event.target.value)}
+          />
+          <div className="household-name-edit-actions">
+            <button
+              className="household-icon-action household-icon-action-save"
+              type="submit"
+              disabled={isSavingHouseholdName}
+              aria-label={t("household.renameSave")}
+            >
+              <Check size={16} aria-hidden="true" />
+            </button>
+            <button
+              className="household-icon-action"
+              type="button"
+              disabled={isSavingHouseholdName}
+              onClick={cancelHouseholdNameEdit}
+              aria-label={t("household.renameCancel")}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+          {householdNameEditStatus ? (
+            <p id={statusId} className={householdNameEditStatusClass}>
+              {householdNameEditStatus}
+            </p>
+          ) : null}
+        </form>
+      );
+    }
+
+    return (
+      <div className="household-name-row">
+        {headingId ? (
+          <h2 id={headingId}>{householdDisplayName}</h2>
+        ) : (
+          <strong className="household-name-display">{householdDisplayName}</strong>
+        )}
+        {canRenameHousehold ? (
+          <button className="household-name-edit-trigger" type="button" onClick={() => startHouseholdNameEdit(surface)} aria-label={t("household.renameAction")}>
+            <Pencil size={15} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderHeroActions = () => (
     <div className="hero-actions">
       <button className="user-menu-trigger" type="button" onClick={() => setIsHouseholdSheetOpen(true)} aria-label={t("household.openMenu")}>
@@ -1465,10 +1754,14 @@ export const App = () => {
             <span className="household-sheet-avatar" aria-hidden="true">
               <Home size={24} />
             </span>
-            <div>
+            <div className="household-sheet-identity">
               <p className="eyebrow">{t("account.household")}</p>
-              <h2 id="household-sheet-title">{householdDisplayName}</h2>
+              {renderHouseholdNameEditor("sheet", "household-sheet-title")}
+              <p className="household-sheet-email">{currentUserEmail}</p>
               <span>{auth.isAuthenticated ? t("household.synced") : t("household.localGuest")}</span>
+              {householdNameEditStatus && householdNameEditSurface !== "sheet" ? (
+                <p className={householdNameEditStatusClass}>{householdNameEditStatus}</p>
+              ) : null}
             </div>
           </div>
           <div className="household-sheet-meta" aria-label={t("household.summary")}>
@@ -1482,21 +1775,18 @@ export const App = () => {
               <span>{t("dashboard.tracked", { count: allFlowers.length })}</span>
             </div>
           </div>
-          {householdLinkStatus === "copy-failed" ? <p className="report-status">{t("household.copyFailed")}</p> : null}
           <div className="household-sheet-actions">
-            <button
-              className={householdLinkStatus === "copied" ? "copy-link-action copied" : "copy-link-action"}
-              type="button"
-              onClick={copyHouseholdLink}
-            >
-              {householdLinkStatus === "copied" ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
-              {householdLinkStatus === "copied" ? t("household.copied") : t("household.copyLink")}
-            </button>
             <a href="#/menu?section=household" onClick={() => setIsHouseholdSheetOpen(false)}>
               <Settings size={17} aria-hidden="true" />
               {t("household.settings")}
               <ChevronRight size={16} aria-hidden="true" />
             </a>
+            {auth.isAuthenticated ? (
+              <button type="button" onClick={() => void handleAccountSignOut()}>
+                <UserRound size={17} aria-hidden="true" />
+                {t("account.signOut")}
+              </button>
+            ) : null}
           </div>
         </section>
       </div>
@@ -1675,36 +1965,22 @@ export const App = () => {
       return;
     }
 
-    const inviteExpiresAtDate = inviteExpiresAt ? new Date(inviteExpiresAt) : null;
-    if (inviteExpiresAtDate && Number.isNaN(inviteExpiresAtDate.getTime())) {
-      setInviteFeedback(t("household.inviteStatusInvalidDate"), "error");
-      return;
-    }
-
-    if (inviteExpiresAtDate && inviteExpiresAtDate.getTime() <= Date.now()) {
-      setInviteFeedback(t("household.inviteStatusExpiry"), "error");
-      return;
-    }
-
-    const inviteExpiresAtIso = inviteExpiresAtDate ? inviteExpiresAtDate.toISOString() : null;
-
     if (householdInvites.some((invite) => isActiveInvite(invite) && invite.inviteeEmail === normalizedEmail)) {
       setInviteFeedback(t("household.inviteStatusDuplicate"), "error");
       return;
     }
 
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
     try {
       setInviteFeedback(t("household.inviteStatusCreating"), "info");
-      const invite = await createHouseholdInvite(
-        activeSupabaseHouseholdId,
-        normalizedEmail,
-        inviteRole,
-        inviteExpiresAtIso,
-      );
+      const invite = await createHouseholdInvite(activeSupabaseHouseholdId, normalizedEmail, inviteRole);
       const link = createInviteUrl(invite.token);
-      setCreatedInviteLink(link);
-      setInviteEmail("");
-      await refreshHouseholdInvites();
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setCreatedInviteLink(link);
+        setInviteEmail("");
+        await refreshHouseholdInvites();
+      }
       try {
         await sendHouseholdInviteEmail({
           householdId: activeSupabaseHouseholdId,
@@ -1713,13 +1989,19 @@ export const App = () => {
           recipientEmail: normalizedEmail,
           role: inviteRole,
         });
-        setInviteFeedback(t("household.inviteStatusSent", { email: normalizedEmail }), "success");
+        if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+          setInviteFeedback(t("household.inviteStatusSent", { email: normalizedEmail }), "success");
+        }
       } catch {
-        setInviteFeedback(t("household.inviteStatusEmailFailed", { email: normalizedEmail }), "error");
+        if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+          setInviteFeedback(t("household.inviteStatusEmailFailed", { email: normalizedEmail }), "error");
+        }
       }
     } catch (error) {
-      const debugMessage = safeInviteDebugMessage(error);
-      setInviteFeedback(`${t(inviteErrorMessage(error))}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        const debugMessage = safeInviteDebugMessage(error);
+        setInviteFeedback(`${t(inviteErrorMessage(error))}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
+      }
     }
   };
 
@@ -1728,21 +2010,60 @@ export const App = () => {
       return;
     }
 
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
     try {
       await navigator.clipboard.writeText(createdInviteLink);
-      setInviteStatus(t("household.inviteCopied"));
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteStatus(t("household.inviteCopied"));
+      }
     } catch {
-      setInviteStatus(createdInviteLink);
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteStatus(createdInviteLink);
+      }
     }
   };
 
   const handleRevokeInvite = async (inviteId: string) => {
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
     try {
       await revokeHouseholdInvite(inviteId);
-      setInviteStatus(t("household.inviteRevoked"));
-      await refreshHouseholdInvites();
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteStatus(t("household.inviteRevoked"));
+        await refreshHouseholdInvites();
+      }
     } catch (error) {
-      setInviteStatus(error instanceof Error ? error.message : t("household.inviteRevokeFailed"));
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteStatus(error instanceof Error ? error.message : t("household.inviteRevokeFailed"));
+      }
+    }
+  };
+
+  const handleRemoveViewer = async (member: HouseholdMember) => {
+    if (!activeSupabaseHouseholdId || !isCurrentHouseholdOwner || member.role !== "viewer" || member.userId === auth.user?.id) {
+      return;
+    }
+
+    if (!window.confirm(t("household.removeViewerConfirm", { email: member.email }))) {
+      return;
+    }
+
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
+    try {
+      setInviteFeedback(t("household.removeViewerWorking"), "info");
+      await removeHouseholdViewer(activeSupabaseHouseholdId, member.userId);
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteFeedback(t("household.removeViewerSuccess", { email: member.email }), "success");
+        const members = await listHouseholdMembers(activeSupabaseHouseholdId);
+        setHouseholdMembers(members);
+      }
+    } catch (error) {
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        const debugMessage = safeInviteDebugMessage(error);
+        setInviteFeedback(`${t("household.removeViewerFailed")}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
+      }
     }
   };
 
@@ -1764,7 +2085,11 @@ export const App = () => {
       clearHouseholdSession();
       setActiveHousehold(null);
       setSupabaseReadState(null);
-      setAccountActionStatus(t("account.signedOut"));
+      setHouseholdInvites([]);
+      setHouseholdMembers([]);
+      setIsHouseholdSheetOpen(false);
+      setAccountActionStatus("");
+      window.location.hash = "#/menu?section=account";
     } catch (error) {
       setAccountActionStatus(error instanceof Error ? error.message : t("account.signOutFailed"));
     }
@@ -1773,7 +2098,7 @@ export const App = () => {
   const handleJoinInvite = async (input = joinInviteInput) => {
     const token = normalizeInviteTokenInput(input);
     if (!token || !isLikelyInviteToken(token)) {
-      setInviteStatus(t(token ? "household.inviteStatusInvalidOrExpired" : "household.inviteStatusMissingToken"));
+      setInviteStatus(t(token ? "household.inviteStatusInvalidInvite" : "household.inviteStatusMissingToken"));
       return false;
     }
 
@@ -1785,6 +2110,8 @@ export const App = () => {
       return false;
     }
 
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
     try {
       setInviteStatus(t("household.joining"));
       const household = await joinHouseholdByInvite(token);
@@ -1793,12 +2120,16 @@ export const App = () => {
       window.localStorage.removeItem(pendingInviteStorageKey);
       setActiveHousehold(session);
       setBaseUrl(currentHouseholdBaseUrl(session.publicToken));
-      setInviteStatus(t("household.joined"));
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteStatus(t("household.joined"));
+      }
       window.history.replaceState(null, "", createHouseholdUrl(session.publicToken));
       await refreshSupabaseReadState().catch(() => null);
       return true;
     } catch (error) {
-      setInviteStatus(t(joinInviteErrorMessage(error)));
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteStatus(t(joinInviteErrorMessage(error)));
+      }
       return false;
     }
   };
@@ -1815,17 +2146,31 @@ export const App = () => {
       return false;
     }
 
+    const nameValidation = validateHouseholdName(householdNameDraft);
+    if (!nameValidation.valid) {
+      setAccessStatus(
+        nameValidation.reason === "required"
+          ? t("household.renameRequired")
+          : nameValidation.reason === "too_long"
+            ? t("household.renameTooLong", { count: householdNameMaxLength })
+            : t("household.renameUnsafe"),
+      );
+      return false;
+    }
+
+    const feedbackGeneration = transientMessageGenerationRef.current;
+
     try {
       setIsCreatingHousehold(true);
       setAccessStatus(t("household.creating"));
       let household: HouseholdSession;
 
       if (auth.isAuthenticated && isSupabaseBackend) {
-        const created = await createHousehold(householdNameDraft);
+        const created = await createHousehold(nameValidation.name);
         household = { name: created.name, publicToken: created.id };
       } else if (isLegacyNetlifyBackendEnabled) {
         const response = await fetch("/.netlify/functions/household-access", {
-          body: JSON.stringify({ name: householdNameDraft }),
+          body: JSON.stringify({ name: nameValidation.name }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
         });
@@ -1854,26 +2199,15 @@ export const App = () => {
       setAccessStatus("");
       return true;
     } catch {
-      setAccessStatus(t("household.createFailedRetry"));
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setAccessStatus(t("household.createFailedRetry"));
+      }
       return false;
     } finally {
-      setIsCreatingHousehold(false);
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setIsCreatingHousehold(false);
+      }
       setIsAccessChecking(false);
-    }
-  };
-
-  const copyHouseholdLink = async () => {
-    if (!activeHousehold) {
-      return;
-    }
-
-    const link = createHouseholdUrl(activeHousehold.publicToken);
-    try {
-      await navigator.clipboard.writeText(link);
-      setHouseholdLinkStatus("copied");
-      window.setTimeout(() => setHouseholdLinkStatus(""), 2200);
-    } catch {
-      setHouseholdLinkStatus("copy-failed");
     }
   };
 
@@ -1984,6 +2318,12 @@ export const App = () => {
   };
 
   const handleGenerateCarePreview = async (flower: Flower) => {
+    const access = resolveCurrentAiDiagnosisAccess();
+    if (!access.allowed) {
+      setCarePreviewStatus(aiDiagnosisAccessMessage(access));
+      return;
+    }
+
     setIsGeneratingCarePreview(true);
     setCarePreviewStatus(t("detail.aiCarePreparing"));
 
@@ -2046,12 +2386,23 @@ export const App = () => {
   };
 
   const openDiagnosisModal = () => {
+    const access = resolveCurrentAiDiagnosisAccess();
+    if (!access.allowed) {
+      const message = aiDiagnosisAccessMessage(access);
+      setDiagnosisStatus(message);
+      if (access.status === "limit_reached") {
+        setDiagnosisUpgradeReason(message);
+      }
+      return;
+    }
+
     setDiagnosisImageDataUrl("");
     setDiagnosisImagePreviewUrl("");
     setDiagnosisDraft(null);
     setDiagnosisSymptomNotes("");
     setDiagnosisUserNote("");
     setDiagnosisStatus("");
+    setDiagnosisUpgradeReason("");
     setIsDiagnosisModalOpen(true);
   };
 
@@ -2086,6 +2437,12 @@ export const App = () => {
   };
 
   const handleDiagnosisImageChange = async (source: "camera" | "gallery", file?: File) => {
+    const access = resolveCurrentAiDiagnosisAccess();
+    if (!access.allowed) {
+      setDiagnosisStatus(aiDiagnosisAccessMessage(access));
+      return;
+    }
+
     if (!file && source === "gallery") {
       return;
     }
@@ -2123,22 +2480,24 @@ export const App = () => {
     }
 
     setIsDiagnosing(true);
-    setDiagnosisStatus(t("diagnosis.checkingPremium"));
+    setDiagnosisStatus(t("diagnosis.accessChecking"));
 
     try {
       setDiagnosisStatus(t("image.validatingSafety"));
       await validatePlantImageForUpload(diagnosisImageDataUrl);
 
       if (auth.isAuthenticated && !activeSupabaseHouseholdId) {
-        const message = "Open a household before running AI plant health analysis.";
-        setDiagnosisUpgradeReason(message);
+        const message = t("diagnosis.householdRequired");
         setDiagnosisStatus(message);
         return;
       }
 
-      if (householdPlanUsage?.aiAnalyzesRemaining === 0) {
-        const message = "Free households can run 5 plant health AI analyzes per month. Upgrade for unlimited analyzes.";
-        setDiagnosisUpgradeReason(message);
+      const access = resolveCurrentAiDiagnosisAccess();
+      if (!access.allowed) {
+        const message = aiDiagnosisAccessMessage(access);
+        if (access.status === "limit_reached") {
+          setDiagnosisUpgradeReason(message);
+        }
         setDiagnosisStatus(message);
         return;
       }
@@ -2161,20 +2520,49 @@ export const App = () => {
     }
   };
 
+  const upsertSupabaseDiagnosisInReadState = (entry: PlantDiagnosticEntry) => {
+    setSupabaseReadState((current) =>
+      current
+        ? {
+            ...current,
+            diagnostics: [
+              entry,
+              ...current.diagnostics.filter(
+                (diagnostic) =>
+                  diagnostic.id !== entry.id &&
+                  (!entry.supabaseId || diagnostic.supabaseId !== entry.supabaseId) &&
+                  getSupabaseDiagnosticId(diagnostic) !== getSupabaseDiagnosticId(entry),
+              ),
+            ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+          }
+        : current,
+    );
+  };
+
   const savePlantDiagnosis = async (flower: Flower, userConfirmation: DiagnosisConfirmation) => {
     if (!diagnosisDraft || !diagnosisImageDataUrl || !flowerById.has(flower.id)) {
       setDiagnosisStatus(t("diagnosis.saveUnavailable"));
       return;
     }
 
+    if (isSavingDiagnosis) {
+      return;
+    }
+
     const now = new Date().toISOString();
     const sanitizedNote = sanitizeDiagnosticNote(diagnosisUserNote);
     const supabasePlantId = supabasePlantIdsByLegacyId[flower.id];
-    let supabaseImagePath = "";
-    let supabaseDiagnosticId = "";
+    setIsSavingDiagnosis(true);
+    setDiagnosisStatus(t("diagnosis.saving"));
 
-    if (supabaseWriteMode === "supabase-first" && supabasePlantId) {
-      try {
+    try {
+      if (supabaseWriteMode === "supabase-first") {
+        if (!supabasePlantId) {
+          setSupabaseReadError(true);
+          setDiagnosisStatus(t("diagnosis.saveUnavailable"));
+          return;
+        }
+
         const legacyDiagnosisId = createDiagnosticId();
         const saved = await createSupabaseDiagnosis({
           diagnosis: diagnosisDraft,
@@ -2184,37 +2572,63 @@ export const App = () => {
           userConfirmation,
           userNote: sanitizedNote,
         });
-        supabaseImagePath = saved.imagePath ?? "";
-        supabaseDiagnosticId = saved.id;
-      } catch {
-        if (isSupabaseOnlyDataMode) {
-          setSupabaseReadError(true);
-          setDiagnosisStatus("Supabase diagnosis save failed. Diagnosis was not saved.");
-          return;
+        const entry: PlantDiagnosticEntry = {
+          ...saved,
+          id: saved.legacyId ?? legacyDiagnosisId,
+          imageDataUrl: saved.imagePath ? "" : diagnosisImageDataUrl,
+          imagePath: saved.imagePath ?? undefined,
+          plantId: flower.id,
+          storageMode: "supabase",
+          supabaseId: saved.id,
+        };
+
+        upsertSupabaseDiagnosisInReadState(entry);
+        setOpenDiagnosticId(entry.id);
+        setDiagnosisDraft(null);
+        setIsDiagnosisModalOpen(false);
+        setDiagnosisStatus(t("diagnosis.saved"));
+
+        try {
+          await refreshSupabaseReadState();
+        } catch (error) {
+          logTechnicalError("Supabase diagnosis history refresh failed after save.", error);
+          setDiagnosisStatus(t("diagnosis.savedRefreshFailed"));
         }
-        setDiagnosisStatus("Supabase diagnosis save failed. Saving diagnosis locally for backward compatibility.");
+        return;
       }
-    } else if (isSupabaseOnlyDataMode) {
-      setSupabaseReadError(true);
-      setDiagnosisStatus("Supabase plant is not available. Diagnosis was not saved.");
-      return;
+
+      if (isSupabaseOnlyDataMode) {
+        setSupabaseReadError(true);
+        setDiagnosisStatus(t("diagnosis.saveFailed"));
+        return;
+      }
+
+      const entry: PlantDiagnosticEntry = {
+        ...diagnosisDraft,
+        createdAt: now,
+        id: createDiagnosticId(),
+        imageDataUrl: diagnosisImageDataUrl,
+        plantId: flower.id,
+        storageMode: "local",
+        updatedAt: now,
+        userConfirmation,
+        userNote: sanitizedNote,
+      };
+
+      setDiagnostics((current) => [entry, ...current.filter((diagnostic) => diagnostic.id !== entry.id)]);
+      setOpenDiagnosticId(entry.id);
+      setDiagnosisDraft(null);
+      setIsDiagnosisModalOpen(false);
+      setDiagnosisStatus(t("diagnosis.saved"));
+    } catch (error) {
+      logTechnicalError("Supabase diagnosis save failed.", error);
+      if (isSupabaseOnlyDataMode || supabaseWriteMode === "supabase-first") {
+        setSupabaseReadError(true);
+      }
+      setDiagnosisStatus(t("diagnosis.saveFailed"));
+    } finally {
+      setIsSavingDiagnosis(false);
     }
-
-    const entry: PlantDiagnosticEntry = {
-      ...diagnosisDraft,
-      createdAt: now,
-      id: supabaseDiagnosticId || createDiagnosticId(),
-      imageDataUrl: supabaseImagePath ? "" : diagnosisImageDataUrl,
-      imagePath: supabaseImagePath || undefined,
-      plantId: flower.id,
-      storageMode: supabaseImagePath ? "supabase" : "local",
-      updatedAt: now,
-      userConfirmation,
-      userNote: sanitizedNote,
-    };
-
-    setDiagnostics((current) => [entry, ...current.filter((diagnostic) => diagnostic.id !== entry.id)]);
-    setIsDiagnosisModalOpen(false);
   };
 
   const updateDiagnosticHistoryEntry = async (diagnosticId: string, patch: Partial<Pick<PlantDiagnosticEntry, "userConfirmation" | "userNote">>) => {
@@ -2222,26 +2636,45 @@ export const App = () => {
       ...patch,
       ...(patch.userNote !== undefined ? { userNote: sanitizeDiagnosticNote(patch.userNote) } : {}),
     };
+    const diagnostic = diagnostics.find((item) => item.id === diagnosticId);
 
-    setDiagnostics((current) =>
-      current.map((diagnostic) =>
-        diagnostic.id === diagnosticId
-          ? {
-              ...diagnostic,
-              ...sanitizedPatch,
-              updatedAt: new Date().toISOString(),
-            }
-          : diagnostic,
-      ),
+    if (!diagnostic) {
+      setDiagnosisStatus(t("diagnosis.saveUnavailable"));
+      return;
+    }
+
+    const applyPatch = (item: PlantDiagnosticEntry): PlantDiagnosticEntry => ({
+      ...item,
+      ...sanitizedPatch,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setDiagnostics((current) => current.map((item) => (item.id === diagnosticId ? applyPatch(item) : item)));
+    setSupabaseReadState((current) =>
+      current
+        ? {
+            ...current,
+            diagnostics: current.diagnostics.map((item) => (item.id === diagnosticId ? applyPatch(item) : item)),
+          }
+        : current,
     );
 
-    const diagnostic = diagnostics.find((item) => item.id === diagnosticId);
-    if (diagnostic?.storageMode === "supabase" && supabaseWriteMode === "supabase-first") {
+    if (diagnostic.storageMode === "supabase" && supabaseWriteMode === "supabase-first") {
+      const supabaseDiagnosticId = getSupabaseDiagnosticId(diagnostic);
+      if (!supabaseDiagnosticId) {
+        setDiagnosisStatus(t("diagnosis.saveUnavailable"));
+        return;
+      }
+
       try {
-        await updateSupabaseDiagnosis(diagnosticId, sanitizedPatch);
+        await updateSupabaseDiagnosis(supabaseDiagnosticId, sanitizedPatch);
         await refreshSupabaseReadState();
-      } catch {
-        setDiagnosisStatus(t("sync.diagnosisFallback"));
+      } catch (error) {
+        logTechnicalError("Supabase diagnosis update failed.", error);
+        setDiagnosisStatus(t("diagnosis.updateFailed"));
+        await refreshSupabaseReadState().catch((refreshError) => {
+          logTechnicalError("Supabase diagnosis history refresh failed after update.", refreshError);
+        });
       }
     }
   };
@@ -2314,8 +2747,18 @@ export const App = () => {
     viteSupabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
     viteSupabaseUrl: import.meta.env.VITE_SUPABASE_URL,
   };
-  const openAddPlantFromMobileNav = () => {
+  const openAddPlantModal = () => {
+    setNewPlantStatus("");
     setIsAddPlantModalOpen(true);
+  };
+
+  const closeAddPlantModal = () => {
+    setNewPlantStatus("");
+    setIsAddPlantModalOpen(false);
+  };
+
+  const openAddPlantFromMobileNav = () => {
+    openAddPlantModal();
     if (route.page !== "dashboard") {
       window.location.hash = "#/";
     }
@@ -2594,15 +3037,17 @@ export const App = () => {
     const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
     const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays, t) : [];
     const isEditingName = editingNameFlowerId === flower.id;
-    const diagnosisLimitReached = householdPlanUsage?.aiAnalyzesRemaining === 0;
-    const diagnosisUsageLabel = householdPlanUsage
-      ? householdPlanUsage.isPremium
-        ? t("diagnosis.premiumUnlimited")
-        : t("diagnosis.usageRemaining", {
-            limit: householdPlanUsage.aiAnalyzesMonthlyLimit ?? 5,
-            remaining: householdPlanUsage.aiAnalyzesRemaining ?? 0,
+    const diagnosisAccess = resolveCurrentAiDiagnosisAccess();
+    const diagnosisBlockedReason = aiDiagnosisAccessMessage(diagnosisAccess);
+    const diagnosisUsageLabel =
+      currentHouseholdPlanUsage && !currentHouseholdPlanUsage.isPremium
+        ? t("diagnosis.usageRemaining", {
+            limit: currentHouseholdPlanUsage.aiAnalyzesMonthlyLimit ?? freeAiDiagnosisMonthlyLimit,
+            remaining: currentHouseholdPlanUsage.aiAnalyzesRemaining ?? 0,
           })
-      : "";
+        : "";
+    const diagnosisActionLabel = diagnosisAccess.allowed ? t("detail.diagnosisAction") : aiDiagnosisDisabledActionLabel(diagnosisAccess);
+    const diagnosisRunLabel = diagnosisAccess.allowed ? t("diagnosis.run") : aiDiagnosisDisabledActionLabel(diagnosisAccess);
     const flowerDiagnostics = diagnostics
       .filter((diagnosis) => diagnosis.plantId === flower.id)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -2706,10 +3151,11 @@ export const App = () => {
               <h2 id="diagnosis-title">{t("detail.diagnosisTitle")}</h2>
             </div>
             <p>{t("detail.diagnosisBody")}</p>
+            {diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
           </div>
-          <button type="button" onClick={openDiagnosisModal}>
+          <button type="button" disabled={!diagnosisAccess.allowed} onClick={openDiagnosisModal}>
             <Camera size={18} aria-hidden="true" />
-            {t("detail.diagnosisAction")}
+            {diagnosisActionLabel}
           </button>
         </section>
 
@@ -2776,14 +3222,14 @@ export const App = () => {
             <button
               className="ai-care-button"
               type="button"
-              disabled={isGeneratingCarePreview}
+              disabled={isGeneratingCarePreview || !diagnosisAccess.allowed}
               onClick={() => handleGenerateCarePreview(flower)}
             >
               <Sparkles size={16} aria-hidden="true" />
-              {isGeneratingCarePreview ? t("detail.generating") : t("detail.generateAi")}
+              {isGeneratingCarePreview ? t("detail.generating") : diagnosisAccess.allowed ? t("detail.generateAi") : aiDiagnosisDisabledActionLabel(diagnosisAccess)}
             </button>
           </div>
-          {carePreviewStatus ? <p className="care-preview-status">{carePreviewStatus}</p> : null}
+          {carePreviewStatus ? <p className="care-preview-status">{carePreviewStatus}</p> : diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
           <p className="care-summary">{flower.shortCare}</p>
           <div className="care-pill-grid" aria-label={t("detail.careProfile")}>
             {flower.carePills.map((pill) => (
@@ -3076,6 +3522,7 @@ export const App = () => {
               </div>
               <p>{t("diagnosis.modalBody")}</p>
               {diagnosisUsageLabel ? <p className="care-preview-status">{diagnosisUsageLabel}</p> : null}
+              {diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
 
               <label className="field">
                 <span>{t("diagnosis.symptoms")}</span>
@@ -3088,7 +3535,7 @@ export const App = () => {
                 />
               </label>
 
-              <label className="diagnosis-upload">
+              <label className={`diagnosis-upload ${diagnosisAccess.allowed ? "" : "diagnosis-upload-disabled"}`} aria-disabled={!diagnosisAccess.allowed}>
                 <span className="image-upload-icon">
                   <ImagePlus size={19} aria-hidden="true" />
                 </span>
@@ -3100,6 +3547,7 @@ export const App = () => {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
+                  disabled={!diagnosisAccess.allowed}
                   onChange={(event) => {
                     void handleDiagnosisImageChange("gallery", event.target.files?.[0]);
                     event.target.value = "";
@@ -3109,11 +3557,11 @@ export const App = () => {
 
               {isNativeImageRuntime ? (
                 <div className="image-capture-actions">
-                  <button className="ghost-action" type="button" onClick={() => void handleDiagnosisImageChange("camera")}>
+                  <button className="ghost-action" type="button" disabled={!diagnosisAccess.allowed} onClick={() => void handleDiagnosisImageChange("camera")}>
                     <Camera size={17} aria-hidden="true" />
                     {t("action.camera")}
                   </button>
-                  <button className="ghost-action" type="button" onClick={() => void handleDiagnosisImageChange("gallery")}>
+                  <button className="ghost-action" type="button" disabled={!diagnosisAccess.allowed} onClick={() => void handleDiagnosisImageChange("gallery")}>
                     <ImagePlus size={17} aria-hidden="true" />
                     {t("action.gallery")}
                   </button>
@@ -3126,10 +3574,10 @@ export const App = () => {
               <button
                 className="primary-action diagnosis-run-button"
                 type="button"
-                disabled={!diagnosisImageDataUrl || isDiagnosing || diagnosisLimitReached}
+                disabled={!diagnosisImageDataUrl || isDiagnosing || !diagnosisAccess.allowed}
                 onClick={() => runPlantDiagnosis(flower)}
               >
-                {isDiagnosing ? t("diagnosis.analyzing") : t("diagnosis.run")}
+                {isDiagnosing ? t("diagnosis.analyzing") : diagnosisRunLabel}
               </button>
 
               {diagnosisDraft ? (
@@ -3177,10 +3625,10 @@ export const App = () => {
                     />
                   </label>
                   <div className="modal-actions">
-                    <button className="primary-action" type="button" onClick={() => savePlantDiagnosis(flower, "confirmed")}>
-                      {t("diagnosis.save")}
+                    <button className="primary-action" type="button" disabled={isSavingDiagnosis} onClick={() => savePlantDiagnosis(flower, "confirmed")}>
+                      {isSavingDiagnosis ? t("diagnosis.saving") : t("diagnosis.save")}
                     </button>
-                    <button className="neutral-action" type="button" onClick={() => savePlantDiagnosis(flower, "rejected")}>
+                    <button className="neutral-action" type="button" disabled={isSavingDiagnosis} onClick={() => savePlantDiagnosis(flower, "rejected")}>
                       {t("diagnosis.reject")}
                     </button>
                   </div>
@@ -3349,10 +3797,19 @@ export const App = () => {
               <span>{t("menu.household")}</span>
             </summary>
             <div className="menu-section-body">
-              <div className="account-summary-list">
-                <div>
+              <div className="account-summary-list household-menu-summary">
+                <div className="household-menu-identity-card">
                   <span>{t("account.household")}</span>
-                  <strong>{activeHousehold || supabaseReadState ? householdDisplayName : t("account.householdRequired")}</strong>
+                  {activeHousehold || supabaseReadState ? (
+                    <>
+                      {renderHouseholdNameEditor("menu")}
+                      {householdNameEditStatus && householdNameEditSurface !== "menu" ? (
+                        <p className={householdNameEditStatusClass}>{householdNameEditStatus}</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <strong>{t("account.householdRequired")}</strong>
+                  )}
                 </div>
                 <div>
                   <span>{t("household.members")}</span>
@@ -3364,14 +3821,32 @@ export const App = () => {
                 </div>
               </div>
               {householdMembers.length > 0 ? (
-                <div className="household-member-list" aria-label={t("household.members")}>
-                  {householdMembers.map((member) => (
-                    <div key={member.userId}>
-                      <strong>{member.email}</strong>
-                      <span>{member.role}</span>
+                <section className="household-member-management" aria-labelledby="household-members-title">
+                  <div className="household-member-management-head">
+                    <span className="household-member-management-icon" aria-hidden="true">
+                      <UsersRound size={18} />
+                    </span>
+                    <div>
+                      <h2 id="household-members-title">{t("household.members")}</h2>
+                      <p>{t("household.memberCount", { count: householdMembers.length })}</p>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                  <div className="household-member-list" aria-label={t("household.members")}>
+                    {householdMembers.map((member) => (
+                      <div key={member.userId}>
+                        <span className="household-member-identity">
+                          <strong>{member.email}</strong>
+                          <span className="household-member-role">{householdRoleLabel(member.role)}</span>
+                        </span>
+                        {isCurrentHouseholdOwner && member.role === "viewer" && member.userId !== auth.user?.id ? (
+                          <button className="household-member-remove-action" type="button" onClick={() => void handleRemoveViewer(member)}>
+                            {t("household.removeViewer")}
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
               ) : null}
               {activeSupabaseHouseholdId && auth.isAuthenticated ? (
                 <>
@@ -3391,10 +3866,6 @@ export const App = () => {
                         <option value="editor">{t("household.roleEditor")}</option>
                         <option value="viewer">{t("household.roleViewer")}</option>
                       </select>
-                    </label>
-                    <label className="field">
-                      <span>{t("household.inviteExpiresAt")}</span>
-                      <input type="datetime-local" value={inviteExpiresAt} onChange={(event) => setInviteExpiresAt(event.target.value)} />
                     </label>
                     <button className="primary-action" type="button" onClick={() => void handleCreateInvite()}>
                       {t("household.createEmailInvite")}
@@ -3418,11 +3889,9 @@ export const App = () => {
                               ? t("household.inviteStatusRevoked")
                               : invite.usedAt
                                 ? t("household.inviteStatusAccepted")
-                                : invite.expiresAt
-                                  ? t("household.inviteStatusExpires", { date: formatDate(invite.expiresAt.slice(0, 10)) })
-                                  : t("household.inviteStatusPending")}
+                                : t("household.inviteStatusPending")}
                             {" - "}
-                            {invite.role === "editor" ? t("household.roleEditor") : invite.role === "viewer" ? t("household.roleViewer") : t("household.roleOwner")}
+                            {householdRoleLabel(invite.role)}
                           </span>
                           {!invite.revokedAt && !invite.usedAt ? (
                             <button type="button" onClick={() => void handleRevokeInvite(invite.id)}>
@@ -3476,7 +3945,7 @@ export const App = () => {
               <span>{t("menu.subscription")}</span>
             </summary>
             <div className="menu-section-body">
-              <PricingPage householdPlanUsage={householdPlanUsage} language={selectedLanguage} />
+              <PricingPage householdPlanUsage={currentHouseholdPlanUsage} language={selectedLanguage} />
             </div>
           </details>
 
@@ -3735,7 +4204,7 @@ export const App = () => {
       {isAddPlantModalOpen ? (
         <div className="modal-backdrop" role="presentation">
           <section className="plant-modal" role="dialog" aria-modal="true" aria-labelledby="add-plant-title">
-            <button className="modal-close" type="button" onClick={() => setIsAddPlantModalOpen(false)} aria-label={t("action.close")}>
+            <button className="modal-close" type="button" onClick={closeAddPlantModal} aria-label={t("action.close")}>
               <X size={20} aria-hidden="true" />
             </button>
             <div className="section-title">
@@ -3804,7 +4273,7 @@ export const App = () => {
           <h2 id="empty-dashboard-title">{t("household.ready")}</h2>
           <p>{t("household.readyBody")}</p>
           <div className="onboarding-empty-actions">
-            <button className="primary-action" type="button" onClick={() => setIsAddPlantModalOpen(true)}>
+            <button className="primary-action" type="button" onClick={openAddPlantModal}>
               <Plus size={18} aria-hidden="true" />
               {t("plantForm.addFirst")}
             </button>

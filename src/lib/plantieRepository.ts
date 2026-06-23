@@ -7,6 +7,7 @@ import {
   plantImagesBucket,
 } from "./imageStoragePaths.js";
 import { createPrivateImageSignedUrl } from "./imageCaptureService.js";
+import { validateHouseholdName } from "./householdNameValidation.js";
 
 export type IdentificationStatus = "confident" | "likely" | "needs_confirmation";
 export type CarePillTone = "green" | "amber" | "blue" | "rose";
@@ -59,7 +60,6 @@ type DbHouseholdInvite = {
   household_id: string;
   invitee_email: string;
   role: HouseholdRole;
-  expires_at: string | null;
   used_at?: string | null;
   revoked_at?: string | null;
   token?: string;
@@ -129,6 +129,7 @@ type DbPlantDiagnostic = {
   disclaimer: string;
   user_confirmation: DiagnosisConfirmation;
   user_note: string;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   diagnostic_observed_symptoms?: { position: number; symptom: string }[] | null;
@@ -183,7 +184,6 @@ export type HouseholdInvite = {
   householdId: string;
   inviteeEmail: string;
   role: HouseholdRole;
-  expiresAt: string | null;
   usedAt: string | null;
   revokedAt: string | null;
   createdAt: string;
@@ -304,6 +304,7 @@ export type HouseholdReportSettings = {
 };
 
 export type SupabasePlantDiagnostic = PlantDiagnosisDraft & {
+  createdBy: string | null;
   id: string;
   householdId: string;
   imagePath: string | null;
@@ -453,6 +454,7 @@ const plantDiagnosticSelect = `
   disclaimer,
   user_confirmation,
   user_note,
+  created_by,
   created_at,
   updated_at,
   diagnostic_observed_symptoms(position,symptom),
@@ -521,7 +523,6 @@ const mapHousehold = (household: DbHousehold): Household => ({
 const mapHouseholdInvite = (invite: DbHouseholdInvite): HouseholdInvite => ({
   createdAt: invite.created_at,
   createdBy: invite.created_by ?? null,
-  expiresAt: invite.expires_at,
   householdId: invite.household_id,
   id: invite.id,
   inviteeEmail: invite.invitee_email,
@@ -584,6 +585,7 @@ const mapPlantDiagnostic = (diagnostic: DbPlantDiagnostic): SupabasePlantDiagnos
   confidence: diagnostic.confidence,
   confidenceLabel: toDisplayConfidenceLabel(diagnostic.confidence_label),
   createdAt: diagnostic.created_at,
+  createdBy: diagnostic.created_by,
   diagnosisTitle: diagnostic.diagnosis_title,
   disclaimer: diagnostic.disclaimer,
   householdId: diagnostic.household_id,
@@ -769,8 +771,13 @@ export const getHouseholdPlantById = async (plantId: string) => {
 };
 
 export const createHousehold = async (name: string) => {
+  const validation = validateHouseholdName(name);
+  if (!validation.valid) {
+    throw new Error("Household name is not allowed.");
+  }
+
   const { data, error } = await getClient()
-    .rpc("create_household_for_current_user", { household_name: name });
+    .rpc("create_household_for_current_user", { household_name: validation.name });
 
   if (error) {
     throw error;
@@ -783,11 +790,34 @@ export const createHousehold = async (name: string) => {
   return mapHousehold(data as DbHousehold);
 };
 
+export const renameHousehold = async (householdId: string, name: string) => {
+  const validation = validateHouseholdName(name);
+  if (!validation.valid) {
+    throw new Error("Household name is not allowed.");
+  }
+
+  const { data, error } = await getClient()
+    .rpc("rename_household", {
+      household_name: validation.name,
+      target_household_id: householdId,
+    })
+    .single<DbHousehold>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Supabase did not return the renamed household.");
+  }
+
+  return mapHousehold(data);
+};
+
 export const createHouseholdInvite = async (
   householdId: string,
   email: string,
   role: HouseholdRole = "editor",
-  expiresAt: string | null = null,
 ) => {
   const normalizedEmail = normalizeInviteEmail(email);
   if (!isValidInviteEmail(normalizedEmail)) {
@@ -797,7 +827,6 @@ export const createHouseholdInvite = async (
   const { data, error } = await getClient()
     .rpc("create_household_invite", {
       invite_email: normalizedEmail,
-      invite_expires_at: expiresAt,
       invite_role: role,
       target_household_id: householdId,
     })
@@ -840,6 +869,17 @@ export const listHouseholdMembers = async (householdId: string) => {
 
 export const revokeHouseholdInvite = async (inviteId: string) => {
   const { error } = await getClient().rpc("revoke_household_invite", { invite_id: inviteId });
+
+  if (error) {
+    throw error;
+  }
+};
+
+export const removeHouseholdViewer = async (householdId: string, userId: string) => {
+  const { error } = await getClient().rpc("remove_household_viewer", {
+    target_household_id: householdId,
+    target_user_id: userId,
+  });
 
   if (error) {
     throw error;

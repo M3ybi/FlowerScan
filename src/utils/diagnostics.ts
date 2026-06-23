@@ -21,6 +21,7 @@ export type PlantDiagnosticEntry = PlantDiagnosisDraft & {
   imageDataUrl: string;
   imagePath?: string;
   storageMode?: DiagnosisStorageMode;
+  supabaseId?: string;
   userConfirmation: DiagnosisConfirmation;
   userNote: string;
   createdAt: string;
@@ -186,7 +187,6 @@ export const fetchPlantDiagnosis = async (
   let data: { diagnosis?: unknown };
   try {
     data = await callBackendFunction<{ diagnosis?: unknown }>({
-      allowNetlifyFallback: true,
       body: { householdId, imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) },
       functionName: "plant-diagnosis-ai",
       netlifyPath: "/.netlify/functions/plant-diagnosis-ai",

@@ -43,9 +43,9 @@ test("Supabase-only writes fail closed instead of saving legacy fallback data", 
 
 test("household creation uses Supabase RPC before legacy Netlify fallback", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
-  const createHouseholdSection = appSource.slice(appSource.indexOf("const handleCreateHousehold"), appSource.indexOf("const copyHouseholdLink"));
+  const createHouseholdSection = appSource.slice(appSource.indexOf("const handleCreateHousehold"), appSource.indexOf("const changeHousehold"));
 
-  assert.match(createHouseholdSection, /createHousehold\(householdNameDraft\)/);
+  assert.match(createHouseholdSection, /createHousehold\(nameValidation\.name\)/);
   assert.match(createHouseholdSection, /isLegacyNetlifyBackendEnabled/);
   assert.match(createHouseholdSection, /!auth\.isAuthenticated/);
   assert.doesNotMatch(createHouseholdSection, /localGuestHouseholdToken/);
@@ -104,6 +104,7 @@ test("AI frontend calls use backend provider layer", () => {
 
   assert.match(diagnosisSource, /callBackendFunction/);
   assert.match(diagnosisSource, /functionName: "plant-diagnosis-ai"/);
+  assert.doesNotMatch(diagnosisSource, /allowNetlifyFallback: true/);
   assert.match(diagnosisSource, /error instanceof Error && error\.message \? error\.message/);
   assert.match(careSource, /callBackendFunction/);
   assert.match(careSource, /functionName: "plant-care-ai"/);
@@ -113,8 +114,9 @@ test("subscription UI is driven by household server plan usage", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
   const pricingSource = readFileSync("src/components/PricingPage.tsx", "utf8");
 
-  assert.match(appSource, /const accountSubscriptionLabel = householdPlanUsage/);
-  assert.match(appSource, /<PricingPage householdPlanUsage=\{householdPlanUsage\} language=\{selectedLanguage\} \/>/);
+  assert.match(appSource, /const currentHouseholdPlanUsage = householdPlanUsageHouseholdId === activeSupabaseHouseholdId \? householdPlanUsage : null/);
+  assert.match(appSource, /const accountSubscriptionLabel = currentHouseholdPlanUsage/);
+  assert.match(appSource, /<PricingPage householdPlanUsage=\{currentHouseholdPlanUsage\} language=\{selectedLanguage\} \/>/);
   assert.match(pricingSource, /householdPlanUsage\?: HouseholdPlanUsage \| null/);
   assert.match(pricingSource, /const hasServerPremium = householdPlanUsage\?\.isPremium === true/);
   assert.match(pricingSource, /pricing\.currentServerPremium/);
@@ -132,9 +134,25 @@ test("Supabase diagnosis confidence labels are mapped to the database enum", () 
   const repositorySource = readFileSync("src/lib/plantieRepository.ts", "utf8");
 
   assert.match(repositorySource, /type DbDiagnosisConfidenceLabel = "nizka" \| "stredna" \| "vysoka"/);
+  assert.match(repositorySource, /created_by,/);
   assert.match(repositorySource, /const toDisplayConfidenceLabel/);
   assert.match(repositorySource, /const toDbConfidenceLabel/);
   assert.match(repositorySource, /confidence_label: toDbConfidenceLabel\(input\.confidenceLabel\)/);
+});
+
+test("Supabase diagnosis save patches and refetches rendered history", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  const readThroughSource = readFileSync("src/lib/supabaseReadThrough.ts", "utf8");
+
+  assert.match(appSource, /const upsertSupabaseDiagnosisInReadState/);
+  assert.match(appSource, /supabaseId: saved\.id/);
+  assert.match(appSource, /upsertSupabaseDiagnosisInReadState\(entry\)/);
+  assert.match(appSource, /await refreshSupabaseReadState\(\)/);
+  assert.match(appSource, /const supabaseDiagnosticId = getSupabaseDiagnosticId\(diagnostic\)/);
+  assert.match(appSource, /await updateSupabaseDiagnosis\(supabaseDiagnosticId, sanitizedPatch\)/);
+  assert.match(appSource, /logTechnicalError\("Supabase diagnosis save failed\.", error\)/);
+  assert.doesNotMatch(appSource, /Saving diagnosis locally for backward compatibility/);
+  assert.match(readThroughSource, /supabaseId: diagnostic\.id/);
 });
 
 test("Supabase startup avoids duplicate per-plant PostgREST reads", () => {
@@ -170,6 +188,18 @@ test("PostgREST egress hardening revokes anon private table reads and adds commo
   assert.match(migration, /plants_household_legacy_id_idx/);
   assert.match(migration, /plant_diagnostics_household_created_at_idx/);
   assert.match(migration, /plant_care_records_household_plant_idx/);
+});
+
+test("diagnosis RLS stores saving user and rejects spoofed created_by", () => {
+  const migration = readFileSync("supabase/migrations/20260623100000_diagnosis_created_by_and_access.sql", "utf8");
+
+  assert.match(migration, /alter column created_by set default auth\.uid\(\)/);
+  assert.match(migration, /create or replace function public\.set_plant_diagnostic_created_by/);
+  assert.match(migration, /if new\.created_by is null then/);
+  assert.match(migration, /new\.created_by := auth\.uid\(\)/);
+  assert.match(migration, /new\.created_by is distinct from auth\.uid\(\)/);
+  assert.match(migration, /public\.can_edit_household\(household_id\)/);
+  assert.match(migration, /created_by = auth\.uid\(\)/);
 });
 
 test("frontend does not reference server-only backend secrets", () => {

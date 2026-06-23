@@ -58,6 +58,10 @@ test("diagnose plant picker has search, pagination, and open affordance", () => 
   assert.match(diagnoseRoute, /setPlantPage\(plantPageCount\)/);
   assert.match(diagnoseRoute, /className="diagnose-picker-open-icon"/);
   assert.match(styleSource, /\.diagnose-picker-open-icon\s*\{/);
+  assert.match(styleSource, /\.toolbar\s*\{[\s\S]*width: min\(100%, 360px\);[\s\S]*justify-content: center;[\s\S]*margin: -4px auto 16px;[\s\S]*border-radius: 999px;[\s\S]*background: transparent;[\s\S]*box-shadow: none;/);
+  assert.match(styleSource, /\.search-field\s*\{[\s\S]*width: 100%;[\s\S]*min-height: 44px;[\s\S]*border-radius: 999px;/);
+  assert.match(styleSource, /\.search-field:hover\s*\{/);
+  assert.match(styleSource, /\.search-field input::placeholder\s*\{/);
 });
 
 test("page back controls use browser history with a fallback", () => {
@@ -66,11 +70,32 @@ test("page back controls use browser history with a fallback", () => {
   assert.match(appSource, /onClick=\{navigateBack\("#\/"\)\}/);
 });
 
+test("AI diagnosis actions are disabled when household access is unavailable", () => {
+  const detailRouteStart = appSource.lastIndexOf('if (route.page === "detail")');
+  const detailRoute = appSource.slice(detailRouteStart, appSource.indexOf('if (route.page === "menu")', detailRouteStart));
+
+  assert.match(detailRoute, /const diagnosisAccess = resolveCurrentAiDiagnosisAccess\(\)/);
+  assert.match(detailRoute, /const diagnosisBlockedReason = aiDiagnosisAccessMessage\(diagnosisAccess\)/);
+  assert.match(detailRoute, /disabled=\{isGeneratingCarePreview \|\| !diagnosisAccess\.allowed\}/);
+  assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\} onClick=\{openDiagnosisModal\}/);
+  assert.match(detailRoute, /className=\{`diagnosis-upload \$\{diagnosisAccess\.allowed \? "" : "diagnosis-upload-disabled"\}`\}/);
+  assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\}/);
+  assert.match(detailRoute, /disabled=\{!diagnosisImageDataUrl \|\| isDiagnosing \|\| !diagnosisAccess\.allowed\}/);
+  assert.doesNotMatch(detailRoute, /diagnosis\.premiumUnlimited/);
+});
+
 test("household actions are behind a compact sheet", () => {
+  const householdSheet = appSource.slice(appSource.indexOf("const renderHouseholdSheet"), appSource.indexOf("const renderHouseholdLoading"));
+
   assert.match(appSource, /isHouseholdSheetOpen/);
   assert.match(appSource, /className="user-menu-trigger"/);
   assert.match(appSource, /className="household-sheet"/);
+  assert.match(householdSheet, /className="household-sheet-email"/);
+  assert.match(householdSheet, /renderHouseholdNameEditor\("sheet", "household-sheet-title"\)/);
+  assert.doesNotMatch(householdSheet, /aria-label=\{t\("auth\.email"\)\}/);
+  assert.match(appSource, /t\("account\.signOut"\)/);
   assert.match(appSource, /t\("household\.settings"\)/);
+  assert.doesNotMatch(appSource, /copy-link-action|copyHouseholdLink|householdLinkStatus/);
   assert.doesNotMatch(appSource, /className="household-chip-button"/);
 });
 

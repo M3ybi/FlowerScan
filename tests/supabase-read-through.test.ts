@@ -48,6 +48,7 @@ const createDiagnostic = (patch: Partial<SupabasePlantDiagnostic> = {}): Supabas
   confidence: 80,
   confidenceLabel: "stredná",
   createdAt: "2026-05-31T10:00:00.000Z",
+  createdBy: "user-id",
   diagnosisTitle: "Preliatie",
   disclaimer: "AI diagnostika je iba odhad.",
   householdId: household.id,
@@ -178,6 +179,7 @@ test("Supabase rows map back into existing App state shape and preserve legacy I
   assert.equal(state.records[flowers[0].id].lastWatered, "2026-05-30");
   assert.equal(state.diagnostics[0].id, "legacy-diagnostic-id");
   assert.equal(state.diagnostics[0].plantId, flowers[0].id);
+  assert.equal(state.diagnostics[0].supabaseId, "supabase-diagnostic-id");
   assert.equal(state.supabasePlantIdsByLegacyId[flowers[0].id], "supabase-plant-id");
 });
 
@@ -215,7 +217,9 @@ test("Supabase-only plants keep a write mapping for generated App IDs", () => {
 
   assert.equal(state.allFlowers[0].id, generatedAppPlantId);
   assert.equal(state.records[generatedAppPlantId].lastWatered, "2026-06-17");
+  assert.equal(state.diagnostics[0].id, "diagnostic-for-supabase-only-plant");
   assert.equal(state.diagnostics[0].plantId, generatedAppPlantId);
+  assert.equal(state.diagnostics[0].supabaseId, "diagnostic-for-supabase-only-plant");
   assert.equal(state.supabasePlantIdsByLegacyId[generatedAppPlantId], supabaseOnlyPlantId);
 });
 

@@ -57,7 +57,7 @@ test("premium households bypass AI, care-tip, and plant limits", () => {
   assert.doesNotThrow(() => assertCanAddPlant(state));
 });
 
-test("non-premium households can run exactly five successful plant health analyzes per month", () => {
+test("non-premium households can run exactly ten successful plant health analyzes per month", () => {
   let state = freeState();
 
   for (let index = 0; index < PLAN_LIMITS.free.monthlyPlantUnwellAiAnalyzes; index += 1) {
@@ -65,35 +65,35 @@ test("non-premium households can run exactly five successful plant health analyz
     state = recordAiAnalyzeUsage(state);
   }
 
-  assert.equal(state.aiAnalyzesUsed, 5);
+  assert.equal(state.aiAnalyzesUsed, 10);
   assert.equal(getRemainingPlantUnwellAiAnalyzes(state), 0);
-  assert.throws(() => assertCanRunAiAnalyze(state), /5 plant health AI analyzes/);
+  assert.throws(() => assertCanRunAiAnalyze(state), /10 plant health AI analyzes/);
 });
 
 test("failed plant health analyzes do not consume usage", () => {
-  const before = freeState({ aiAnalyzesUsed: 4 });
+  const before = freeState({ aiAnalyzesUsed: 9 });
 
   assert.doesNotThrow(() => assertCanRunAiAnalyze(before));
   const afterFailure = before;
 
-  assert.equal(afterFailure.aiAnalyzesUsed, 4);
+  assert.equal(afterFailure.aiAnalyzesUsed, 9);
   assert.equal(getRemainingPlantUnwellAiAnalyzes(afterFailure), 1);
 });
 
 test("reserved concurrent plant health analyzes count against remaining capacity", () => {
-  const state = freeState({ aiAnalyzesReserved: 1, aiAnalyzesUsed: 4 });
+  const state = freeState({ aiAnalyzesReserved: 1, aiAnalyzesUsed: 9 });
 
   assert.equal(getRemainingPlantUnwellAiAnalyzes(state), 0);
-  assert.throws(() => assertCanRunAiAnalyze(state), /5 plant health AI analyzes/);
+  assert.throws(() => assertCanRunAiAnalyze(state), /10 plant health AI analyzes/);
 });
 
 test("initial plant care generation and AI care tips do not consume monthly AI analyze usage", () => {
-  let state = freeState({ aiAnalyzesUsed: 2 });
+  let state = freeState({ aiAnalyzesUsed: 7 });
 
   state = recordCareTipGeneration(state, "initial_plant_add");
   state = recordCareTipGeneration(state, "manual_refresh");
 
-  assert.equal(state.aiAnalyzesUsed, 2);
+  assert.equal(state.aiAnalyzesUsed, 7);
   assert.equal(getRemainingPlantUnwellAiAnalyzes(state), 3);
 });
 
@@ -138,6 +138,7 @@ test("reset job is idempotent because usage rows are unique by household type an
 
 test("database migration enforces plant limits and atomic AI reservations server-side", () => {
   const migration = readFileSync("supabase/migrations/20260615120000_household_premium_usage_limits.sql", "utf8");
+  const diagnosisAccessFixMigration = readFileSync("supabase/migrations/20260622120000_ai_diagnosis_household_access_fix.sql", "utf8");
 
   assert.match(migration, /create trigger enforce_household_plant_limit_before_write/);
   assert.match(migration, /perform 1 from public\.households where id = target_household_id for update/);
@@ -146,6 +147,11 @@ test("database migration enforces plant limits and atomic AI reservations server
   assert.match(migration, /create or replace function public\.commit_ai_analyze_usage/);
   assert.match(migration, /used_count = used_count \+ 1/);
   assert.match(migration, /create table if not exists public\.plant_care_tip_generations/);
+  assert.match(diagnosisAccessFixMigration, /create or replace function public\.free_household_ai_analyzes_monthly_limit/);
+  assert.match(diagnosisAccessFixMigration, /public\.is_household_premium\(target_household_id\)[\s\S]*return null;/);
+  assert.match(diagnosisAccessFixMigration, /greatest\(ai_limit - used - reserved, 0\)/);
+  assert.match(diagnosisAccessFixMigration, /raise exception 'Free households can run % plant health AI analyzes per month\.', ai_limit/);
+  assert.match(diagnosisAccessFixMigration, /limit_count = ai_limit/);
 });
 
 test("Supabase AI functions count only successful plant-unwell analyzes and keep care generation separate", () => {

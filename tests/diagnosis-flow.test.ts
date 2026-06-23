@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveAiDiagnosisAccess } from "../src/lib/aiDiagnosisAccess.js";
 import { resolveDiagnosisGate } from "../src/lib/diagnosisGateRules.js";
 import { normalizeReminderSettings } from "../src/lib/reminderService.js";
 import {
@@ -38,6 +39,50 @@ test("legacy anonymous users keep existing diagnosis access", async () => {
   });
 
   assert.deepEqual(result, { allowed: true, mode: "legacy" });
+});
+
+test("premium household plan usage allows AI diagnosis", () => {
+  const result = resolveAiDiagnosisAccess({
+    activeHouseholdId: "household-1",
+    householdPlanUsage: { aiAnalyzesRemaining: null, isPremium: true },
+    isAuthenticated: true,
+    requiresSupabaseHousehold: true,
+  });
+
+  assert.deepEqual(result, { allowed: true, status: "allowed" });
+});
+
+test("free household with remaining monthly scans allows AI diagnosis", () => {
+  const result = resolveAiDiagnosisAccess({
+    activeHouseholdId: "household-1",
+    householdPlanUsage: { aiAnalyzesRemaining: 1, isPremium: false },
+    isAuthenticated: true,
+    requiresSupabaseHousehold: true,
+  });
+
+  assert.deepEqual(result, { allowed: true, status: "allowed" });
+});
+
+test("free household with exhausted monthly scans is blocked before AI diagnosis", () => {
+  const result = resolveAiDiagnosisAccess({
+    activeHouseholdId: "household-1",
+    householdPlanUsage: { aiAnalyzesRemaining: 0, isPremium: false },
+    isAuthenticated: true,
+    requiresSupabaseHousehold: true,
+  });
+
+  assert.deepEqual(result, { allowed: false, status: "limit_reached" });
+});
+
+test("authenticated Supabase diagnosis fails closed while household usage is missing", () => {
+  const result = resolveAiDiagnosisAccess({
+    activeHouseholdId: "household-1",
+    householdPlanUsage: null,
+    isAuthenticated: true,
+    requiresSupabaseHousehold: true,
+  });
+
+  assert.deepEqual(result, { allowed: false, status: "checking" });
 });
 
 test("diagnosis image validation rejects unsafe uploads", () => {

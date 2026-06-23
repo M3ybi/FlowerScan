@@ -213,8 +213,8 @@ begin
     plant_limit,
     greatest(plant_limit - plant_count, 0),
     used,
-    5,
-    greatest(5 - used - reserved, 0),
+    10,
+    greatest(10 - used - reserved, 0),
     current_period_start,
     current_period_end;
 end;
@@ -280,8 +280,8 @@ begin
     and uc.usage_type = analyze_type
     and uc.period_start = current_period_start;
 
-  if used + reserved >= 5 then
-    raise exception 'Free households can run 5 plant health AI analyzes per month.';
+  if used + reserved >= 10 then
+    raise exception 'Free households can run 10 plant health AI analyzes per month.';
   end if;
 end;
 $$;
@@ -310,10 +310,10 @@ begin
   perform public.assert_can_run_ai_analyze(target_household_id, analyze_type);
 
   insert into public.household_usage_counters (household_id, usage_type, period_start, period_end, reserved_count, limit_count, last_reset_at)
-  values (target_household_id, analyze_type, current_period_start, current_period_end, 1, 5, current_period_start)
+  values (target_household_id, analyze_type, current_period_start, current_period_end, 1, 10, current_period_start)
   on conflict (household_id, usage_type, period_start) do update set
     reserved_count = public.household_usage_counters.reserved_count + 1,
-    limit_count = 5,
+    limit_count = 10,
     period_end = excluded.period_end,
     updated_at = now();
 
@@ -423,10 +423,10 @@ begin
   perform public.assert_can_run_ai_analyze(target_household_id, analyze_type);
 
   insert into public.household_usage_counters (household_id, usage_type, period_start, period_end, used_count, limit_count, last_reset_at)
-  values (target_household_id, analyze_type, current_period_start, current_period_end, 1, 5, current_period_start)
+  values (target_household_id, analyze_type, current_period_start, current_period_end, 1, 10, current_period_start)
   on conflict (household_id, usage_type, period_start) do update set
     used_count = public.household_usage_counters.used_count + 1,
-    limit_count = 5,
+    limit_count = 10,
     period_end = excluded.period_end,
     updated_at = now();
 
@@ -520,7 +520,7 @@ declare
   inserted_count integer;
 begin
   insert into public.household_usage_counters (household_id, usage_type, period_start, period_end, used_count, reserved_count, limit_count, last_reset_at)
-  select h.id, 'plant_unwell_ai_analyze', current_period_start, current_period_end, 0, 0, 5, current_period_start
+  select h.id, 'plant_unwell_ai_analyze', current_period_start, current_period_end, 0, 0, 10, current_period_start
   from public.households h
   where not (
     h.premium_enabled

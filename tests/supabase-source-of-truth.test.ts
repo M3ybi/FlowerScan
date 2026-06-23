@@ -70,6 +70,7 @@ const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
       return {
         ...input,
         createdAt: "2026-06-01T08:00:00.000Z",
+        createdBy: "user-id",
         householdId: "household-id",
         id: "diagnosis-id",
         imagePath: input.imagePath ?? null,
@@ -114,6 +115,7 @@ const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
         confidence: 75,
         confidenceLabel: "stredná",
         createdAt: "2026-06-01T08:00:00.000Z",
+        createdBy: "user-id",
         diagnosisTitle: "Test",
         disclaimer: "AI",
         householdId: "household-id",
@@ -255,7 +257,7 @@ test("report settings persist", async () => {
 
 test("diagnosis create and update use Supabase helpers", async () => {
   const { calls, deps } = createDeps();
-  await createSupabaseDiagnosis(
+  const saved = await createSupabaseDiagnosis(
     {
       diagnosis: {
         confidence: 75,
@@ -276,7 +278,46 @@ test("diagnosis create and update use Supabase helpers", async () => {
     deps,
   );
 
+  assert.equal(saved.createdBy, "user-id");
+  assert.equal(saved.plantId, "plant-id");
+  assert.equal(saved.householdId, "household-id");
+  assert.equal(saved.imagePath, "diagnostic/path.jpg");
   assert.deepEqual(calls, ["upload-diagnosis-image", "create-diagnosis:legacy-diagnosis"]);
+});
+
+test("diagnosis create surfaces RLS denial from Supabase insert", async () => {
+  const { calls, deps } = createDeps({
+    createPlantDiagnostic: async () => {
+      calls.push("create-diagnosis-denied");
+      throw new Error("new row violates row-level security policy");
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      createSupabaseDiagnosis(
+        {
+          diagnosis: {
+            confidence: 75,
+            confidenceLabel: "stredná",
+            diagnosisTitle: "Test",
+            disclaimer: "AI",
+            observedSymptoms: ["leaf"],
+            reasoningSummary: "reason",
+            recommendedSteps: ["step"],
+            riskLevel: "medium",
+          },
+          imageDataUrl: "data:image/jpeg;base64,abc",
+          legacyId: "legacy-diagnosis",
+          plantId: "plant-id",
+          userConfirmation: "confirmed",
+          userNote: " ok ",
+        },
+        deps,
+      ),
+    /row-level security/,
+  );
+  assert.deepEqual(calls, ["upload-diagnosis-image", "create-diagnosis-denied"]);
 });
 
 test("rollback mode keeps writes legacy-only when local or env disables Supabase writes", () => {

@@ -199,6 +199,7 @@ export const mapSupabaseRowsToLegacyStateShape = ({
                 imagePath: diagnostic.imagePath ?? undefined,
                 plantId: legacyPlantId,
                 storageMode: "supabase" as const,
+                supabaseId: diagnostic.id,
               },
             ]
           : [];

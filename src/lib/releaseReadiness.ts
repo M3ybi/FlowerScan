@@ -41,7 +41,7 @@ export const legalPages: LegalPage[] = [
       {
         heading: "Service providers",
         body: [
-          "Supabase stores authenticated account, household, plant, subscription entitlement, and private image storage data.",
+          "Supabase stores authenticated account, household, plant, Premium access, and private image storage data.",
           "OpenAI may process plant photos, diagnosis images, symptoms, and care prompts to generate informational AI outputs.",
           "RevenueCat processes subscription status and store purchase events when mobile subscriptions are enabled.",
         ],
@@ -77,7 +77,7 @@ export const legalPages: LegalPage[] = [
       {
         heading: "Subscriptions",
         body: [
-          "When enabled, mobile subscriptions are managed by the App Store or Google Play. Premium access is granted only from server-backed entitlement state.",
+          "When enabled, mobile subscriptions are managed by the App Store or Google Play. Premium access is confirmed by Plantie after secure server validation.",
         ],
       },
       {
@@ -89,7 +89,7 @@ export const legalPages: LegalPage[] = [
       {
         heading: "Acceptable use",
         body: [
-          "Do not misuse the service, probe private data, bypass access controls, overload backend systems, or attempt to reverse engineer payment or entitlement checks.",
+          "Do not misuse the service, probe private data, bypass access controls, overload backend systems, or attempt to reverse engineer payment or Premium access checks.",
         ],
       },
     ],
@@ -132,7 +132,7 @@ export const legalPages: LegalPage[] = [
       {
         heading: "Manual process",
         body: [
-          "Verify the requester identity, review household ownership, export any legally required records, remove or transfer household membership, delete private storage objects where appropriate, then remove the Supabase user and related entitlement rows.",
+          "Verify the requester identity, review household ownership, export any legally required records, remove or transfer household membership, delete private storage objects where appropriate, then remove the Supabase user and related Premium access records.",
         ],
       },
     ],
@@ -153,7 +153,7 @@ export const legalPages: LegalPage[] = [
       {
         heading: "Access",
         body: [
-          "Client-side RevenueCat results do not grant Premium. Plantie grants Premium only from Supabase entitlement state updated by validated server-side webhook processing.",
+          "Client-side RevenueCat results do not grant Premium. Plantie grants Premium only after validated server-side webhook processing updates secure Premium access state.",
         ],
       },
     ],
@@ -173,7 +173,7 @@ export const storeMetadata = {
     "Camera and gallery image capture on mobile",
     "QR labels for individual plants",
     "Email report support",
-    "Server-backed Premium entitlement model",
+    "Server-backed Premium access model",
   ],
   changelogTemplate: ["Added release compliance pages.", "Added safe health diagnostics.", "Prepared mobile store metadata and asset checklist."],
   betaTesterInstructions: [
@@ -209,7 +209,7 @@ export const storeAssetChecklist = [
 export const securityReviewChecklist = [
   "No server-only Supabase or webhook secret environment variables are referenced in frontend code.",
   "RevenueCat webhook rejects missing config and invalid secrets.",
-  "Premium access is derived from Supabase entitlement state, not local RevenueCat customer info.",
+  "Premium access is derived from secure Supabase Premium state, not local RevenueCat customer info.",
   "Image capture validates MIME type and size before processing.",
   "Private image storage stores paths only and uses short-lived signed URLs.",
   "Logs avoid secrets, receipts, auth headers, raw images, and full webhook payloads.",

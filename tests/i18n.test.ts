@@ -68,6 +68,16 @@ test("language switch updates UI strings", () => {
   assert.equal(slovak("auth.login"), "Prihlásiť sa");
 });
 
+test("subscription restriction copy is user-friendly and localized", () => {
+  const i18nSource = readFileSync("src/lib/i18n.ts", "utf8");
+  const upgradeModalSource = readFileSync("src/components/UpgradeModal.tsx", "utf8");
+  const releaseReadinessSource = readFileSync("src/lib/releaseReadiness.ts", "utf8");
+
+  assert.equal(translate("en", "account.subscriptionServer"), "This feature is not available for your current plan.");
+  assert.equal(translate("sk", "account.subscriptionServer"), "Táto funkcia nie je dostupná vo vašom aktuálnom pláne.");
+  assert.doesNotMatch(`${i18nSource}\n${upgradeModalSource}\n${releaseReadinessSource}`, /server entitlement|serverov\u00fd entitlement|entitlement required|Serverberechtigung|Droit d'accès au serveur|derecho de servidor/i);
+});
+
 test("detail screen uses translator keys for quick actions", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
   const detailSource = appSource;

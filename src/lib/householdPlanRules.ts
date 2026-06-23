@@ -17,7 +17,7 @@ export const PLAN_LIMITS: Record<HouseholdPlanKey, PlanLimits> = {
     careTipRefreshPerPlantPerDay: 1,
     initialCareGenerationCountsAsAnalyze: false,
     maxPlants: 10,
-    monthlyPlantUnwellAiAnalyzes: 5,
+    monthlyPlantUnwellAiAnalyzes: 10,
   },
   premium: {
     careTipRefreshPerPlantPerDay: null,

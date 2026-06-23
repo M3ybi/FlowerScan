@@ -31,12 +31,16 @@ test("desktop tab navigation is available across primary app pages", () => {
   assert.match(styleSource, /@media \(max-width: 780px\)[\s\S]*\.app-tab-nav\s*\{[\s\S]*display: none;/);
 });
 
-test("dashboard account access is a user menu trigger without direct sign out", () => {
-  const triggerIndex = appSource.indexOf('className="user-menu-trigger"');
-  const dashboardSection = appSource.slice(Math.max(0, triggerIndex - 500), appSource.indexOf("{isHouseholdSheetOpen ?", triggerIndex));
-  assert.match(dashboardSection, /className="user-menu-trigger"/);
-  assert.match(dashboardSection, /setIsHouseholdSheetOpen\(true\)/);
-  assert.doesNotMatch(dashboardSection, /<AuthButton|handleAccountSignOut|account-menu|Sign out/);
+test("dashboard account access opens the household sheet with account actions", () => {
+  const dashboardTrigger = appSource.slice(appSource.indexOf("const renderHeroActions"), appSource.indexOf("const renderHouseholdSheet"));
+  const householdSheet = appSource.slice(appSource.indexOf("const renderHouseholdSheet"), appSource.indexOf("const renderHouseholdLoading"));
+
+  assert.match(dashboardTrigger, /className="user-menu-trigger"/);
+  assert.match(dashboardTrigger, /setIsHouseholdSheetOpen\(true\)/);
+  assert.doesNotMatch(dashboardTrigger, /<AuthButton|handleAccountSignOut|account-menu|Sign out/);
+  assert.match(householdSheet, /className="household-sheet-email"/);
+  assert.match(householdSheet, /renderHouseholdNameEditor\("sheet", "household-sheet-title"\)/);
+  assert.match(householdSheet, /handleAccountSignOut/);
   assert.doesNotMatch(appSource, /import \{ AuthButton \}/);
 });
 
@@ -79,6 +83,7 @@ test("household family section uses email invites and no manual join form", () =
   assert.match(householdSection, /handleCreateInvite/);
   assert.match(householdSection, /invite\.inviteeEmail/);
   assert.match(householdSection, /Pending email invites/);
+  assert.doesNotMatch(householdSection, /inviteExpiresAt|datetime-local|inviteStatusExpires/);
   assert.doesNotMatch(householdSection, /Join by invite/);
 });
 
@@ -96,8 +101,75 @@ test("household family section renders Supabase household members", () => {
   const householdSection = appSource.slice(appSource.indexOf('t("menu.household")'), appSource.indexOf('t("menu.subscription")'));
   assert.match(appSource, /listHouseholdMembers/);
   assert.match(repositorySource, /rpc\("list_household_members"/);
+  assert.match(repositorySource, /rpc\("remove_household_viewer"/);
+  assert.match(repositorySource, /rpc\("rename_household"/);
   assert.match(householdSection, /className="household-member-list"/);
   assert.match(householdSection, /member\.email/);
+  assert.match(householdSection, /isCurrentHouseholdOwner && member\.role === "viewer"/);
+  assert.match(householdSection, /handleRemoveViewer\(member\)/);
+  assert.match(householdSection, /renderHouseholdNameEditor\("menu"\)/);
+});
+
+test("household rename UI is owner-gated and localized", () => {
+  assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && isCurrentHouseholdOwner/);
+  assert.match(appSource, /className="household-name-edit-trigger"/);
+  assert.match(appSource, /t\("household\.renameAction"\)/);
+  assert.match(appSource, /t\("household\.renameRequired"\)/);
+  assert.match(appSource, /t\("household\.renameTooLong"/);
+  assert.match(appSource, /t\("household\.renameUnsafe"\)/);
+  assert.match(appSource, /renameHousehold\(activeSupabaseHouseholdId, nameValidation\.name\)/);
+});
+
+test("transient UI feedback is cleared on route, auth, and household changes", () => {
+  assert.match(appSource, /const clearTransientMessages = \(\) => \{/);
+  for (const setter of [
+    "setAccessStatus",
+    "setAccountActionStatus",
+    "setCarePreviewStatus",
+    "setCreatedInviteLink",
+    "setDeleteAccountStatus",
+    "setDiagnosisStatus",
+    "setHouseholdNameEditStatus",
+    "setInviteStatus",
+    "setNewPlantStatus",
+    "setOnboardingStatus",
+    "setQrExportStatus",
+    "setQuickRecordStatus",
+  ]) {
+    assert.match(appSource, new RegExp(`${setter}\\(""\\)`));
+  }
+
+  assert.match(appSource, /const routeLifecycleKey =[\s\S]*route\.page === "menu"[\s\S]*route\.section/);
+  assert.match(appSource, /useEffect\(\(\) => \{\s*clearTransientMessages\(\);\s*\}, \[routeLifecycleKey\]\)/);
+  assert.match(appSource, /const householdLifecycleKey = activeSupabaseHouseholdId \|\| activeHousehold\?\.publicToken \|\| ""/);
+  assert.match(appSource, /useEffect\(\(\) => \{\s*clearTransientMessages\(\);\s*\}, \[householdLifecycleKey\]\)/);
+  assert.match(appSource, /previousAuthUserIdRef\.current = nextUserId;\s*clearTransientMessages\(\);/);
+  assert.match(appSource, /householdPlanUsageHouseholdId === activeSupabaseHouseholdId \? householdPlanUsage : null/);
+  assert.match(appSource, /setHouseholdPlanUsageHouseholdId\(""\)/);
+  assert.match(appSource, /activeSupabaseHouseholdIdRef\.current === householdId/);
+  assert.doesNotMatch(appSource, /setAccountActionStatus\(t\("account\.signedOut"\)\)/);
+});
+
+test("household member management is visually distinct from account summaries", () => {
+  const householdSection = appSource.slice(appSource.indexOf('t("menu.household")'), appSource.indexOf('t("menu.subscription")'));
+
+  assert.match(householdSection, /className="household-member-management"/);
+  assert.match(householdSection, /className="household-member-management-head"/);
+  assert.match(styleSource, /\.account-summary-list > div\s*\{/);
+  assert.match(styleSource, /\.household-member-management\s*\{[\s\S]*rgba\(45, 83, 100, 0\.2\)/);
+  assert.match(styleSource, /\.household-member-list > div\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto/);
+  assert.doesNotMatch(styleSource, /\.household-member-list div\s*\{/);
+  assert.doesNotMatch(styleSource, /\.account-summary-list div\s*\{/);
+});
+
+test("global stylesheet exposes design tokens and keeps label typography readable", () => {
+  for (const token of ["--space-1", "--space-4", "--radius-md", "--z-nav", "--z-modal"]) {
+    assert.match(styleSource, new RegExp(`${token}:`));
+  }
+
+  assert.match(styleSource, /z-index: var\(--z-modal\)/);
+  assert.match(styleSource, /z-index: var\(--z-nav\)/);
+  assert.doesNotMatch(styleSource, /letter-spacing: 0\.[0-9]+em/);
 });
 
 test("role select uses styled dropdown controls", () => {
@@ -138,10 +210,11 @@ test("QR labels live in app tab navigation instead of Menu content", () => {
   assert.doesNotMatch(menuRoute, /handleQrPdfExport/);
 });
 
-test("app footer provides secondary navigation", () => {
-  assert.match(appSource, /const AppFooter/);
-  assert.match(appSource, /<AppFooter t=\{t\} \/>/);
-  assert.match(styleSource, /\.app-footer\s*\{/);
+test("primary navigation provides secondary app routes", () => {
+  assert.match(appSource, /const AppTabNav/);
+  assert.match(appSource, /<MobileBottomNav/);
+  assert.match(styleSource, /\.app-tab-nav\s*\{/);
+  assert.match(styleSource, /\.mobile-bottom-nav\s*\{/);
 });
 
 test("changing household can restore the previous logged-in household", () => {
