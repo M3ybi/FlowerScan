@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
-  Bell,
   Camera,
   Check,
   ChevronRight,
@@ -62,7 +61,6 @@ import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
 import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
 import { AuthPanel } from "./components/AuthPanel";
-import { DashboardOverview } from "./components/DashboardOverview";
 import { LoadingButton } from "./components/LoadingButton";
 import { PricingPage } from "./components/PricingPage";
 import { QrCode } from "./components/QrCode";
@@ -293,6 +291,8 @@ export const App = () => {
   const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
+  const [diagnosticHistoryStatus, setDiagnosticHistoryStatus] = useState("");
+  const [pendingDiagnosticUpdateKey, setPendingDiagnosticUpdateKey] = useState("");
   const [deleteAccountContact, setDeleteAccountContact] = useState(() => auth.user?.email ?? "");
   const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
   const [isRequestingAccountDeletion, setIsRequestingAccountDeletion] = useState(false);
@@ -425,7 +425,7 @@ export const App = () => {
   );
   const routeLifecycleKey =
     route.page === "detail"
-      ? `detail:${route.flowerId}:${route.scan ? "scan" : "view"}`
+      ? `detail:${route.flowerId}:${route.scan ? "scan" : "view"}:${route.panel}`
       : route.page === "menu"
         ? `menu:${route.section}`
         : route.page === "join"
@@ -442,6 +442,7 @@ export const App = () => {
     setCarePreviewStatus("");
     setCreatedInviteLink("");
     setDeleteAccountStatus("");
+    setDiagnosticHistoryStatus("");
     setDiagnosisStatus("");
     setDiagnosisUpgradeReason("");
     setHouseholdNameEditDraft("");
@@ -465,8 +466,30 @@ export const App = () => {
     generation === transientMessageGenerationRef.current;
 
   useEffect(() => {
+    if (route.page === "detail" && route.panel === "diagnostics") {
+      return;
+    }
+
     window.scrollTo({ top: 0, left: 0 });
-  }, [route.page, "flowerId" in route ? route.flowerId : ""]);
+  }, [route.page, "flowerId" in route ? route.flowerId : "", "panel" in route ? route.panel : ""]);
+
+  useEffect(() => {
+    if (route.page !== "detail" || route.panel !== "diagnostics") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const panel = document.getElementById("diagnostic-history-panel");
+      if (!panel) {
+        return;
+      }
+
+      panel.scrollIntoView({ block: "start" });
+      panel.focus({ preventScroll: true });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [route.page, "flowerId" in route ? route.flowerId : "", "panel" in route ? route.panel : ""]);
 
   useEffect(() => {
     if (route.page === "detail") {
@@ -2162,7 +2185,8 @@ export const App = () => {
 
     if (!diagnostic) {
       setDiagnosisStatus(t("diagnosis.saveUnavailable"));
-      return;
+      setDiagnosticHistoryStatus(t("diagnosis.saveUnavailable"));
+      return false;
     }
 
     const applyPatch = (item: PlantDiagnosticEntry): PlantDiagnosticEntry => ({
@@ -2185,7 +2209,8 @@ export const App = () => {
       const supabaseDiagnosticId = getSupabaseDiagnosticId(diagnostic);
       if (!supabaseDiagnosticId) {
         setDiagnosisStatus(t("diagnosis.saveUnavailable"));
-        return;
+        setDiagnosticHistoryStatus(t("diagnosis.saveUnavailable"));
+        return false;
       }
 
       try {
@@ -2194,10 +2219,31 @@ export const App = () => {
       } catch (error) {
         logTechnicalError("Supabase diagnosis update failed.", error);
         setDiagnosisStatus(t("diagnosis.updateFailed"));
+        setDiagnosticHistoryStatus(t("diagnosis.updateFailed"));
         await refreshSupabaseReadState().catch((refreshError) => {
           logTechnicalError("Supabase diagnosis history refresh failed after update.", refreshError);
         });
+        return false;
       }
+    }
+
+    return true;
+  };
+
+  const updateDiagnosticConfirmation = async (diagnosticId: string, userConfirmation: DiagnosisConfirmation) => {
+    if (pendingDiagnosticUpdateKey) {
+      return;
+    }
+
+    const updateKey = `${diagnosticId}:${userConfirmation}`;
+    setPendingDiagnosticUpdateKey(updateKey);
+    setDiagnosticHistoryStatus(t("diagnosis.saving"));
+
+    try {
+      const saved = await updateDiagnosticHistoryEntry(diagnosticId, { userConfirmation });
+      setDiagnosticHistoryStatus(saved ? t("diagnosis.saved") : t("diagnosis.updateFailed"));
+    } finally {
+      setPendingDiagnosticUpdateKey("");
     }
   };
 
@@ -2835,17 +2881,6 @@ export const App = () => {
             <Pencil size={18} aria-hidden="true" />
             <h2 id="care-log-title">{t("detail.careLog")}</h2>
           </div>
-          <label className="toggle-field">
-            <span>
-              <Bell size={18} aria-hidden="true" />
-              {t("detail.notifications")}
-            </span>
-            <input
-              type="checkbox"
-              checked={flower.notificationsEnabled !== false}
-              onChange={(event) => void saveFlower({ ...flower, notificationsEnabled: event.target.checked, source: "custom" })}
-            />
-          </label>
           <label className="field">
             <span>{t("detail.lastWateredDate")}</span>
             <div className="date-row">
@@ -2917,7 +2952,7 @@ export const App = () => {
           </label>
         </section>
 
-        <section className="diagnostic-history-panel" aria-labelledby="diagnostic-history-title">
+        <section className="diagnostic-history-panel" id="diagnostic-history-panel" tabIndex={-1} aria-labelledby="diagnostic-history-title">
           <div className="section-title">
             <Camera size={18} aria-hidden="true" />
             <h2 id="diagnostic-history-title">{t("diagnosis.history")}</h2>
@@ -2925,9 +2960,13 @@ export const App = () => {
           {flowerDiagnostics.length === 0 ? (
             <p>{t("diagnosis.historyEmpty")}</p>
           ) : (
-            <div className="diagnostic-history-list">
+            <>
+              {diagnosticHistoryStatus ? <p className="care-preview-status diagnostic-history-status" aria-live="polite">{diagnosticHistoryStatus}</p> : null}
+              <div className="diagnostic-history-list">
               {flowerDiagnostics.map((diagnosis) => {
                 const isOpen = openDiagnosticId === diagnosis.id;
+                const confirmUpdateKey = `${diagnosis.id}:confirmed`;
+                const rejectUpdateKey = `${diagnosis.id}:rejected`;
                 return (
                   <article className={`diagnostic-history-card diagnostic-risk-${diagnosis.riskLevel}`} key={diagnosis.id}>
                     {diagnosis.imageDataUrl ? (
@@ -2979,20 +3018,26 @@ export const App = () => {
                             />
                           </label>
                           <div className="modal-actions">
-                            <button
+                            <LoadingButton
                               className="primary-action"
                               type="button"
-                              onClick={() => void updateDiagnosticHistoryEntry(diagnosis.id, { userConfirmation: "confirmed" })}
+                              onClick={() => void updateDiagnosticConfirmation(diagnosis.id, "confirmed")}
+                              isLoading={pendingDiagnosticUpdateKey === confirmUpdateKey}
+                              disabled={Boolean(pendingDiagnosticUpdateKey && pendingDiagnosticUpdateKey !== confirmUpdateKey)}
+                              loadingLabel={t("diagnosis.saving")}
                             >
                               {t("diagnosis.confirm")}
-                            </button>
-                            <button
+                            </LoadingButton>
+                            <LoadingButton
                               className="neutral-action"
                               type="button"
-                              onClick={() => void updateDiagnosticHistoryEntry(diagnosis.id, { userConfirmation: "rejected" })}
+                              onClick={() => void updateDiagnosticConfirmation(diagnosis.id, "rejected")}
+                              isLoading={pendingDiagnosticUpdateKey === rejectUpdateKey}
+                              disabled={Boolean(pendingDiagnosticUpdateKey && pendingDiagnosticUpdateKey !== rejectUpdateKey)}
+                              loadingLabel={t("diagnosis.saving")}
                             >
                               {t("diagnosis.reject")}
-                            </button>
+                            </LoadingButton>
                           </div>
                         </div>
                       ) : (
@@ -3007,7 +3052,8 @@ export const App = () => {
                   </article>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </section>
 
@@ -3685,7 +3731,7 @@ export const App = () => {
           {filteredFlowers.length > 0 ? (
             <div className="diagnose-picker-list">
               {visibleFlowers.map((flower) => (
-                <a className="diagnose-picker-card" href={flowerPath(flower.id, true)} key={flower.id}>
+                <a className="diagnose-picker-card" href={flowerPath(flower.id, false, "diagnostics")} key={flower.id}>
                   <img src={flower.image} alt={flower.displayName} loading="lazy" />
                   <div>
                     <strong>{flower.displayName}</strong>
@@ -3851,7 +3897,6 @@ export const App = () => {
         {renderHeroActions()}
       </header>
       <AppTabNav currentPage={isAddPlantModalOpen ? "add" : "plants"} onAddPlant={openAddPlantFromMobileNav} t={t} />
-      <DashboardOverview flowers={allFlowers} records={records} t={t} />
       <section className="toolbar" aria-label={t("dashboard.tools")}>
         <label className="search-field">
           <Search size={18} aria-hidden="true" />

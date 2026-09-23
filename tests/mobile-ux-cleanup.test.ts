@@ -57,12 +57,19 @@ test("diagnose plant picker has search, pagination, and open affordance", () => 
   assert.match(diagnoseRoute, /visibleFlowers\.map\(\(flower\) =>/);
   assert.match(diagnoseRoute, /filteredFlowers\.length > plantPageSize/);
   assert.match(diagnoseRoute, /setPlantPage\(plantPageCount\)/);
+  assert.match(diagnoseRoute, /href=\{flowerPath\(flower\.id, false, "diagnostics"\)\}/);
   assert.match(diagnoseRoute, /className="diagnose-picker-open-icon"/);
   assert.match(styleSource, /\.diagnose-picker-open-icon\s*\{/);
   assert.match(styleSource, /\.toolbar\s*\{[\s\S]*width: min\(100%, 360px\);[\s\S]*justify-content: center;[\s\S]*margin: -4px auto 16px;[\s\S]*border-radius: 999px;[\s\S]*background: transparent;[\s\S]*box-shadow: none;/);
   assert.match(styleSource, /\.search-field\s*\{[\s\S]*width: 100%;[\s\S]*min-height: 44px;[\s\S]*border-radius: 999px;/);
   assert.match(styleSource, /\.search-field:hover\s*\{/);
   assert.match(styleSource, /\.search-field input::placeholder\s*\{/);
+});
+
+test("detail page no longer exposes the nonfunctional notification toggle UI", () => {
+  assert.doesNotMatch(appSource, /toggle-field/);
+  assert.doesNotMatch(appSource, /detail\.notifications/);
+  assert.doesNotMatch(styleSource, /\.toggle-field/);
 });
 
 test("page back controls use browser history with a fallback", () => {
@@ -106,6 +113,10 @@ test("household actions are behind a compact sheet", () => {
 
 test("diagnosis history is newest-first and horizontal on mobile", () => {
   assert.match(appSource, /\.sort\(\(left, right\) => right\.createdAt\.localeCompare\(left\.createdAt\)\)/);
+  assert.match(appSource, /id="diagnostic-history-panel"/);
+  assert.match(appSource, /panel\.scrollIntoView\(\{ block: "start" \}\)/);
+  assert.match(appSource, /updateDiagnosticConfirmation/);
+  assert.match(appSource, /pendingDiagnosticUpdateKey/);
   assert.match(appSource, /className="diagnostic-card-meta"/);
   assert.match(styleSource, /\.diagnostic-history-list\s*\{[\s\S]*display: flex;[\s\S]*overflow-x: auto;[\s\S]*scroll-snap-type: x mandatory;/);
 });

@@ -35,7 +35,13 @@ test("invite helper maps backend errors to safe localization keys", () => {
 });
 
 test("route helper parses public and protected app routes", () => {
-  assert.deepEqual(parseHashRoute("#/flower/monstera?scan=1"), { flowerId: "monstera", page: "detail", scan: true });
+  assert.deepEqual(parseHashRoute("#/flower/monstera?scan=1"), { flowerId: "monstera", page: "detail", panel: "", scan: true });
+  assert.deepEqual(parseHashRoute("#/flower/monstera?panel=diagnostics"), {
+    flowerId: "monstera",
+    page: "detail",
+    panel: "diagnostics",
+    scan: false,
+  });
   assert.deepEqual(parseHashRoute("#/menu?section=household"), { page: "menu", section: "household" });
   assert.deepEqual(parseHashRoute("#/privacy"), { legalPageId: "privacy", page: "legal" });
 

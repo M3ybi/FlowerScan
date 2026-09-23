@@ -3,7 +3,7 @@ import type { LegalPageId } from "../lib/releaseReadiness";
 
 export type AppRoute =
   | { page: "dashboard" }
-  | { page: "detail"; flowerId: string; scan: boolean }
+  | { page: "detail"; flowerId: string; panel: "diagnostics" | ""; scan: boolean }
   | { page: "diagnose" }
   | { page: "health" }
   | { page: "join"; invite: string }
@@ -17,7 +17,12 @@ export const parseHashRoute = (hash: string): AppRoute => {
   const match = normalizedHash.match(/^#\/flower\/([^/?]+)(?:\?(.+))?$/);
   if (match) {
     const params = new URLSearchParams(match[2] ?? "");
-    return { page: "detail", flowerId: decodeURIComponent(match[1]), scan: params.get("scan") === "1" };
+    return {
+      page: "detail",
+      flowerId: decodeURIComponent(match[1]),
+      panel: params.get("panel") === "diagnostics" ? "diagnostics" : "",
+      scan: params.get("scan") === "1",
+    };
   }
 
   if (normalizedHash === "#/qr") {
