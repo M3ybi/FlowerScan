@@ -4,18 +4,19 @@ import test from "node:test";
 
 const appSource = readFileSync("src/App.tsx", "utf8");
 const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
+const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
 const i18nSource = readFileSync("src/lib/i18n.ts", "utf8");
 const repositorySource = readFileSync("src/lib/plantieRepository.ts", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 
 test("bottom navigation renders Menu instead of Account", () => {
-  assert.match(appSource, /type MobileBottomNavPage = "plants" \| "diagnose" \| "add" \| "qr" \| "menu"/);
-  assert.match(appSource, /href="#\/menu"/);
-  assert.match(appSource, /mobile-bottom-nav-action/);
-  assert.match(appSource, /const AppTabNav/);
-  assert.match(appSource, /className="app-tab-nav"/);
-  assert.match(appSource, /t\("dashboard\.addPlant"\)/);
-  assert.match(appSource, /t\("nav\.menu"\)/);
+  assert.match(navigationSource, /type AppNavigationPage = "plants" \| "diagnose" \| "add" \| "qr" \| "menu"/);
+  assert.match(navigationSource, /href="#\/menu"/);
+  assert.match(navigationSource, /mobile-bottom-nav-action/);
+  assert.match(navigationSource, /export const AppTabNav/);
+  assert.match(navigationSource, /className="app-tab-nav"/);
+  assert.match(navigationSource, /t\("dashboard\.addPlant"\)/);
+  assert.match(navigationSource, /t\("nav\.menu"\)/);
   assert.doesNotMatch(appSource, /currentPage="account"/);
   assert.doesNotMatch(i18nSource, /"nav\.account"/);
 });
@@ -25,8 +26,8 @@ test("desktop tab navigation is available across primary app pages", () => {
   assert.match(appSource, /<AppTabNav currentPage="diagnose"/);
   assert.match(appSource, /<AppTabNav currentPage="qr"/);
   assert.match(appSource, /<AppTabNav currentPage="menu"/);
-  assert.match(appSource, /className=\{currentPage === "add" \? "active app-tab-nav-action" : "app-tab-nav-action"\}/);
-  assert.match(appSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
+  assert.match(navigationSource, /className=\{currentPage === "add" \? "active app-tab-nav-action" : "app-tab-nav-action"\}/);
+  assert.match(navigationSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
   assert.match(styleSource, /\.app-tab-nav\s*\{/);
   assert.match(styleSource, /@media \(max-width: 780px\)[\s\S]*\.app-tab-nav\s*\{[\s\S]*display: none;/);
 });
@@ -197,7 +198,7 @@ test("pending invite route has accept and decline actions", () => {
 });
 
 test("dashboard remains blocked before auth and household", () => {
-  assert.match(appSource, /!activeHousehold && !supabaseReadState && !isRouteAllowedWithoutHousehold/);
+  assert.match(appSource, /!activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold/);
   assert.match(appSource, /<AuthPanel compact language=\{selectedLanguage\} onSuccess=\{continueToHouseholdSetup\}/);
   assert.match(appSource, /setAccessStatus/);
 });
@@ -205,13 +206,14 @@ test("dashboard remains blocked before auth and household", () => {
 test("QR labels live in app tab navigation instead of Menu content", () => {
   const menuRoute = appSource.slice(appSource.indexOf('if (route.page === "menu")'), appSource.indexOf('if (route.page === "diagnose")'));
   assert.match(appSource, /<AppTabNav currentPage="qr" onAddPlant=\{openAddPlantFromMobileNav\}/);
-  assert.match(appSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
+  assert.match(navigationSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
   assert.doesNotMatch(menuRoute, /t\("menu\.qr"\)/);
   assert.doesNotMatch(menuRoute, /handleQrPdfExport/);
 });
 
 test("primary navigation provides secondary app routes", () => {
-  assert.match(appSource, /const AppTabNav/);
+  assert.match(navigationSource, /export const AppTabNav/);
+  assert.match(navigationSource, /export const MobileBottomNav/);
   assert.match(appSource, /<MobileBottomNav/);
   assert.match(styleSource, /\.app-tab-nav\s*\{/);
   assert.match(styleSource, /\.mobile-bottom-nav\s*\{/);

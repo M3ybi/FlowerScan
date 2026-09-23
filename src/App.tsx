@@ -27,7 +27,43 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, MouseEvent } from "react";
+import {
+  currentBaseUrl,
+  currentHouseholdBaseUrl,
+  formatLocalizedDate,
+  formatLocalizedElapsedDays,
+  formatLocalizedWateringStatus,
+  pageTitle,
+  publicFlowerUrl,
+  todayIsoDate,
+} from "./app/appFormatting";
+import {
+  applyGeneratedCareToFlower,
+  getCareDiffRows,
+  getCarePillVisual,
+} from "./app/carePresentation";
+import type { CarePreview } from "./app/carePresentation";
+import {
+  createInviteUrl,
+  inviteErrorMessage,
+  isActiveInvite,
+  isLikelyInviteToken,
+  joinInviteErrorMessage,
+  normalizeInviteTokenInput,
+  safeInviteDebugMessage,
+} from "./app/householdInvites";
+import {
+  diagnosticsStorageKey,
+  flowerDiagnosticsCount,
+  readStoredDiagnostics,
+  riskLevelLabel,
+} from "./app/localDiagnostics";
+import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
+import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
+import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
 import { AuthPanel } from "./components/AuthPanel";
+import { DashboardOverview } from "./components/DashboardOverview";
+import { LoadingButton } from "./components/LoadingButton";
 import { PricingPage } from "./components/PricingPage";
 import { QrCode } from "./components/QrCode";
 import { HealthPage, LegalPageView, ReleaseChecklistPage } from "./components/ReleasePages";
@@ -41,7 +77,7 @@ import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
 import { captureImage, detectImageRuntime } from "./lib/imageCaptureService";
 import type { NormalizedImage } from "./lib/imageCaptureService";
-import { createTranslator, defaultLanguage, translate } from "./lib/i18n";
+import { createTranslator, translate } from "./lib/i18n";
 import {
   getInitialOnboardingStep,
   hasCompletedOnboarding,
@@ -100,8 +136,7 @@ import {
   fetchGeneratedCare,
   imageSourceToDataUrl,
 } from "./utils/customFlower";
-import type { GeneratedCare } from "./utils/customFlower";
-import { daysSince, formatDate, isIsoDate } from "./utils/dates";
+import { daysSince, formatDate } from "./utils/dates";
 import {
   clearHouseholdSession,
   createHouseholdApiUrl,
@@ -124,441 +159,7 @@ import {
 } from "./utils/diagnostics";
 import { imageUploadRejectionMessage, validatePlantImageForUpload } from "./utils/imageUploadValidation";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
-import type { LegalPageId } from "./lib/releaseReadiness";
 import { callBackendFunction, isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
-
-const todayIsoDate = () => {
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-
-  return `${today.getFullYear()}-${month}-${day}`;
-};
-
-const localeByLanguage: Record<PlantieLanguage, string> = {
-  de: "de-DE",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  sk: "sk-SK",
-};
-
-const formatLocalizedDate = (value: string, language: PlantieLanguage | null, t: ReturnType<typeof createTranslator>) => {
-  if (!isIsoDate(value)) {
-    return t("date.empty");
-  }
-
-  return new Intl.DateTimeFormat(localeByLanguage[language ?? defaultLanguage], {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
-};
-
-const formatLocalizedElapsedDays = (value: number | null, t: ReturnType<typeof createTranslator>) => {
-  if (value === null) {
-    return t("date.new");
-  }
-
-  if (value === 0) {
-    return t("date.todayLower");
-  }
-
-  if (value === 1) {
-    return t("date.oneDayAgo");
-  }
-
-  return t("date.daysAgo", { count: value });
-};
-
-const formatLocalizedWateringStatus = (
-  progress: ReturnType<typeof getWateringProgress>,
-  t: ReturnType<typeof createTranslator>,
-) => {
-  if (progress.state === "unknown") {
-    return t("watering.notSet");
-  }
-
-  if (progress.daysLeft < 0) {
-    return t("watering.overdue", { count: Math.abs(progress.daysLeft) });
-  }
-
-  if (progress.daysLeft === 0) {
-    return t("watering.today");
-  }
-
-  return t("watering.inDays", { count: progress.daysLeft });
-};
-
-const normalizeBaseUrl = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
-};
-
-const currentBaseUrl = () => {
-  const { origin, pathname } = window.location;
-  return `${origin}${pathname}`;
-};
-
-const currentHouseholdBaseUrl = (householdToken: string) =>
-  isValidHouseholdToken(householdToken) ? createHouseholdUrl(householdToken, "").replace(/#\/?$/, "") : currentBaseUrl();
-
-const publicFlowerUrl = (baseUrl: string, flowerId: string) =>
-  `${normalizeBaseUrl(baseUrl)}${flowerPath(flowerId, true)}`;
-
-const normalizeCareText = (value: string) =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-const includesAny = (value: string, keywords: string[]) => keywords.some((keyword) => value.includes(keyword));
-
-const getWaterIconLevel = (value: string, intervalDays: number) => {
-  const normalizedValue = normalizeCareText(value);
-
-  if (
-    includesAny(normalizedValue, [
-      "nechat uplne vyschnut",
-      "po uplnom vyschnuti",
-      "po vyschnuti",
-      "az po preschnuti",
-      "az po vyschnuti",
-      "mierne",
-      "striedmo",
-      "such",
-      "sukulent",
-      "kaktus",
-    ]) ||
-    intervalDays >= 14
-  ) {
-    return "low";
-  }
-
-  if (
-    includesAny(normalizedValue, ["udrziavat vlhku", "stale mierne vlhku", "rovnomerne vlhku", "vela vody", "castejsie"]) ||
-    intervalDays <= 5
-  ) {
-    return "high";
-  }
-
-  return "medium";
-};
-
-const getSunIconLevel = (value: string) => {
-  const normalizedValue = normalizeCareText(value);
-
-  if (includesAny(normalizedValue, ["plne slnko", "priame slnko", "vela svetla", "velmi jasne", "slnecne", "6 hodin"])) {
-    return "full";
-  }
-
-  if (includesAny(normalizedValue, ["polotien", "tien", "menej svetla", "slabsie svetlo", "nizke svetlo"])) {
-    return "low";
-  }
-
-  return "half";
-};
-
-const getHumidityIconLevel = (value: string) => {
-  const normalizedValue = normalizeCareText(value);
-
-  if (includesAny(normalizedValue, ["nizs", "nizka", "suchy vzduch", "bez rosenia", "nie je narocna", "bezna izbova"])) {
-    return "low";
-  }
-
-  if (includesAny(normalizedValue, ["vysok", "vyss", "rosit", "vlhkomil", "terarium"])) {
-    return "high";
-  }
-
-  return "medium";
-};
-
-const getDifficultyIconLevel = (value: string) => {
-  const normalizedValue = normalizeCareText(value);
-
-  if (includesAny(normalizedValue, ["nenaroc", "lahk", "jednoduch", "zaciatocnik", "odolna"])) {
-    return "easy";
-  }
-
-  if (includesAny(normalizedValue, ["stredn", "mierna"])) {
-    return "medium";
-  }
-
-  if (includesAny(normalizedValue, ["naroc", "citliv", "skusen"])) {
-    return "hard";
-  }
-
-  return "medium";
-};
-
-const getCarePillVisual = (label: string, value: string, intervalDays: number) => {
-  const normalizedLabel = normalizeCareText(label);
-
-  if (normalizedLabel.includes("svetlo")) {
-    const strength = getSunIconLevel(value);
-
-    return (
-      <span className={`pill-visual pill-sun pill-sun-${strength}`} aria-hidden="true">
-        <span />
-      </span>
-    );
-  }
-
-  if (normalizedLabel.includes("zalievka")) {
-    const level = getWaterIconLevel(value, intervalDays);
-
-    return (
-      <span className={`pill-visual pill-water pill-water-${level}`} aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-    );
-  }
-
-  if (normalizedLabel.includes("vlhkost")) {
-    const level = getHumidityIconLevel(value);
-
-    return (
-      <span className={`pill-visual pill-humidity pill-humidity-${level}`} aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-    );
-  }
-
-  if (normalizedLabel.includes("narocnost")) {
-    const level = getDifficultyIconLevel(value);
-
-    return (
-      <span className={`pill-visual pill-difficulty pill-difficulty-${level}`} aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-    );
-  }
-
-  return (
-    <span className="pill-visual pill-pot" aria-hidden="true">
-      <span />
-    </span>
-  );
-};
-
-type CarePreview = {
-  flowerId: string;
-  nextCare: GeneratedCare;
-};
-
-type CareDiffRow = {
-  label: string;
-  currentValue: string;
-  nextValue: string;
-};
-
-const formatCarePills = (carePills: Flower["carePills"]) =>
-  carePills.map((pill) => `${pill.label}: ${pill.value}`).join("\n");
-
-const formatCareTips = (careTips: string[]) => careTips.map((tip) => `- ${tip}`).join("\n");
-
-const getCareDiffRows = (
-  flower: Flower,
-  nextCare: GeneratedCare,
-  currentIntervalDays: number,
-  t: ReturnType<typeof createTranslator>,
-): CareDiffRow[] => {
-  const candidates: CareDiffRow[] = [
-    { label: t("careDiff.name"), currentValue: flower.displayName, nextValue: nextCare.displayName },
-    { label: t("careDiff.botanicalId"), currentValue: flower.likelyName, nextValue: nextCare.likelyName },
-    { label: t("careDiff.shortCare"), currentValue: flower.shortCare, nextValue: nextCare.shortCare },
-    { label: t("careDiff.quickPills"), currentValue: formatCarePills(flower.carePills), nextValue: formatCarePills(nextCare.carePills) },
-    { label: t("detail.light"), currentValue: flower.light, nextValue: nextCare.light },
-    { label: t("plants.watering"), currentValue: flower.watering, nextValue: nextCare.watering },
-    {
-      label: t("careDiff.wateringInterval"),
-      currentValue: t("careDiff.days", { count: currentIntervalDays }),
-      nextValue: t("careDiff.days", { count: nextCare.wateringIntervalDays }),
-    },
-    { label: t("detail.substrate"), currentValue: flower.soil, nextValue: nextCare.soil },
-    { label: t("detail.careTips"), currentValue: formatCareTips(flower.careTips), nextValue: formatCareTips(nextCare.careTips) },
-    { label: t("careDiff.identificationNote"), currentValue: flower.identificationNote, nextValue: nextCare.identificationNote },
-  ];
-
-  return candidates.filter((row) => row.currentValue.trim() !== row.nextValue.trim());
-};
-
-const applyGeneratedCareToFlower = (flower: Flower, nextCare: GeneratedCare): Flower => {
-  const { displayName, identificationConfidence, ...careProfile } = nextCare;
-
-  return {
-    ...flower,
-    ...careProfile,
-    displayName: displayName.trim() || flower.displayName,
-    identification: identificationConfidence,
-    source: "custom",
-  };
-};
-
-const recordHasValue = (record: FlowerRecords[string] | undefined) =>
-  Boolean(record?.note || record?.lastFertilized || record?.lastWatered || record?.lastTransplanted);
-
-const mergeCloudRecords = (localRecords: FlowerRecords, cloudRecords: FlowerRecords) => {
-  const flowerIds = new Set([...Object.keys(localRecords), ...Object.keys(cloudRecords)]);
-
-  return Object.fromEntries(
-    [...flowerIds].map((flowerId) => [
-      flowerId,
-      recordHasValue(cloudRecords[flowerId]) ? cloudRecords[flowerId] : localRecords[flowerId],
-    ]),
-  ) as FlowerRecords;
-};
-
-const diagnosticsStorageKey = "flowscan-plant-diagnostics-v1";
-
-const readStoredDiagnostics = () => {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    return sanitizeDiagnosticEntries(JSON.parse(window.localStorage.getItem(diagnosticsStorageKey) ?? "[]"));
-  } catch {
-    return [];
-  }
-};
-
-const riskLevelLabel = (riskLevel: PlantDiagnosticEntry["riskLevel"], t: ReturnType<typeof createTranslator>) =>
-  riskLevel === "high" ? t("diagnosis.riskHigh") : riskLevel === "medium" ? t("diagnosis.riskMedium") : t("diagnosis.riskLow");
-
-const flowerDiagnosticsCount = (flowerId: string, diagnostics: PlantDiagnosticEntry[]) =>
-  diagnostics.filter((diagnostic) => diagnostic.plantId === flowerId).length;
-
-type MobileBottomNavPage = "plants" | "diagnose" | "add" | "qr" | "menu";
-
-const MobileBottomNav = ({
-  currentPage,
-  onAddPlant,
-  t,
-}: {
-  currentPage: MobileBottomNavPage;
-  onAddPlant: () => void;
-  t: ReturnType<typeof createTranslator>;
-}) => (
-  <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-    <a className={currentPage === "plants" ? "active" : ""} href="#/">
-      <Leaf size={18} aria-hidden="true" />
-      {t("nav.plants")}
-    </a>
-    <a className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
-      <Camera size={18} aria-hidden="true" />
-      {t("nav.diagnose")}
-    </a>
-    <button type="button" className="mobile-bottom-nav-action" onClick={onAddPlant}>
-      <Plus size={18} aria-hidden="true" />
-      {t("dashboard.addPlant")}
-    </button>
-    <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
-      <QrCodeIcon size={18} aria-hidden="true" />
-      {t("nav.qr")}
-    </a>
-    <a className={currentPage === "menu" ? "active" : ""} href="#/menu">
-      <Home size={18} aria-hidden="true" />
-      {t("nav.menu")}
-    </a>
-  </nav>
-);
-
-const AppTabNav = ({
-  currentPage,
-  onAddPlant,
-  t,
-}: {
-  currentPage: MobileBottomNavPage;
-  onAddPlant: () => void;
-  t: ReturnType<typeof createTranslator>;
-}) => (
-  <nav className="app-tab-nav" aria-label="Main navigation">
-    <a className={currentPage === "plants" ? "active" : ""} href="#/">
-      <Leaf size={18} aria-hidden="true" />
-      {t("nav.plants")}
-    </a>
-    <a className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
-      <Camera size={18} aria-hidden="true" />
-      {t("nav.diagnose")}
-    </a>
-    <button type="button" className={currentPage === "add" ? "active app-tab-nav-action" : "app-tab-nav-action"} onClick={onAddPlant}>
-      <Plus size={18} aria-hidden="true" />
-      {t("dashboard.addPlant")}
-    </button>
-    <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
-      <QrCodeIcon size={18} aria-hidden="true" />
-      {t("nav.qr")}
-    </a>
-    <a className={currentPage === "menu" ? "active" : ""} href="#/menu">
-      <Home size={18} aria-hidden="true" />
-      {t("nav.menu")}
-    </a>
-  </nav>
-);
-
-const useHashRoute = () => {
-  const [hash, setHash] = useState(() => window.location.hash || "#/");
-
-  useEffect(() => {
-    const handleHashChange = () => setHash(window.location.hash || "#/");
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
-
-  const match = hash.match(/^#\/flower\/([^/?]+)(?:\?(.+))?$/);
-  if (match) {
-    const params = new URLSearchParams(match[2] ?? "");
-    return { page: "detail" as const, flowerId: decodeURIComponent(match[1]), scan: params.get("scan") === "1" };
-  }
-
-  if (hash === "#/qr") {
-    return { page: "qr" as const };
-  }
-
-  if (hash === "#/diagnose") {
-    return { page: "diagnose" as const };
-  }
-
-  const menuMatch = hash.match(/^#\/(?:account|menu)(?:\?(.+))?$/);
-  if (menuMatch) {
-    const params = new URLSearchParams(menuMatch[1] ?? "");
-    return { page: "menu" as const, section: params.get("section") ?? "" };
-  }
-
-  const joinMatch = hash.match(/^#\/join(?:\?(.+))?$/);
-  if (joinMatch) {
-    const params = new URLSearchParams(joinMatch[1] ?? "");
-    return { invite: params.get("invite") ?? "", page: "join" as const };
-  }
-
-  const legalPageMatch = hash.match(/^#\/(privacy|terms|support|delete-account|subscription-terms)$/);
-  if (legalPageMatch) {
-    return { page: "legal" as const, legalPageId: legalPageMatch[1] as LegalPageId };
-  }
-
-  if (hash === "#/release-readiness") {
-    return { page: "release-readiness" as const };
-  }
-
-  if (hash === "#/health") {
-    return { page: "health" as const };
-  }
-
-  return { page: "dashboard" as const };
-};
-
-const pageTitle = (pageName: string) => `${pageName} | Plantie`;
 
 const isSupabaseReadThroughEnabled = isSupabaseConfigured && import.meta.env.VITE_DISABLE_SUPABASE_READS !== "true";
 const isSupabaseWriteThroughEnvEnabled =
@@ -582,106 +183,6 @@ const logTechnicalError = (message: string, error: unknown) => {
     error: error instanceof Error ? error.message : String(error),
     name: error instanceof Error ? error.name : "UnknownError",
   });
-};
-
-const createInviteUrl = (token: string) => {
-  const url = new URL(window.location.href);
-  url.search = "";
-  url.hash = `#/join?invite=${encodeURIComponent(token)}`;
-  return url.toString();
-};
-
-const normalizeInviteTokenInput = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-    const hashQuery = parsed.hash.match(/^#\/join(?:\?(.+))?$/)?.[1] ?? "";
-    return new URLSearchParams(hashQuery).get("invite")?.trim() ?? trimmed;
-  } catch {
-    const hashQuery = trimmed.match(/^#\/join(?:\?(.+))?$/)?.[1] ?? "";
-    return hashQuery ? new URLSearchParams(hashQuery).get("invite")?.trim() ?? "" : trimmed;
-  }
-};
-
-const isLikelyInviteToken = (value: string) => value.length >= 32 && /^[A-Za-z0-9_-]+$/.test(value);
-
-const isActiveInvite = (invite: HouseholdInvite) => !invite.usedAt && !invite.revokedAt;
-
-const inviteErrorMessage = (error: unknown) => {
-  const details = typeof error === "object" && error !== null ? error as { code?: string; details?: string; hint?: string; message?: string } : {};
-  const message = [details.message, details.details, details.hint, details.code]
-    .filter((item): item is string => typeof item === "string")
-    .join(" ")
-    .toLowerCase();
-
-  if (message.includes("active invite already exists") || message.includes("duplicate")) {
-    return "household.inviteStatusDuplicate";
-  }
-
-  if (message.includes("invalid invite email") || message.includes("valid family member email") || message.includes("invalid email")) {
-    return "household.inviteStatusInvalidEmail";
-  }
-
-  if (message.includes("permission") || message.includes("access") || message.includes("owner") || message.includes("editor") || message.includes("42501")) {
-    return "household.inviteStatusPermission";
-  }
-
-  if (message.includes("jwt") || message.includes("auth") || message.includes("not authenticated") || message.includes("401")) {
-    return "household.inviteStatusAuth";
-  }
-
-  if (message.includes("schema cache") || message.includes("pgrst202") || message.includes("could not find the function")) {
-    return "household.inviteStatusConfig";
-  }
-
-  return "household.inviteStatusGeneric";
-};
-
-const safeInviteDebugMessage = (error: unknown) => {
-  if (import.meta.env.PROD || typeof error !== "object" || error === null) {
-    return "";
-  }
-
-  const details = error as { code?: string; details?: string; hint?: string; message?: string };
-  return [details.code, details.message, details.details, details.hint]
-    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    .join(" | ")
-    .slice(0, 240);
-};
-
-const joinInviteErrorMessage = (error: unknown) => {
-  const details = typeof error === "object" && error !== null ? error as { code?: string; details?: string; hint?: string; message?: string } : {};
-  const message = [details.message, details.details, details.hint, details.code]
-    .filter((item): item is string => typeof item === "string")
-    .join(" ")
-    .toLowerCase();
-
-  if (message.includes("revoked") || message.includes("invalid") || message.includes("used")) {
-    return "household.inviteStatusInvalidInvite";
-  }
-
-  if (message.includes("jwt") || message.includes("auth") || message.includes("not authenticated") || message.includes("401")) {
-    return "household.inviteStatusAuthRequired";
-  }
-
-  if (message.includes("schema cache") || message.includes("pgrst202") || message.includes("could not find the function")) {
-    return "household.inviteStatusConfig";
-  }
-
-  return "household.joinFailed";
-};
-
-const areStringRecordsEqual = (left: Record<string, string>, right: Record<string, string>) => {
-  const leftEntries = Object.entries(left);
-  if (leftEntries.length !== Object.keys(right).length) {
-    return false;
-  }
-
-  return leftEntries.every(([key, value]) => right[key] === value);
 };
 
 type HouseholdLookupStatus = "idle" | "checking" | "complete";
@@ -752,6 +253,11 @@ export const App = () => {
   const [householdInvites, setHouseholdInvites] = useState<HouseholdInvite[]>([]);
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [joinInviteInput, setJoinInviteInput] = useState("");
+  const [isJoiningInvite, setIsJoiningInvite] = useState(false);
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+  const [revokeInviteId, setRevokeInviteId] = useState("");
+  const [removingViewerId, setRemovingViewerId] = useState("");
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [isAccessChecking, setIsAccessChecking] = useState(true);
   const [householdLookupStatus, setHouseholdLookupStatus] = useState<HouseholdLookupStatus>("idle");
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
@@ -759,13 +265,16 @@ export const App = () => {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [qrExportStatus, setQrExportStatus] = useState("");
+  const [isExportingQrPdf, setIsExportingQrPdf] = useState(false);
   const [newPlantName, setNewPlantName] = useState("");
   const [newPlantImage, setNewPlantImage] = useState<NormalizedImage | null>(null);
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
+  const [isCapturingNewPlantImage, setIsCapturingNewPlantImage] = useState(false);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
   const [plantPage, setPlantPage] = useState(1);
   const [deleteFlowerId, setDeleteFlowerId] = useState("");
+  const [isRemovingPlant, setIsRemovingPlant] = useState(false);
   const [carePreview, setCarePreview] = useState<CarePreview | null>(null);
   const [carePreviewStatus, setCarePreviewStatus] = useState("");
   const [isGeneratingCarePreview, setIsGeneratingCarePreview] = useState(false);
@@ -780,15 +289,18 @@ export const App = () => {
   const [diagnosisStatus, setDiagnosisStatus] = useState("");
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [isSavingDiagnosis, setIsSavingDiagnosis] = useState(false);
+  const [isCapturingDiagnosisImage, setIsCapturingDiagnosisImage] = useState(false);
   const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
   const [deleteAccountContact, setDeleteAccountContact] = useState(() => auth.user?.email ?? "");
   const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
+  const [isRequestingAccountDeletion, setIsRequestingAccountDeletion] = useState(false);
   const [accountActionStatus, setAccountActionStatus] = useState("");
   const [healthEndpointStatus, setHealthEndpointStatus] = useState("");
   const [supabasePlantIdsByLegacyId, setSupabasePlantIdsByLegacyId] = useState<Record<string, string>>({});
   const [quickRecordStatus, setQuickRecordStatus] = useState("");
+  const [pendingQuickRecordKey, setPendingQuickRecordKey] = useState("");
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
   const [supabaseReadError, setSupabaseReadError] = useState(false);
   const [householdPlanUsage, setHouseholdPlanUsage] = useState<HouseholdPlanUsage | null>(null);
@@ -855,12 +367,7 @@ export const App = () => {
   const aiDiagnosisDisabledActionLabel = (access: AiDiagnosisAccessResult) =>
     access.status === "limit_reached" ? t("diagnosis.limitReachedAction") : t("diagnosis.unavailableAction");
   const routeInviteToken = route.page === "join" ? route.invite : "";
-  const isRouteAllowedWithoutHousehold =
-    route.page === "menu" ||
-    route.page === "join" ||
-    route.page === "legal" ||
-    route.page === "release-readiness" ||
-    route.page === "health";
+  const currentRouteAllowedWithoutHousehold = isRouteAllowedWithoutHousehold(route);
   const supabaseWriteMode = detectSupabaseWriteMode({
     hasAuthenticatedUser: auth.isAuthenticated,
     hasMigratedHousehold: Boolean(supabaseReadState),
@@ -1491,17 +998,24 @@ export const App = () => {
   );
 
   const handleQrPdfExport = async () => {
+    if (isExportingQrPdf) {
+      return;
+    }
+
     if (allFlowers.length === 0) {
       setQrExportStatus(t("qr.noPlantsExport"));
       return;
     }
 
     try {
+      setIsExportingQrPdf(true);
       setQrExportStatus(t("qr.exportGenerating"));
       await exportQrLabelsPdf(allFlowers, baseUrl);
       setQrExportStatus(t("qr.exportReady"));
     } catch (error) {
       setQrExportStatus(error instanceof Error ? error.message : t("qr.exportFailed"));
+    } finally {
+      setIsExportingQrPdf(false);
     }
   };
 
@@ -1547,6 +1061,10 @@ export const App = () => {
   };
 
   const handleSaveHouseholdName = async () => {
+    if (isSavingHouseholdName) {
+      return;
+    }
+
     if (!activeSupabaseHouseholdId || !isCurrentHouseholdOwner) {
       setHouseholdNameEditStatus(t("household.renamePermission"));
       setHouseholdNameEditStatusTone("error");
@@ -1627,14 +1145,15 @@ export const App = () => {
             onChange={(event) => setHouseholdNameEditDraft(event.target.value)}
           />
           <div className="household-name-edit-actions">
-            <button
+            <LoadingButton
               className="household-icon-action household-icon-action-save"
               type="submit"
-              disabled={isSavingHouseholdName}
+              isLoading={isSavingHouseholdName}
+              loadingLabel={<span className="sr-only">{t("household.renameSaving")}</span>}
               aria-label={t("household.renameSave")}
             >
               <Check size={16} aria-hidden="true" />
-            </button>
+            </LoadingButton>
             <button
               className="household-icon-action"
               type="button"
@@ -1723,10 +1242,10 @@ export const App = () => {
               <ChevronRight size={16} aria-hidden="true" />
             </a>
             {auth.isAuthenticated ? (
-              <button type="button" onClick={() => void handleAccountSignOut()}>
+              <LoadingButton type="button" onClick={() => void handleAccountSignOut()} isLoading={isSigningOut} loadingLabel={t("account.signingOut")}>
                 <UserRound size={17} aria-hidden="true" />
                 {t("account.signOut")}
-              </button>
+              </LoadingButton>
             ) : null}
           </div>
         </section>
@@ -1802,11 +1321,20 @@ export const App = () => {
     return saved;
   };
 
-  const saveQuickRecord = (flowerId: string, patch: Partial<FlowerRecords[string]>, message: string) => {
-    void updateCareRecord(flowerId, patch, message).catch(() => {
+  const saveQuickRecord = async (actionKey: string, flowerId: string, patch: Partial<FlowerRecords[string]>, message: string) => {
+    if (pendingQuickRecordKey) {
+      return;
+    }
+
+    setPendingQuickRecordKey(actionKey);
+    try {
+      await updateCareRecord(flowerId, patch, message);
+    } catch {
       setSupabaseReadError(true);
       setQuickRecordStatus(t("sync.careWriteFallback"));
-    });
+    } finally {
+      setPendingQuickRecordKey("");
+    }
   };
 
   const saveFlower = async (flower: Flower, message = "") => {
@@ -1885,6 +1413,10 @@ export const App = () => {
   };
 
   const handleCreateInvite = async () => {
+    if (isCreatingInvite) {
+      return;
+    }
+
     if (!auth.isAuthenticated) {
       setInviteFeedback(t("household.inviteStatusNotSignedIn"), "error");
       setOnboardingStep("welcome");
@@ -1910,6 +1442,7 @@ export const App = () => {
     const feedbackGeneration = transientMessageGenerationRef.current;
 
     try {
+      setIsCreatingInvite(true);
       setInviteFeedback(t("household.inviteStatusCreating"), "info");
       const invite = await createHouseholdInvite(activeSupabaseHouseholdId, normalizedEmail, inviteRole);
       const link = createInviteUrl(invite.token);
@@ -1939,6 +1472,8 @@ export const App = () => {
         const debugMessage = safeInviteDebugMessage(error);
         setInviteFeedback(`${t(inviteErrorMessage(error))}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
       }
+    } finally {
+      setIsCreatingInvite(false);
     }
   };
 
@@ -1962,9 +1497,14 @@ export const App = () => {
   };
 
   const handleRevokeInvite = async (inviteId: string) => {
+    if (revokeInviteId) {
+      return;
+    }
+
     const feedbackGeneration = transientMessageGenerationRef.current;
 
     try {
+      setRevokeInviteId(inviteId);
       await revokeHouseholdInvite(inviteId);
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
         setInviteStatus(t("household.inviteRevoked"));
@@ -1974,10 +1514,16 @@ export const App = () => {
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
         setInviteStatus(error instanceof Error ? error.message : t("household.inviteRevokeFailed"));
       }
+    } finally {
+      setRevokeInviteId("");
     }
   };
 
   const handleRemoveViewer = async (member: HouseholdMember) => {
+    if (removingViewerId) {
+      return;
+    }
+
     if (!activeSupabaseHouseholdId || !isCurrentHouseholdOwner || member.role !== "viewer" || member.userId === auth.user?.id) {
       return;
     }
@@ -1989,6 +1535,7 @@ export const App = () => {
     const feedbackGeneration = transientMessageGenerationRef.current;
 
     try {
+      setRemovingViewerId(member.userId);
       setInviteFeedback(t("household.removeViewerWorking"), "info");
       await removeHouseholdViewer(activeSupabaseHouseholdId, member.userId);
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
@@ -2001,6 +1548,8 @@ export const App = () => {
         const debugMessage = safeInviteDebugMessage(error);
         setInviteFeedback(`${t("household.removeViewerFailed")}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
       }
+    } finally {
+      setRemovingViewerId("");
     }
   };
 
@@ -2012,11 +1561,16 @@ export const App = () => {
   };
 
   const handleAccountSignOut = async () => {
+    if (isSigningOut) {
+      return;
+    }
+
     if (!window.confirm(t("account.signOutConfirm"))) {
       return;
     }
 
     try {
+      setIsSigningOut(true);
       setAccountActionStatus(t("account.signingOut"));
       await signOut();
       clearHouseholdSession();
@@ -2029,10 +1583,16 @@ export const App = () => {
       window.location.hash = "#/menu?section=account";
     } catch (error) {
       setAccountActionStatus(error instanceof Error ? error.message : t("account.signOutFailed"));
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
   const handleJoinInvite = async (input = joinInviteInput) => {
+    if (isJoiningInvite) {
+      return false;
+    }
+
     const token = normalizeInviteTokenInput(input);
     if (!token || !isLikelyInviteToken(token)) {
       setInviteStatus(t(token ? "household.inviteStatusInvalidInvite" : "household.inviteStatusMissingToken"));
@@ -2050,6 +1610,7 @@ export const App = () => {
     const feedbackGeneration = transientMessageGenerationRef.current;
 
     try {
+      setIsJoiningInvite(true);
       setInviteStatus(t("household.joining"));
       const household = await joinHouseholdByInvite(token);
       const session = { name: household.name, publicToken: household.id };
@@ -2068,6 +1629,8 @@ export const App = () => {
         setInviteStatus(t(joinInviteErrorMessage(error)));
       }
       return false;
+    } finally {
+      setIsJoiningInvite(false);
     }
   };
 
@@ -2200,6 +1763,10 @@ export const App = () => {
 
   const handleAddCustomFlower = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isAddingPlant) {
+      return;
+    }
+
     const plantName = newPlantName.trim();
 
     if (!plantName || !newPlantImage) {
@@ -2255,6 +1822,10 @@ export const App = () => {
   };
 
   const handleGenerateCarePreview = async (flower: Flower) => {
+    if (isGeneratingCarePreview) {
+      return;
+    }
+
     const access = resolveCurrentAiDiagnosisAccess();
     if (!access.allowed) {
       setCarePreviewStatus(aiDiagnosisAccessMessage(access));
@@ -2344,7 +1915,7 @@ export const App = () => {
   };
 
   const closeDiagnosisModal = () => {
-    if (isDiagnosing) {
+    if (isDiagnosing || isCapturingDiagnosisImage) {
       return;
     }
 
@@ -2352,8 +1923,13 @@ export const App = () => {
   };
 
   const handleNewPlantImageCapture = async (source: "camera" | "gallery", file?: File) => {
+    if (isCapturingNewPlantImage || isAddingPlant) {
+      return;
+    }
+
     let capturedImage: NormalizedImage | null = null;
     try {
+      setIsCapturingNewPlantImage(true);
       setNewPlantStatus(t("image.processing"));
       const image = await captureImage({ file, source });
       capturedImage = image;
@@ -2370,10 +1946,16 @@ export const App = () => {
       }
       setNewPlantImage(null);
       setNewPlantStatus(error instanceof Error ? error.message : t("image.processFailed"));
+    } finally {
+      setIsCapturingNewPlantImage(false);
     }
   };
 
   const handleDiagnosisImageChange = async (source: "camera" | "gallery", file?: File) => {
+    if (isCapturingDiagnosisImage || isDiagnosing) {
+      return;
+    }
+
     const access = resolveCurrentAiDiagnosisAccess();
     if (!access.allowed) {
       setDiagnosisStatus(aiDiagnosisAccessMessage(access));
@@ -2386,6 +1968,7 @@ export const App = () => {
 
     let capturedImage: NormalizedImage | null = null;
     try {
+      setIsCapturingDiagnosisImage(true);
       setDiagnosisStatus(t("image.processing"));
       setDiagnosisDraft(null);
       const image = await captureImage({ file, source });
@@ -2408,6 +1991,8 @@ export const App = () => {
       setDiagnosisImageDataUrl("");
       setDiagnosisImagePreviewUrl("");
       setDiagnosisStatus(error instanceof Error ? error.message : t("image.processFailed"));
+    } finally {
+      setIsCapturingDiagnosisImage(false);
     }
   };
 
@@ -2616,25 +2201,35 @@ export const App = () => {
     }
   };
 
-  const confirmRemoveCustomFlower = () => {
-    if (!deleteFlowerId) {
+  const confirmRemoveCustomFlower = async () => {
+    if (!deleteFlowerId || isRemovingPlant) {
       return;
     }
 
-    void removeFlowerById(deleteFlowerId);
-    setDeleteFlowerId("");
-    window.location.hash = "#/";
-  }
+    try {
+      setIsRemovingPlant(true);
+      await removeFlowerById(deleteFlowerId);
+      setDeleteFlowerId("");
+      window.location.hash = "#/";
+    } finally {
+      setIsRemovingPlant(false);
+    }
+  };
 
   const requestAccountDeletion = async () => {
+    if (isRequestingAccountDeletion) {
+      return;
+    }
+
     const contact = deleteAccountContact.trim();
     if (!contact) {
       setDeleteAccountStatus("Enter the account email or user ID before requesting deletion review.");
       return;
     }
 
-    setDeleteAccountStatus("Submitting deletion review request...");
     try {
+      setIsRequestingAccountDeletion(true);
+      setDeleteAccountStatus("Submitting deletion review request...");
       const body = await callBackendFunction<{ message?: string }>({
         allowNetlifyFallback: true,
         body: {
@@ -2648,6 +2243,8 @@ export const App = () => {
       setDeleteAccountStatus(body?.message ?? "Deletion request received for manual review.");
     } catch (error) {
       setDeleteAccountStatus(error instanceof Error ? error.message : "Deletion request could not be submitted.");
+    } finally {
+      setIsRequestingAccountDeletion(false);
     }
   };
 
@@ -2746,9 +2343,15 @@ export const App = () => {
           </label>
           {auth.isAuthenticated ? (
             <div className="menu-action-row">
-              <button className="primary-action" type="button" onClick={() => void handleJoinInvite()}>
+              <LoadingButton
+                className="primary-action"
+                type="button"
+                onClick={() => void handleJoinInvite()}
+                isLoading={isJoiningInvite}
+                loadingLabel={t("household.joining")}
+              >
                 {t("household.acceptInvite")}
-              </button>
+              </LoadingButton>
               <button className="neutral-action" type="button" onClick={declinePendingInvite}>
                 {t("household.declineInvite")}
               </button>
@@ -2777,6 +2380,7 @@ export const App = () => {
         {route.page === "legal" ? (
         <LegalPageView
           deleteRequestStatus={deleteAccountStatus}
+          isDeleteRequestPending={isRequestingAccountDeletion}
           onRequestDeletion={auth.isAuthenticated ? requestAccountDeletion : undefined}
           pageId={route.legalPageId}
           requestEmail={deleteAccountContact}
@@ -2791,7 +2395,7 @@ export const App = () => {
     );
   }
 
-  if ((isSupabaseHouseholdPending || (!shouldUseSupabaseAccountData && isAccessChecking)) && !isRouteAllowedWithoutHousehold) {
+  if ((isSupabaseHouseholdPending || (!shouldUseSupabaseAccountData && isAccessChecking)) && !currentRouteAllowedWithoutHousehold) {
     return renderHouseholdLoading();
   }
 
@@ -2866,10 +2470,10 @@ export const App = () => {
                   onChange={(event) => setHouseholdNameDraft(event.target.value)}
                 />
               </label>
-              <button type="submit" disabled={isCreatingHousehold}>
+              <LoadingButton type="submit" isLoading={isCreatingHousehold} loadingLabel={t("household.creatingShort")}>
                 <Plus size={18} aria-hidden="true" />
-                {isCreatingHousehold ? t("household.creatingShort") : t("household.create")}
-              </button>
+                {t("household.create")}
+              </LoadingButton>
             </form>
           )}
           {accessStatus || onboardingStatus ? <p className="access-status">{accessStatus || onboardingStatus}</p> : null}
@@ -2878,7 +2482,7 @@ export const App = () => {
     );
   }
 
-  if (!activeHousehold && !supabaseReadState && !isRouteAllowedWithoutHousehold) {
+  if (!activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold) {
     return (
       <main className="app-shell access-shell">
         <section className="access-card household-setup-card" aria-labelledby="access-title">
@@ -2909,10 +2513,10 @@ export const App = () => {
                     onChange={(event) => setHouseholdNameDraft(event.target.value)}
                   />
                 </label>
-                <button className="primary-action" type="submit" disabled={isCreatingHousehold}>
+                <LoadingButton className="primary-action" type="submit" isLoading={isCreatingHousehold} loadingLabel={t("household.creatingShort")}>
                   <Plus size={18} aria-hidden="true" />
-                  {isCreatingHousehold ? t("household.creatingShort") : t("household.create")}
-                </button>
+                  {t("household.create")}
+                </LoadingButton>
               </form>
               <div className="household-setup-option">
                 <div>
@@ -2927,9 +2531,15 @@ export const App = () => {
                     placeholder="#/join?invite=..."
                   />
                 </label>
-                <button className="ghost-action" type="button" onClick={() => void handleJoinInvite()}>
+                <LoadingButton
+                  className="ghost-action"
+                  type="button"
+                  onClick={() => void handleJoinInvite()}
+                  isLoading={isJoiningInvite}
+                  loadingLabel={t("household.joining")}
+                >
                   {t("household.continueWithInvite")}
-                </button>
+                </LoadingButton>
               </div>
             </div>
           ) : (
@@ -3050,30 +2660,39 @@ export const App = () => {
             <p>{t("detail.quickActionBody")}</p>
           </div>
           <div className="scan-action-buttons">
-              <button
+              <LoadingButton
                 className={`primary-action ${quickRecordStatus === t("detail.savedWatered") ? "quick-action-saved" : ""}`}
                 type="button"
-                onClick={() => saveQuickRecord(flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}
+                onClick={() => void saveQuickRecord("watered", flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}
+                isLoading={pendingQuickRecordKey === "watered"}
+                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "watered")}
+                loadingLabel={t("detail.savingCare")}
             >
               <Droplets size={18} aria-hidden="true" />
               {t("detail.todayWatered")}
-            </button>
-              <button
+            </LoadingButton>
+              <LoadingButton
                 className={`ghost-action ${quickRecordStatus === t("detail.savedTransplanted") ? "quick-action-saved" : ""}`}
                 type="button"
-                onClick={() => saveQuickRecord(flower.id, { lastTransplanted: todayIsoDate() }, t("detail.savedTransplanted"))}
+                onClick={() => void saveQuickRecord("transplanted", flower.id, { lastTransplanted: todayIsoDate() }, t("detail.savedTransplanted"))}
+                isLoading={pendingQuickRecordKey === "transplanted"}
+                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "transplanted")}
+                loadingLabel={t("detail.savingCare")}
               >
                 <Sprout size={18} aria-hidden="true" />
               {t("detail.todayTransplanted")}
-            </button>
-            <button
+            </LoadingButton>
+            <LoadingButton
               className={`ghost-action ${quickRecordStatus === t("detail.savedFertilized") ? "quick-action-saved" : ""}`}
               type="button"
-              onClick={() => saveQuickRecord(flower.id, { lastFertilized: todayIsoDate() }, t("detail.savedFertilized"))}
+              onClick={() => void saveQuickRecord("fertilized", flower.id, { lastFertilized: todayIsoDate() }, t("detail.savedFertilized"))}
+              isLoading={pendingQuickRecordKey === "fertilized"}
+              disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "fertilized")}
+              loadingLabel={t("detail.savingCare")}
             >
               <Leaf size={18} aria-hidden="true" />
               {t("detail.todayFertilized")}
-            </button>
+            </LoadingButton>
             <div className={`quick-save-feedback ${quickRecordStatus ? "quick-save-feedback-visible" : ""}`} aria-live="polite">
               <Check size={16} aria-hidden="true" />
               {quickRecordStatus || t("detail.savedGeneric")}
@@ -3156,15 +2775,17 @@ export const App = () => {
           <div className="section-title">
             <Leaf size={18} aria-hidden="true" />
             <h2 id="care-title">{t("detail.basicCare")}</h2>
-            <button
+            <LoadingButton
               className="ai-care-button"
               type="button"
               disabled={isGeneratingCarePreview || !diagnosisAccess.allowed}
               onClick={() => handleGenerateCarePreview(flower)}
+              isLoading={isGeneratingCarePreview}
+              loadingLabel={t("detail.generating")}
             >
               <Sparkles size={16} aria-hidden="true" />
-              {isGeneratingCarePreview ? t("detail.generating") : diagnosisAccess.allowed ? t("detail.generateAi") : aiDiagnosisDisabledActionLabel(diagnosisAccess)}
-            </button>
+              {diagnosisAccess.allowed ? t("detail.generateAi") : aiDiagnosisDisabledActionLabel(diagnosisAccess)}
+            </LoadingButton>
           </div>
           {carePreviewStatus ? <p className="care-preview-status">{carePreviewStatus}</p> : diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
           <p className="care-summary">{flower.shortCare}</p>
@@ -3234,9 +2855,15 @@ export const App = () => {
                 max="9999-12-31"
                 onChange={(event) => void updateCareRecord(flower.id, { lastWatered: event.target.value })}
               />
-              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}>
+              <LoadingButton
+                type="button"
+                onClick={() => void saveQuickRecord("log-watered", flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}
+                isLoading={pendingQuickRecordKey === "log-watered"}
+                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "log-watered")}
+                loadingLabel={t("detail.savingCare")}
+              >
                 {t("date.today")}
-              </button>
+              </LoadingButton>
             </div>
           </label>
           <label className="field">
@@ -3248,9 +2875,15 @@ export const App = () => {
                 max="9999-12-31"
                 onChange={(event) => void updateCareRecord(flower.id, { lastTransplanted: event.target.value })}
               />
-              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastTransplanted: todayIsoDate() })}>
+              <LoadingButton
+                type="button"
+                onClick={() => void saveQuickRecord("log-transplanted", flower.id, { lastTransplanted: todayIsoDate() }, t("detail.savedTransplanted"))}
+                isLoading={pendingQuickRecordKey === "log-transplanted"}
+                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "log-transplanted")}
+                loadingLabel={t("detail.savingCare")}
+              >
                 {t("date.today")}
-              </button>
+              </LoadingButton>
             </div>
           </label>
           <label className="field">
@@ -3262,9 +2895,15 @@ export const App = () => {
                 max="9999-12-31"
                 onChange={(event) => void updateCareRecord(flower.id, { lastFertilized: event.target.value })}
               />
-              <button type="button" onClick={() => void updateCareRecord(flower.id, { lastFertilized: todayIsoDate() })}>
+              <LoadingButton
+                type="button"
+                onClick={() => void saveQuickRecord("log-fertilized", flower.id, { lastFertilized: todayIsoDate() }, t("detail.savedFertilized"))}
+                isLoading={pendingQuickRecordKey === "log-fertilized"}
+                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "log-fertilized")}
+                loadingLabel={t("detail.savingCare")}
+              >
                 {t("date.today")}
-              </button>
+              </LoadingButton>
             </div>
           </label>
           <label className="field">
@@ -3472,7 +3111,10 @@ export const App = () => {
                 />
               </label>
 
-              <label className={`diagnosis-upload ${diagnosisAccess.allowed ? "" : "diagnosis-upload-disabled"}`} aria-disabled={!diagnosisAccess.allowed}>
+              <label
+                className={`diagnosis-upload ${diagnosisAccess.allowed && !isCapturingDiagnosisImage && !isDiagnosing ? "" : "diagnosis-upload-disabled"}`}
+                aria-disabled={!diagnosisAccess.allowed || isCapturingDiagnosisImage || isDiagnosing}
+              >
                 <span className="image-upload-icon">
                   <ImagePlus size={19} aria-hidden="true" />
                 </span>
@@ -3484,7 +3126,7 @@ export const App = () => {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
-                  disabled={!diagnosisAccess.allowed}
+                  disabled={!diagnosisAccess.allowed || isCapturingDiagnosisImage || isDiagnosing}
                   onChange={(event) => {
                     void handleDiagnosisImageChange("gallery", event.target.files?.[0]);
                     event.target.value = "";
@@ -3494,28 +3136,44 @@ export const App = () => {
 
               {isNativeImageRuntime ? (
                 <div className="image-capture-actions">
-                  <button className="ghost-action" type="button" disabled={!diagnosisAccess.allowed} onClick={() => void handleDiagnosisImageChange("camera")}>
+                  <LoadingButton
+                    className="ghost-action"
+                    type="button"
+                    disabled={!diagnosisAccess.allowed}
+                    onClick={() => void handleDiagnosisImageChange("camera")}
+                    isLoading={isCapturingDiagnosisImage}
+                    loadingLabel={t("image.processing")}
+                  >
                     <Camera size={17} aria-hidden="true" />
                     {t("action.camera")}
-                  </button>
-                  <button className="ghost-action" type="button" disabled={!diagnosisAccess.allowed} onClick={() => void handleDiagnosisImageChange("gallery")}>
+                  </LoadingButton>
+                  <LoadingButton
+                    className="ghost-action"
+                    type="button"
+                    disabled={!diagnosisAccess.allowed}
+                    onClick={() => void handleDiagnosisImageChange("gallery")}
+                    isLoading={isCapturingDiagnosisImage}
+                    loadingLabel={t("image.processing")}
+                  >
                     <ImagePlus size={17} aria-hidden="true" />
                     {t("action.gallery")}
-                  </button>
+                  </LoadingButton>
                 </div>
               ) : null}
 
               {diagnosisImageDataUrl ? <img className="diagnosis-preview" src={diagnosisImagePreviewUrl || diagnosisImageDataUrl} alt={t("diagnosis.previewAlt")} /> : null}
               {diagnosisStatus ? <p className="care-preview-status">{diagnosisStatus}</p> : null}
 
-              <button
+              <LoadingButton
                 className="primary-action diagnosis-run-button"
                 type="button"
                 disabled={!diagnosisImageDataUrl || isDiagnosing || !diagnosisAccess.allowed}
                 onClick={() => runPlantDiagnosis(flower)}
+                isLoading={isDiagnosing}
+                loadingLabel={t("diagnosis.analyzing")}
               >
-                {isDiagnosing ? t("diagnosis.analyzing") : diagnosisRunLabel}
-              </button>
+                {diagnosisRunLabel}
+              </LoadingButton>
 
               {diagnosisDraft ? (
                 <div className={`diagnosis-result diagnosis-risk-${diagnosisDraft.riskLevel}`}>
@@ -3562,12 +3220,24 @@ export const App = () => {
                     />
                   </label>
                   <div className="modal-actions">
-                    <button className="primary-action" type="button" disabled={isSavingDiagnosis} onClick={() => savePlantDiagnosis(flower, "confirmed")}>
-                      {isSavingDiagnosis ? t("diagnosis.saving") : t("diagnosis.save")}
-                    </button>
-                    <button className="neutral-action" type="button" disabled={isSavingDiagnosis} onClick={() => savePlantDiagnosis(flower, "rejected")}>
+                    <LoadingButton
+                      className="primary-action"
+                      type="button"
+                      isLoading={isSavingDiagnosis}
+                      loadingLabel={t("diagnosis.saving")}
+                      onClick={() => savePlantDiagnosis(flower, "confirmed")}
+                    >
+                      {t("diagnosis.save")}
+                    </LoadingButton>
+                    <LoadingButton
+                      className="neutral-action"
+                      type="button"
+                      isLoading={isSavingDiagnosis}
+                      loadingLabel={t("diagnosis.saving")}
+                      onClick={() => savePlantDiagnosis(flower, "rejected")}
+                    >
                       {t("diagnosis.reject")}
-                    </button>
+                    </LoadingButton>
                   </div>
                 </div>
               ) : null}
@@ -3588,10 +3258,16 @@ export const App = () => {
               </div>
               <p>{t("detail.deleteConfirmBody", { plant: flower.displayName })}</p>
               <div className="modal-actions">
-                <button className="danger-action" type="button" onClick={confirmRemoveCustomFlower}>
+                <LoadingButton
+                  className="danger-action"
+                  type="button"
+                  onClick={() => void confirmRemoveCustomFlower()}
+                  isLoading={isRemovingPlant}
+                  loadingLabel={t("detail.deletingPlant")}
+                >
                   {t("detail.deleteConfirmAction")}
-                </button>
-                <button className="neutral-action" type="button" onClick={() => setDeleteFlowerId("")}>
+                </LoadingButton>
+                <button className="neutral-action" type="button" disabled={isRemovingPlant} onClick={() => setDeleteFlowerId("")}>
                   {t("action.no")}
                 </button>
               </div>
@@ -3648,9 +3324,15 @@ export const App = () => {
                     placeholder="#/join?invite=..."
                   />
                 </label>
-                <button className="primary-action" type="button" onClick={() => void handleJoinInvite()}>
+                <LoadingButton
+                  className="primary-action"
+                  type="button"
+                  onClick={() => void handleJoinInvite()}
+                  isLoading={isJoiningInvite}
+                  loadingLabel={t("household.joining")}
+                >
                   {t("household.continueWithInvite")}
-                </button>
+                </LoadingButton>
                 {inviteStatus ? <p className={inviteStatusClass}>{inviteStatus}</p> : null}
               </div>
             </details>
@@ -3712,9 +3394,15 @@ export const App = () => {
                   </div>
                 </div>
                 <div className="menu-action-row">
-                  <button className="neutral-action" type="button" onClick={() => void handleAccountSignOut()}>
+                  <LoadingButton
+                    className="neutral-action"
+                    type="button"
+                    onClick={() => void handleAccountSignOut()}
+                    isLoading={isSigningOut}
+                    loadingLabel={t("account.signingOut")}
+                  >
                     {t("account.signOut")}
-                  </button>
+                  </LoadingButton>
                   <a className="danger-action" href="#/delete-account">
                     {t("account.delete")}
                   </a>
@@ -3784,9 +3472,16 @@ export const App = () => {
                           <span className="household-member-role">{householdRoleLabel(member.role)}</span>
                         </span>
                         {isCurrentHouseholdOwner && member.role === "viewer" && member.userId !== auth.user?.id ? (
-                          <button className="household-member-remove-action" type="button" onClick={() => void handleRemoveViewer(member)}>
+                          <LoadingButton
+                            className="household-member-remove-action"
+                            type="button"
+                            onClick={() => void handleRemoveViewer(member)}
+                            isLoading={removingViewerId === member.userId}
+                            disabled={Boolean(removingViewerId && removingViewerId !== member.userId)}
+                            loadingLabel={t("household.removeViewerWorking")}
+                          >
                             {t("household.removeViewer")}
-                          </button>
+                          </LoadingButton>
                         ) : null}
                       </div>
                     ))}
@@ -3812,9 +3507,15 @@ export const App = () => {
                         <option value="viewer">{t("household.roleViewer")}</option>
                       </select>
                     </label>
-                    <button className="primary-action" type="button" onClick={() => void handleCreateInvite()}>
+                    <LoadingButton
+                      className="primary-action"
+                      type="button"
+                      onClick={() => void handleCreateInvite()}
+                      isLoading={isCreatingInvite}
+                      loadingLabel={t("household.inviteStatusCreating")}
+                    >
                       {t("household.createEmailInvite")}
-                    </button>
+                    </LoadingButton>
                   </div>
                   {createdInviteLink ? (
                     <div className="report-status">
@@ -3839,9 +3540,15 @@ export const App = () => {
                             {householdRoleLabel(invite.role)}
                           </span>
                           {!invite.revokedAt && !invite.usedAt ? (
-                            <button type="button" onClick={() => void handleRevokeInvite(invite.id)}>
+                            <LoadingButton
+                              type="button"
+                              onClick={() => void handleRevokeInvite(invite.id)}
+                              isLoading={revokeInviteId === invite.id}
+                              disabled={Boolean(revokeInviteId && revokeInviteId !== invite.id)}
+                              loadingLabel={t("household.inviteRevoking")}
+                            >
                               {t("household.revokeInvite")}
-                            </button>
+                            </LoadingButton>
                           ) : null}
                         </div>
                       ))
@@ -3863,9 +3570,9 @@ export const App = () => {
                         placeholder="Petzvalova"
                       />
                     </label>
-                    <button className="primary-action" type="submit" disabled={isCreatingHousehold}>
-                      {isCreatingHousehold ? t("household.creatingShort") : t("household.create")}
-                    </button>
+                    <LoadingButton className="primary-action" type="submit" isLoading={isCreatingHousehold} loadingLabel={t("household.creatingShort")}>
+                      {t("household.create")}
+                    </LoadingButton>
                   </form>
                   <label className="field">
                     <span>{t("household.inviteToken")}</span>
@@ -3875,9 +3582,15 @@ export const App = () => {
                       placeholder="#/join?invite=..."
                     />
                   </label>
-                  <button className="neutral-action" type="button" onClick={() => void handleJoinInvite()}>
+                  <LoadingButton
+                    className="neutral-action"
+                    type="button"
+                    onClick={() => void handleJoinInvite()}
+                    isLoading={isJoiningInvite}
+                    loadingLabel={t("household.joining")}
+                  >
                     {t("household.join")}
-                  </button>
+                  </LoadingButton>
                 </div>
               ) : (
                 <p>{t("household.inviteRequiresSupabase")}</p>
@@ -4041,9 +3754,16 @@ export const App = () => {
             <p className="topbar-copy">Generate and print plant labels that open each plant profile.</p>
           </div>
           <div className="topbar-actions">
-            <button className="icon-button" type="button" onClick={handleQrPdfExport} aria-label={t("qr.exportPdf")}>
+            <LoadingButton
+              className="icon-button"
+              type="button"
+              onClick={handleQrPdfExport}
+              aria-label={t("qr.exportPdf")}
+              isLoading={isExportingQrPdf}
+              loadingLabel={<span className="sr-only">{t("qr.exportGenerating")}</span>}
+            >
               <FileDown size={21} aria-hidden="true" />
-            </button>
+            </LoadingButton>
             <button className="icon-button" type="button" onClick={() => window.print()} aria-label={t("qr.printCodes")}>
               <Printer size={21} aria-hidden="true" />
             </button>
@@ -4081,10 +3801,10 @@ export const App = () => {
               </p>
               <p className="print-note">{t("qr.printNote")}</p>
               <div className="pdf-export-actions">
-                <button type="button" onClick={handleQrPdfExport}>
+                <LoadingButton type="button" onClick={handleQrPdfExport} isLoading={isExportingQrPdf} loadingLabel={t("qr.exportGenerating")}>
                   <FileDown size={18} aria-hidden="true" />
                   {t("qr.exportPdf")}
-                </button>
+                </LoadingButton>
                 <span>{qrLabelValidation.message}</span>
               </div>
               {qrExportStatus ? <div className="report-status">{qrExportStatus}</div> : null}
@@ -4131,6 +3851,7 @@ export const App = () => {
         {renderHeroActions()}
       </header>
       <AppTabNav currentPage={isAddPlantModalOpen ? "add" : "plants"} onAddPlant={openAddPlantFromMobileNav} t={t} />
+      <DashboardOverview flowers={allFlowers} records={records} t={t} />
       <section className="toolbar" aria-label={t("dashboard.tools")}>
         <label className="search-field">
           <Search size={18} aria-hidden="true" />
@@ -4175,6 +3896,7 @@ export const App = () => {
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    disabled={isCapturingNewPlantImage || isAddingPlant}
                     onChange={(event) => {
                       void handleNewPlantImageCapture("gallery", event.target.files?.[0]);
                       event.target.value = "";
@@ -4190,22 +3912,36 @@ export const App = () => {
                 </label>
                 {isNativeImageRuntime ? (
                   <div className="image-capture-actions">
-                    <button className="ghost-action" type="button" onClick={() => void handleNewPlantImageCapture("camera")}>
+                    <LoadingButton
+                      className="ghost-action"
+                      type="button"
+                      onClick={() => void handleNewPlantImageCapture("camera")}
+                      isLoading={isCapturingNewPlantImage}
+                      disabled={isAddingPlant}
+                      loadingLabel={t("image.processing")}
+                    >
                       <Camera size={17} aria-hidden="true" />
                       {t("action.camera")}
-                    </button>
-                    <button className="ghost-action" type="button" onClick={() => void handleNewPlantImageCapture("gallery")}>
+                    </LoadingButton>
+                    <LoadingButton
+                      className="ghost-action"
+                      type="button"
+                      onClick={() => void handleNewPlantImageCapture("gallery")}
+                      isLoading={isCapturingNewPlantImage}
+                      disabled={isAddingPlant}
+                      loadingLabel={t("image.processing")}
+                    >
                       <ImagePlus size={17} aria-hidden="true" />
                       {t("action.gallery")}
-                    </button>
+                    </LoadingButton>
                   </div>
                 ) : null}
                 {newPlantImage ? <img className="diagnosis-preview" src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
               </label>
-              <button type="submit" disabled={isAddingPlant || plantLimitReached}>
+              <LoadingButton type="submit" disabled={plantLimitReached || isCapturingNewPlantImage} isLoading={isAddingPlant} loadingLabel={t("plantForm.adding")}>
                 <Plus size={18} aria-hidden="true" />
-                {isAddingPlant ? t("plantForm.adding") : t("dashboard.addPlant")}
-              </button>
+                {t("dashboard.addPlant")}
+              </LoadingButton>
             </form>
             {newPlantStatus ? <div className="report-status">{newPlantStatus}</div> : null}
           </section>

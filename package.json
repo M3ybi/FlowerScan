@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "build": "npm run typecheck && vite build",
+    "test": "node scripts/run-tests.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
     "mobile:android": "npx cap open android",
     "mobile:build": "npm run build && npx cap sync",
     "mobile:init": "npm run build && npx cap sync",
@@ -36,7 +39,9 @@
     "test:backend-migration": "tsc --outDir .tmp-tests --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node src/lib/backendConfig.ts tests/backend-migration.test.ts && node --test .tmp-tests/tests/backend-migration.test.js",
     "test:household-invites": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/household-invites.test.ts && node --test .tmp-tests/household-invites.test.js",
     "test:mobile-ux": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/mobile-ux-cleanup.test.ts && node --test .tmp-tests/mobile-ux-cleanup.test.js",
-    "test:menu-ux": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/menu-ux.test.ts && node --test .tmp-tests/menu-ux.test.js"
+    "test:menu-ux": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/menu-ux.test.ts && node --test .tmp-tests/menu-ux.test.js",
+    "test:app-helpers": "tsc --outDir .tmp-tests --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node src/vite-env.d.ts src/app/routes.ts src/app/householdInvites.ts src/app/records.ts tests/app-helpers.test.ts && node --test .tmp-tests/tests/app-helpers.test.js",
+    "test:product-redesign": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node tests/product-redesign.test.ts && node --test .tmp-tests/product-redesign.test.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

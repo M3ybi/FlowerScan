@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const appSource = readFileSync("src/App.tsx", "utf8");
+const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 
 test("mobile dashboard removes report and reminder configuration clutter", () => {
@@ -25,10 +26,10 @@ test("plant cards are clickable with watering and open quick actions", () => {
 });
 
 test("primary navigation owns Add plant and QR dashboard shortcuts", () => {
-  assert.match(appSource, /mobile-bottom-nav-action/);
+  assert.match(navigationSource, /mobile-bottom-nav-action/);
   assert.match(appSource, /onAddPlant=\{openAddPlantFromMobileNav\}/);
-  assert.match(appSource, /className=\{currentPage === "add" \? "active app-tab-nav-action" : "app-tab-nav-action"\}/);
-  assert.match(appSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
+  assert.match(navigationSource, /className=\{currentPage === "add" \? "active app-tab-nav-action" : "app-tab-nav-action"\}/);
+  assert.match(navigationSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
   assert.doesNotMatch(appSource, /className="menu-quick-actions"/);
   assert.doesNotMatch(appSource, /className="qr-action dashboard-qr-action"/);
   assert.doesNotMatch(appSource, /className="qr-action add-plant-trigger"/);
@@ -78,7 +79,11 @@ test("AI diagnosis actions are disabled when household access is unavailable", (
   assert.match(detailRoute, /const diagnosisBlockedReason = aiDiagnosisAccessMessage\(diagnosisAccess\)/);
   assert.match(detailRoute, /disabled=\{isGeneratingCarePreview \|\| !diagnosisAccess\.allowed\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\} onClick=\{openDiagnosisModal\}/);
-  assert.match(detailRoute, /className=\{`diagnosis-upload \$\{diagnosisAccess\.allowed \? "" : "diagnosis-upload-disabled"\}`\}/);
+  assert.match(
+    detailRoute,
+    /className=\{`diagnosis-upload \$\{diagnosisAccess\.allowed && !isCapturingDiagnosisImage && !isDiagnosing \? "" : "diagnosis-upload-disabled"\}`\}/,
+  );
+  assert.match(detailRoute, /aria-disabled=\{!diagnosisAccess\.allowed \|\| isCapturingDiagnosisImage \|\| isDiagnosing\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisImageDataUrl \|\| isDiagnosing \|\| !diagnosisAccess\.allowed\}/);
   assert.doesNotMatch(detailRoute, /diagnosis\.premiumUnlimited/);

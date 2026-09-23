@@ -90,12 +90,14 @@ test("Supabase startup without memberships prompts create or join instead of inv
 
 test("public menu and compliance routes are not blocked by household gate", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
+  const routesSource = readFileSync("src/app/routes.ts", "utf8");
 
-  assert.match(appSource, /const isRouteAllowedWithoutHousehold/);
-  assert.match(appSource, /route\.page === "menu"/);
-  assert.match(appSource, /route\.page === "legal"/);
-  assert.match(appSource, /\(!shouldUseSupabaseAccountData && isAccessChecking\)\) && !isRouteAllowedWithoutHousehold/);
-  assert.match(appSource, /!activeHousehold && !supabaseReadState && !isRouteAllowedWithoutHousehold/);
+  assert.match(routesSource, /export const isRouteAllowedWithoutHousehold/);
+  assert.match(routesSource, /route\.page === "menu"/);
+  assert.match(routesSource, /route\.page === "legal"/);
+  assert.match(appSource, /const currentRouteAllowedWithoutHousehold = isRouteAllowedWithoutHousehold\(route\)/);
+  assert.match(appSource, /\(!shouldUseSupabaseAccountData && isAccessChecking\)\) && !currentRouteAllowedWithoutHousehold/);
+  assert.match(appSource, /!activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold/);
 });
 
 test("AI frontend calls use backend provider layer", () => {

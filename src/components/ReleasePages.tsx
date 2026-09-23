@@ -9,6 +9,7 @@ import {
   summarizeReleaseHealth,
 } from "../lib/releaseReadiness.js";
 import type { LegalPageId, ReleaseEnvSnapshot } from "../lib/releaseReadiness.js";
+import { LoadingButton } from "./LoadingButton.js";
 
 const iconByPage: Record<LegalPageId, typeof BadgeCheck> = {
   "delete-account": Trash2,
@@ -20,12 +21,14 @@ const iconByPage: Record<LegalPageId, typeof BadgeCheck> = {
 
 export const LegalPageView = ({
   deleteRequestStatus,
+  isDeleteRequestPending = false,
   onRequestDeletion,
   pageId,
   requestEmail,
   setRequestEmail,
 }: {
   deleteRequestStatus?: string;
+  isDeleteRequestPending?: boolean;
   onRequestDeletion?: () => void;
   pageId: LegalPageId;
   requestEmail?: string;
@@ -71,9 +74,14 @@ export const LegalPageView = ({
               onChange={(event) => setRequestEmail?.(event.target.value)}
             />
           </label>
-          <button className="danger-action" type="submit">
+          <LoadingButton
+            className="danger-action"
+            type="submit"
+            isLoading={isDeleteRequestPending}
+            loadingLabel="Submitting deletion review request..."
+          >
             Request account deletion review
-          </button>
+          </LoadingButton>
           {deleteRequestStatus ? <p className="report-status">{deleteRequestStatus}</p> : null}
         </form>
       ) : null}

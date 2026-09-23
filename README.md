@@ -1,57 +1,69 @@
 # Plantie
 
-Mobilná webová aplikácia na evidenciu izbových rastlín, QR štítky, zálievku, presádzanie a poznámky.
+Plantie is a mobile-ready React app for household plant care: plant profiles, QR labels, watering records, diagnosis, care generation, subscriptions, and household sharing.
 
-## Lokálny vývoj
+## Local Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Build
+Copy `.env.example` to `.env.local` for local browser variables. Keep real server secrets in Netlify environment variables or Supabase Edge Function secrets, never in committed files and never under a `VITE_` prefix.
+
+## Validation
 
 ```bash
+npm run typecheck
+npm test
 npm run build
 ```
 
-## Supabase foundation
+For a single production-review command:
 
-The Supabase database foundation is prepared but not yet connected to the current app storage flow.
+```bash
+npm run check
+```
 
-Required frontend environment variables:
+The test runner executes all checked-in `test:*` suites sequentially to avoid shared `.tmp-tests` output races on Windows.
+
+## Backend And Hosting
+
+Supabase is the default backend provider for app data and authenticated Edge Functions. Netlify remains the web host and legacy compatibility function host.
+
+Frontend environment variables:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_BACKEND_PROVIDER=supabase` optional, because Supabase is the default
 
-Do not expose a Supabase service role key in frontend code or any `VITE_*` variable.
+Important server-only variables:
 
-See `docs/supabase-setup.md` and `docs/supabase-storage-buckets.md`.
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY`
+- `REVENUECAT_WEBHOOK_SECRET`
+- `RESEND_API_KEY`
+- `NETLIFY_BLOBS_TOKEN`
+- `VAPID_PRIVATE_KEY`
 
-Catalog seed validation:
+Do not expose server-only keys in frontend code or any `VITE_*` variable.
 
-```bash
-npm run test:supabase
-```
+See:
 
-Catalog seed, local/server only:
+- `docs/supabase-setup.md`
+- `docs/supabase-storage-buckets.md`
+- `docs/supabase-first-backend.md`
+- `docs/revenuecat-billing.md`
 
-```bash
-npm run seed:plant-catalog
-```
+## Netlify
 
-Billing validation:
+`netlify.toml` is the deployment source of truth:
 
-```bash
-npm run test:billing
-```
+- build command: `npm run build`
+- publish directory: `dist`
+- functions directory: `netlify/functions`
 
-RevenueCat billing is prepared but disabled. See `docs/revenuecat-billing.md`.
-
-Legacy-to-Supabase import is available as an opt-in account action. It keeps legacy storage primary.
-See `docs/legacy-supabase-migration.md`.
-
-## Mobile app wrapper
+## Mobile Wrapper
 
 Capacitor is configured for iOS and Android shells.
 
@@ -63,25 +75,6 @@ npm run mobile:android
 
 See `docs/mobile-capacitor.md`.
 
-## Publikovanie
+## Data Safety
 
-Aplikácia je pripravená na GitHub Pages cez workflow `.github/workflows/deploy.yml`.
-
-## Denný email report
-
-Automatický email report potrebuje hosting so serverless funkciami. Projekt je pripravený pre Netlify:
-
-- build command: `npm run build`
-- publish directory: `dist`
-- functions directory: `netlify/functions`
-
-Potrebné environment variables v Netlify:
-
-- `RESEND_API_KEY` - API kľúč pre odosielanie emailov cez Resend
-- `REPORT_FROM_EMAIL` - overený odosielateľ, napr. `Plantie <report@tvoja-domena.sk>`
-- `OPENAI_API_KEY` - API kľúč na AI generovanie starostlivosti pri pridávaní novej rastliny
-- `OPENAI_MODEL` - voliteľné, predvolená hodnota je `gpt-4o-mini`
-
-Report sa kontroluje každú hodinu a odošle sa iba raz denne, keď je v časovej zóne `Europe/Bratislava` 19:00. Do emailu idú iba rastliny so stavom zálievky pod 20 %.
-
-AI generovanie sa používa iba pri vložení novej rastliny. Existujúci katalóg rastlín sa tým nemení.
+Use forward-only Supabase migrations. Do not run destructive database resets, drops, truncates, bulk deletes, storage wipes, or project recreation against production infrastructure. Document destructive cleanup ideas for manual review instead.

@@ -43,7 +43,7 @@ export const sanitizeDiagnosticNote = (value: string) =>
 
 export const validateDiagnosticImageFile = (file: File) => {
   if (!allowedDiagnosticImageTypes.has(file.type)) {
-    throw new Error("PodporovanĂ© sĂş iba JPG, PNG alebo WEBP obrĂˇzky.");
+    throw new Error("Podporovane su iba JPG, PNG alebo WEBP obrazky.");
   }
 
   if (file.size > maxDiagnosticImageBytes) {

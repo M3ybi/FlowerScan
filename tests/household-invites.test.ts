@@ -163,6 +163,7 @@ test("frontend repository exposes authenticated invite and viewer removal operat
 
 test("frontend invite flow creates invites without expiration UI state or payload", () => {
   const appSource = read("src/App.tsx");
+  const inviteSource = read("src/app/householdInvites.ts");
 
   assert.match(appSource, /normalizeInviteEmail\(inviteEmail\)/);
   assert.match(appSource, /isValidInviteEmail\(normalizedEmail\)/);
@@ -170,6 +171,7 @@ test("frontend invite flow creates invites without expiration UI state or payloa
   assert.match(appSource, /createHouseholdInvite\(activeSupabaseHouseholdId, normalizedEmail, inviteRole\)/);
   assert.match(appSource, /sendHouseholdInviteEmail\(/);
   assert.match(appSource, /household\.inviteStatusSent/);
+  assert.match(inviteSource, /export const inviteErrorMessage/);
   assert.match(appSource, /inviteErrorMessage\(error\)/);
   assert.doesNotMatch(appSource, /inviteExpiresAt|setInviteExpiresAt|datetime-local|invite_expires_at|expiresAt/);
 });
