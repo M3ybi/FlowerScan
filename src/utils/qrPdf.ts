@@ -1,4 +1,3 @@
-import QRCode from "qrcode";
 import type { Flower } from "../data/flowers";
 import { flowerPath } from "./links";
 
@@ -89,6 +88,7 @@ export const exportQrLabelsPdf = async (flowers: Flower[], baseUrl: string) => {
   const columns = Math.floor((pageWidthMm - pageMarginMm * 2 + labelGapMm) / stepMm);
   const rowsPerPage = Math.floor((qrLabelSpec.pageHeightMm - pageMarginMm * 2 + labelGapMm) / stepMm);
   const labelsPerPage = columns * rowsPerPage;
+  const { default: QRCode } = await import("qrcode");
   const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ format: "a4", orientation: "portrait", unit: "mm" });
 

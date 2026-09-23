@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 
@@ -17,15 +16,18 @@ export const QrCode = ({ value, label, language = null, size = 132 }: QrCodeProp
   useEffect(() => {
     let active = true;
 
-    QRCode.toDataURL(value, {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      width: size,
-      color: {
-        dark: "#16352a",
-        light: "#ffffff",
-      },
-    })
+    import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(value, {
+          color: {
+            dark: "#16352a",
+            light: "#ffffff",
+          },
+          errorCorrectionLevel: "M",
+          margin: 2,
+          width: size,
+        }),
+      )
       .then((dataUrl) => {
         if (active) {
           setSrc(dataUrl);

@@ -11,6 +11,7 @@ const entitlementMigration = readFileSync(resolve("supabase/migrations/202605312
 const entitlementService = readFileSync(resolve("src/lib/entitlementService.ts"), "utf8");
 const pricingPage = readFileSync(resolve("src/components/PricingPage.tsx"), "utf8");
 const upgradeModal = readFileSync(resolve("src/components/UpgradeModal.tsx"), "utf8");
+const i18n = readFileSync(resolve("src/lib/i18n.ts"), "utf8");
 const billingService = readFileSync(resolve("src/lib/billingService.ts"), "utf8");
 const revenueCatWebhook = readFileSync(resolve("netlify/functions/revenuecat-webhook.ts"), "utf8");
 
@@ -122,15 +123,23 @@ for (const fragment of requiredEntitlementServiceFragments) {
   }
 }
 
-if (
-  !pricingPage.includes("Available in mobile app") ||
-  !pricingPage.includes("Billing not configured") ||
-  !pricingPage.includes("Premium access is still decided by Supabase server entitlements") ||
-  !upgradeModal.includes("Available in mobile app") ||
-  !upgradeModal.includes("Billing not configured") ||
-  !upgradeModal.includes("Premium activates only after server entitlement confirmation")
-) {
-  throw new Error("Subscription UI must keep web disabled and avoid local Premium activation.");
+const requiredSubscriptionUiFragments = [
+  [pricingPage, 't("pricing.mobileOnly")'],
+  [pricingPage, 't("pricing.notConfigured")'],
+  [pricingPage, 't("pricing.purchaseSubmitted")'],
+  [i18n, '"pricing.mobileOnly": "Available in mobile app"'],
+  [i18n, '"pricing.notConfigured": "Billing not configured"'],
+  [i18n, "Premium access is confirmed securely"],
+  [i18n, "Premium activates after secure server confirmation"],
+  [upgradeModal, "Available in mobile app"],
+  [upgradeModal, "Billing not configured"],
+  [upgradeModal, "Premium activates after secure server confirmation"],
+];
+
+for (const [source, fragment] of requiredSubscriptionUiFragments) {
+  if (!source.includes(fragment)) {
+    throw new Error(`Subscription UI must keep web disabled and avoid local Premium activation. Missing: ${fragment}`);
+  }
 }
 
 const requiredBillingFragments = [

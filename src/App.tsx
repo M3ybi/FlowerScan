@@ -101,7 +101,7 @@ import {
   imageSourceToDataUrl,
 } from "./utils/customFlower";
 import type { GeneratedCare } from "./utils/customFlower";
-import { daysSince, formatDate, formatElapsedDays, isIsoDate } from "./utils/dates";
+import { daysSince, formatDate, isIsoDate } from "./utils/dates";
 import {
   clearHouseholdSession,
   createHouseholdApiUrl,
@@ -116,11 +116,6 @@ import type { HouseholdSession } from "./utils/household";
 import { flowerPath } from "./utils/links";
 import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
 import { getWateringProgress } from "./utils/watering";
-import {
-  isPushNotificationSupported,
-  subscribeToPushNotifications,
-  unsubscribeFromPushNotifications,
-} from "./utils/pushNotifications";
 import {
   createDiagnosticId,
   fetchPlantDiagnosis,
@@ -776,8 +771,6 @@ export const App = () => {
   const [isGeneratingCarePreview, setIsGeneratingCarePreview] = useState(false);
   const [editingNameFlowerId, setEditingNameFlowerId] = useState("");
   const [draftFlowerName, setDraftFlowerName] = useState("");
-  const [pushStatus, setPushStatus] = useState("");
-  const [pushEnabled, setPushEnabled] = useState(false);
   const [legacyDiagnostics, setDiagnostics] = useState<PlantDiagnosticEntry[]>(() => readStoredDiagnostics());
   const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false);
   const [diagnosisImageDataUrl, setDiagnosisImageDataUrl] = useState("");
@@ -952,7 +945,6 @@ export const App = () => {
     setInviteStatusTone("info");
     setNewPlantStatus("");
     setOnboardingStatus("");
-    setPushStatus("");
     setQrExportStatus("");
     setQuickRecordStatus("");
     setCarePreview(null);
@@ -1228,11 +1220,7 @@ export const App = () => {
     return usage;
   };
 
-  const writeSupabaseFirst = async <T,>(
-    operation: () => Promise<T>,
-    mirrorLegacy: () => void,
-    fallbackMessage = "Supabase write failed. Saved to legacy storage for rollback.",
-  ) => {
+  const writeSupabaseFirst = async <T,>(operation: () => Promise<T>, mirrorLegacy: () => void) => {
     if (supabaseWriteMode !== "supabase-first") {
       if (isSupabaseOnlyDataMode) {
         setSupabaseReadError(true);
@@ -1476,21 +1464,6 @@ export const App = () => {
   }, [activeHousehold]);
 
   useEffect(() => {
-    if (!isPushNotificationSupported()) {
-      setPushStatus(t("push.unsupported"));
-      return;
-    }
-
-    void navigator.serviceWorker
-      .getRegistration()
-      .then((registration) => registration?.pushManager.getSubscription() ?? null)
-      .then((subscription) => {
-        setPushEnabled(Boolean(subscription));
-      })
-      .catch(() => undefined);
-  }, [t]);
-
-  useEffect(() => {
     if (!activeHousehold || !cloudSyncReady || !cloudSyncEnabled || !isLegacyNetlifyBackendEnabled || supabaseWriteMode === "supabase-first") {
       return;
     }
@@ -1516,38 +1489,6 @@ export const App = () => {
     () => validateQrLabelLayout(createQrLabelLayout(allFlowers, baseUrl)),
     [allFlowers, baseUrl],
   );
-
-  const enablePushNotifications = async () => {
-    if (!activeHousehold) {
-      setPushStatus(t("push.householdRequired"));
-      return;
-    }
-
-    try {
-      setPushStatus(t("push.enabling"));
-      await subscribeToPushNotifications(activeHousehold.publicToken);
-      setPushEnabled(true);
-      setPushStatus(t("push.enabled"));
-    } catch (error) {
-      setPushStatus(error instanceof Error ? error.message : t("push.enableFailed"));
-    }
-  };
-
-  const disablePushNotifications = async () => {
-    if (!activeHousehold) {
-      setPushStatus(t("push.householdRequired"));
-      return;
-    }
-
-    try {
-      setPushStatus(t("push.disabling"));
-      await unsubscribeFromPushNotifications(activeHousehold.publicToken);
-      setPushEnabled(false);
-      setPushStatus(t("push.disabled"));
-    } catch (error) {
-      setPushStatus(error instanceof Error ? error.message : t("push.disableFailed"));
-    }
-  };
 
   const handleQrPdfExport = async () => {
     if (allFlowers.length === 0) {
@@ -1823,7 +1764,6 @@ export const App = () => {
       saved = await writeSupabaseFirst(
         () => updateSupabaseCareRecord(supabasePlantId, patch),
         () => updateRecord(flowerId, patch),
-        t("sync.careWriteFallback"),
       );
       if (!saved) {
         setQuickRecordStatus(t("sync.careWriteFallback"));
@@ -1874,7 +1814,6 @@ export const App = () => {
       const result = await writeSupabaseFirst(
         () => upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower),
         () => updateFlower(flower),
-        t("sync.plantWriteFallback"),
       );
       if (result && message) {
         setQuickRecordStatus(message);
@@ -1899,7 +1838,6 @@ export const App = () => {
       await writeSupabaseFirst(
         () => upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower),
         () => addCustomFlower(flower),
-        t("sync.customPlantFallback"),
       );
       return;
     }
@@ -1918,7 +1856,6 @@ export const App = () => {
       await writeSupabaseFirst(
         () => setSupabasePlantRemoved(supabaseReadState.household.id, flowerId, true),
         () => removeFlower(flowerId),
-        t("sync.removeFallback"),
       );
       return;
     }
@@ -3820,6 +3757,14 @@ export const App = () => {
                   </strong>
                 </div>
               </div>
+              {auth.isAuthenticated && (activeHousehold || supabaseReadState) ? (
+                <div className="menu-action-row">
+                  <button className="neutral-action" type="button" onClick={changeHousehold}>
+                    <UsersRound size={17} aria-hidden="true" />
+                    {t("household.createOrJoin")}
+                  </button>
+                </div>
+              ) : null}
               {householdMembers.length > 0 ? (
                 <section className="household-member-management" aria-labelledby="household-members-title">
                   <div className="household-member-management-head">

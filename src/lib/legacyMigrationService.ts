@@ -1,9 +1,7 @@
 import type { Flower } from "../data/flowers";
 import { flowers as builtInFlowers } from "../data/flowers";
-import type { FlowerRecords } from "../hooks/useFlowerRecords";
 import { sanitizeDiagnosticNote } from "../utils/diagnostics";
 import type { PlantDiagnosticEntry } from "../utils/diagnostics";
-import type { HouseholdSession } from "../utils/household";
 import {
   builtInLegacyIds,
   createLegacyMigrationPlantPlan,
