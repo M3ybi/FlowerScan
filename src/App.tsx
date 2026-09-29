@@ -2704,6 +2704,14 @@ export const App = () => {
             <span>{quickActionLabel}</span>
             <h2 id="quick-action-title">{t("detail.quickAction")}</h2>
             <p>{t("detail.quickActionBody")}</p>
+            <div className={`quick-save-feedback ${quickRecordStatus ? "quick-save-feedback-visible" : ""}`} aria-live="polite">
+              {quickRecordStatus ? (
+                <>
+                  <Check size={16} aria-hidden="true" />
+                  {quickRecordStatus}
+                </>
+              ) : null}
+            </div>
           </div>
           <div className="scan-action-buttons">
               <LoadingButton
@@ -2739,10 +2747,6 @@ export const App = () => {
               <Leaf size={18} aria-hidden="true" />
               {t("detail.todayFertilized")}
             </LoadingButton>
-            <div className={`quick-save-feedback ${quickRecordStatus ? "quick-save-feedback-visible" : ""}`} aria-live="polite">
-              <Check size={16} aria-hidden="true" />
-              {quickRecordStatus || t("detail.savedGeneric")}
-            </div>
           </div>
         </section>
 

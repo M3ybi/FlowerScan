@@ -2230,10 +2230,10 @@ textarea:focus-visible {
 
 .scan-action-panel {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
   gap: 16px;
   align-items: center;
+  justify-content: space-between;
   margin-top: 14px;
   overflow: hidden;
   padding: 20px;
@@ -2276,10 +2276,16 @@ textarea:focus-visible {
 }
 
 .scan-action-buttons {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex: 0 0 230px;
+  align-self: center;
+  flex-direction: column;
   gap: 10px;
   min-width: 230px;
+}
+
+.scan-action-panel > div:first-child {
+  min-width: 0;
 }
 
 .primary-action,
@@ -2364,7 +2370,13 @@ textarea:focus-visible {
     transform 160ms ease;
 }
 
+.quick-save-feedback:empty {
+  display: none;
+}
+
 .quick-save-feedback-visible {
+  width: fit-content;
+  margin-top: 12px;
   opacity: 1;
   transform: translateY(0);
 }
@@ -2393,6 +2405,12 @@ textarea:focus-visible {
 .scan-action-buttons .button-spinner,
 .scan-action-buttons svg {
   flex: 0 0 auto;
+}
+
+.scan-action-buttons button:not([aria-busy="true"]) .button-spinner,
+.date-row button:not([aria-busy="true"]) .button-spinner,
+.pdf-export-actions button:not([aria-busy="true"]) .button-spinner {
+  display: none;
 }
 
 .status-band div {
@@ -3662,7 +3680,7 @@ textarea:focus-visible {
   margin-top: 12px;
 }
 
-.field span {
+.field > span {
   color: #405348;
   font-size: 0.86rem;
   font-weight: 800;
@@ -3703,17 +3721,21 @@ textarea:focus-visible {
 
 .date-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
 }
 
 .date-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 46px;
   padding: 0 16px;
   border-radius: 16px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent),
-    linear-gradient(135deg, #2f6a51, #418762);
+    linear-gradient(135deg, var(--brand-3), var(--brand));
   color: #fff;
   cursor: pointer;
   font-weight: 900;
@@ -3820,165 +3842,60 @@ textarea:focus-visible {
   height: 42px;
   flex: 0 0 42px;
   place-items: center;
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.62),
-    0 9px 18px rgba(42, 38, 29, 0.09);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 13px;
+  background: linear-gradient(145deg, #fff, var(--pill-tint, #edf4ec));
+  box-shadow: 0 4px 10px rgba(42, 38, 29, 0.06);
 }
 
-.pill-sun::before {
-  content: "";
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: #f2b84b;
-  box-shadow: 0 0 0 5px rgba(242, 184, 75, 0.18);
-}
-
-.pill-sun::after {
-  content: "";
-  position: absolute;
+.pill-visual > svg {
+  display: block;
   width: 26px;
   height: 26px;
-  border-radius: 999px;
-  border: 2px solid rgba(169, 101, 43, 0.34);
+  flex: none;
 }
 
-.pill-sun-half::before {
-  background: linear-gradient(90deg, #f2b84b 0 52%, rgba(242, 184, 75, 0.26) 52% 100%);
+.pill-sun {
+  --pill-tint: #fff0c9;
+  color: #ae7119;
 }
 
-.pill-sun-low::before {
-  background: rgba(242, 184, 75, 0.26);
-  box-shadow: 0 0 0 5px rgba(242, 184, 75, 0.1);
+.pill-sun circle {
+  fill: #f8d77c;
 }
 
-.pill-sun-half span {
-  position: absolute;
-  right: 7px;
-  width: 13px;
-  height: 24px;
-  border-radius: 0 999px 999px 0;
-  background: rgba(255, 255, 255, 0.48);
-}
-
-.pill-water {
-  grid-template-columns: repeat(3, 7px);
-  gap: 3px;
-  align-items: end;
-}
-
-.pill-water span {
-  display: block;
-  width: 7px;
-  height: 15px;
-  border-radius: 999px 999px 999px 2px;
-  background: #4f9ac7;
-  transform: rotate(45deg);
-  opacity: 0.28;
-}
-
-.pill-water span:nth-child(2) {
-  height: 20px;
-}
-
-.pill-water span:nth-child(3) {
-  height: 25px;
-}
-
-.pill-water-low span:first-child {
-  opacity: 0.95;
-  height: 11px;
-}
-
-.pill-water-low span:nth-child(2),
-.pill-water-low span:nth-child(3) {
-  opacity: 0.16;
-}
-
-.pill-water-medium span:first-child,
-.pill-water-medium span:nth-child(2) {
-  opacity: 0.95;
-}
-
-.pill-water-high span {
-  opacity: 0.95;
-}
-
+.pill-water,
 .pill-humidity {
-  gap: 3px;
+  --pill-tint: #dceff8;
+  color: #267ba2;
 }
 
-.pill-humidity span {
-  display: block;
-  width: 24px;
-  height: 5px;
-  border: 2px solid #4f9ac7;
-  border-top: 0;
-  border-left: 0;
-  border-radius: 0 0 999px 0;
-  opacity: 0.24;
+.pill-water svg {
+  fill: rgba(77, 169, 211, 0.16);
 }
 
-.pill-humidity-medium span:nth-child(-n + 2),
-.pill-humidity-high span {
-  opacity: 0.9;
-}
-
-.pill-humidity-low span:first-child {
-  opacity: 0.9;
+.pill-water-high svg {
+  fill: rgba(77, 169, 211, 0.38);
 }
 
 .pill-difficulty {
-  grid-template-columns: repeat(3, 8px);
-  gap: 4px;
+  --pill-tint: #e0f0db;
+  color: #407b4d;
 }
 
-.pill-difficulty span {
-  display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #a9652b;
-  opacity: 0.22;
+.pill-difficulty svg {
+  fill: rgba(106, 160, 98, 0.12);
 }
 
-.pill-difficulty-easy span:first-child,
-.pill-difficulty-medium span:nth-child(-n + 2),
-.pill-difficulty-hard span {
-  opacity: 0.95;
+.pill-pot {
+  --pill-tint: #f7e6d5;
+  color: #a16b41;
 }
 
-.pill-pot::before {
-  content: "";
-  width: 24px;
-  height: 15px;
-  border-radius: 4px 4px 9px 9px;
-  background: linear-gradient(180deg, #b8793e, #8e5528);
-  transform: translateY(5px);
-}
-
-.pill-pot::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  width: 18px;
-  height: 18px;
-  border: 3px solid #3f8a5d;
-  border-right: 0;
-  border-bottom: 0;
-  border-radius: 18px 0 0 0;
-  transform: rotate(42deg);
-}
-
-.pill-pot span {
-  position: absolute;
-  top: 15px;
-  width: 25px;
-  height: 4px;
-  border-radius: 999px;
-  background: #9a6534;
+.pill-pot-leaves {
+  fill: #d9ead4;
+  stroke: #407b4d;
 }
 
 .care-pill-green {
@@ -4030,8 +3947,7 @@ textarea:focus-visible {
   width: 34px;
   height: 34px;
   flex-basis: 34px;
-  transform: scale(0.86);
-  transform-origin: center;
+  border-radius: 11px;
 }
 
 .care-list dd {
@@ -4132,7 +4048,7 @@ textarea:focus-visible {
   padding: 0 16px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent),
-    linear-gradient(135deg, var(--brand), var(--brand-2));
+    linear-gradient(135deg, var(--brand-3), var(--brand));
   color: #fff;
   cursor: pointer;
   font-weight: 900;
@@ -4147,7 +4063,7 @@ textarea:focus-visible {
   box-shadow: 0 16px 28px rgba(23, 59, 47, 0.2);
 }
 
-.pdf-export-actions span {
+.pdf-export-actions > span {
   color: #53635a;
   font-size: 0.88rem;
   line-height: 1.4;
@@ -4343,10 +4259,14 @@ textarea:focus-visible {
   }
 
   .scan-action-panel {
-    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .scan-action-buttons {
+    flex-basis: auto;
+    align-self: stretch;
+    width: 100%;
     min-width: 0;
   }
 

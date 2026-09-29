@@ -1,3 +1,4 @@
+import { CloudDrizzle, CloudSun, Droplet, Droplets, Flower2, Leaf, Sprout, Sun, SunDim, Waves, Wind } from "lucide-react";
 import type { Flower } from "../data/flowers";
 import { type createTranslator } from "../lib/i18n";
 import type { GeneratedCare } from "../utils/customFlower";
@@ -98,58 +99,85 @@ const getDifficultyIconLevel = (value: string) => {
   return "medium";
 };
 
+const LowWaterIcon = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M12 3.5 7.15 10.1A6 6 0 1 0 16.85 10L12 3.5Z"
+      fill="currentColor"
+      fillOpacity="0.18"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+    <path d="M8.8 16.1c.8.8 2 1.2 3.2 1.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <circle cx="18.4" cy="15.5" r="1" fill="currentColor" />
+    <circle cx="20.4" cy="18.4" r=".7" fill="currentColor" fillOpacity=".72" />
+  </svg>
+);
+
 export const getCarePillVisual = (label: string, value: string, intervalDays: number) => {
   const normalizedLabel = normalizeCareText(label);
 
-  if (normalizedLabel.includes("svetlo")) {
+  if (includesAny(normalizedLabel, ["svetlo", "light", "licht", "lumiere", "luz"])) {
     const strength = getSunIconLevel(value);
+    const Icon = strength === "full" ? Sun : strength === "low" ? SunDim : CloudSun;
 
     return (
       <span className={`pill-visual pill-sun pill-sun-${strength}`} aria-hidden="true">
-        <span />
+        <Icon size={26} strokeWidth={1.8} />
       </span>
     );
   }
 
-  if (normalizedLabel.includes("zalievka")) {
+  if (includesAny(normalizedLabel, ["zalievka", "water", "bewasserung", "arrosage", "riego"])) {
     const level = getWaterIconLevel(value, intervalDays);
+    const Icon = level === "low" ? LowWaterIcon : Droplets;
 
     return (
       <span className={`pill-visual pill-water pill-water-${level}`} aria-hidden="true">
-        <span />
-        <span />
-        <span />
+        <Icon size={26} strokeWidth={1.8} />
       </span>
     );
   }
 
-  if (normalizedLabel.includes("vlhkost")) {
+  if (includesAny(normalizedLabel, ["vlhkost", "humidity", "feuchtigkeit", "humidite", "humedad"])) {
     const level = getHumidityIconLevel(value);
+    const Icon = level === "low" ? Wind : level === "high" ? CloudDrizzle : Waves;
 
     return (
       <span className={`pill-visual pill-humidity pill-humidity-${level}`} aria-hidden="true">
-        <span />
-        <span />
-        <span />
+        <Icon size={26} strokeWidth={1.8} />
       </span>
     );
   }
 
-  if (normalizedLabel.includes("narocnost")) {
+  if (includesAny(normalizedLabel, ["narocnost", "difficulty", "schwierigkeit", "difficulte", "dificultad"])) {
     const level = getDifficultyIconLevel(value);
+    const Icon = level === "easy" ? Sprout : level === "hard" ? Flower2 : Leaf;
 
     return (
       <span className={`pill-visual pill-difficulty pill-difficulty-${level}`} aria-hidden="true">
-        <span />
-        <span />
-        <span />
+        <Icon size={26} strokeWidth={1.8} />
       </span>
     );
   }
 
   return (
     <span className="pill-visual pill-pot" aria-hidden="true">
-      <span />
+      <svg
+        width="26"
+        height="26"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M5 13h14l-2 8H7Z" fill="currentColor" fillOpacity="0.14" />
+        <path d="M4 13h16M12 13V8" />
+        <path d="M12 9C7 9 5 6 5 3c5 0 7 3 7 6Zm0-2c0-3 3-5 7-5 0 4-3 7-7 7" className="pill-pot-leaves" />
+      </svg>
     </span>
   );
 };

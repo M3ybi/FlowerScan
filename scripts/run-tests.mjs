@@ -22,6 +22,7 @@ const testScripts = [
   "test:menu-ux",
   "test:app-helpers",
   "test:product-redesign",
+  "test:care-presentation",
   "test:revenuecat-webhook",
 ];
 
