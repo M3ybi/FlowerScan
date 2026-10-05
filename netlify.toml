@@ -5,3 +5,16 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+[context.deploy-preview]
+  command = "npm run build:test-store"
+
+[[redirects]]
+  from = "/auth/callback"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/auth/recovery"
+  to = "/index.html"
+  status = 200

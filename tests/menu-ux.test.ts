@@ -145,9 +145,9 @@ test("transient UI feedback is cleared on route, auth, and household changes", (
   assert.match(appSource, /const householdLifecycleKey = activeSupabaseHouseholdId \|\| activeHousehold\?\.publicToken \|\| ""/);
   assert.match(appSource, /useEffect\(\(\) => \{\s*clearTransientMessages\(\);\s*\}, \[householdLifecycleKey\]\)/);
   assert.match(appSource, /previousAuthUserIdRef\.current = nextUserId;\s*clearTransientMessages\(\);/);
-  assert.match(appSource, /householdPlanUsageHouseholdId === activeSupabaseHouseholdId \? householdPlanUsage : null/);
-  assert.match(appSource, /setHouseholdPlanUsageHouseholdId\(""\)/);
-  assert.match(appSource, /activeSupabaseHouseholdIdRef\.current === householdId/);
+  assert.match(appSource, /useSubscriptionState\([\s\S]*auth\.user\?\.id \?\? null,[\s\S]*isSupabaseAuthIdentityTransition \? null : activeSupabaseHouseholdId \|\| null/);
+  assert.match(appSource, /const currentHouseholdPlanUsage = subscription\.householdPlanUsage/);
+  assert.match(appSource, /const nextSnapshot = await refreshSubscriptionState\(\)/);
   assert.doesNotMatch(appSource, /setAccountActionStatus\(t\("account\.signedOut"\)\)/);
 });
 

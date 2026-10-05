@@ -13,6 +13,7 @@ const pricingPage = readFileSync(resolve("src/components/PricingPage.tsx"), "utf
 const upgradeModal = readFileSync(resolve("src/components/UpgradeModal.tsx"), "utf8");
 const i18n = readFileSync(resolve("src/lib/i18n.ts"), "utf8");
 const billingService = readFileSync(resolve("src/lib/billingService.ts"), "utf8");
+const revenueCatProducts = readFileSync(resolve("src/lib/revenueCatProducts.ts"), "utf8");
 const revenueCatWebhook = readFileSync(resolve("netlify/functions/revenuecat-webhook.ts"), "utf8");
 
 const requiredSeedFragments = [
@@ -124,37 +125,42 @@ for (const fragment of requiredEntitlementServiceFragments) {
 }
 
 const requiredSubscriptionUiFragments = [
-  [pricingPage, 't("pricing.mobileOnly")'],
   [pricingPage, 't("pricing.notConfigured")'],
   [pricingPage, 't("pricing.purchaseSubmitted")'],
-  [i18n, '"pricing.mobileOnly": "Available in mobile app"'],
+  [pricingPage, 't("pricing.cancelSubscription")'],
+  [pricingPage, 'createCancellationHandoff'],
   [i18n, '"pricing.notConfigured": "Billing not configured"'],
-  [i18n, "Premium access is confirmed securely"],
+  [i18n, "Choose a plan below"],
   [i18n, "Premium activates after secure server confirmation"],
-  [upgradeModal, "Available in mobile app"],
-  [upgradeModal, "Billing not configured"],
-  [upgradeModal, "Premium activates after secure server confirmation"],
+  [upgradeModal, 't("pricing.buyMonthly")'],
+  [upgradeModal, 't("pricing.notConfigured")'],
+  [upgradeModal, 't("pricing.purchaseSubmitted")'],
 ];
 
 for (const [source, fragment] of requiredSubscriptionUiFragments) {
   if (!source.includes(fragment)) {
-    throw new Error(`Subscription UI must keep web disabled and avoid local Premium activation. Missing: ${fragment}`);
+    throw new Error(`Subscription UI must support web and avoid local Premium activation. Missing: ${fragment}`);
   }
 }
 
 const requiredBillingFragments = [
-  "plantie_premium_monthly",
-  "plantie_premium_yearly",
   "BillingNotConfiguredError",
-  "BillingWebDisabledError",
+  "createRevenueCatWebBillingService",
   "VITE_REVENUECAT_API_KEY_IOS",
   "VITE_REVENUECAT_API_KEY_ANDROID",
+  "VITE_REVENUECAT_API_KEY_WEB",
   "premium",
   "purchasePremiumMonthly",
   "purchasePremiumYearly",
   "restorePurchases",
   "syncEntitlements",
 ];
+
+for (const fragment of ["plantie_premium_monthly", "plantie_premium_yearly", "plantie_premium_monthly:monthly", "plantie_premium_yearly:yearly"]) {
+  if (!revenueCatProducts.includes(fragment)) {
+    throw new Error(`RevenueCat product mapping is missing required fragment: ${fragment}`);
+  }
+}
 
 for (const fragment of requiredBillingFragments) {
   if (!billingService.includes(fragment)) {

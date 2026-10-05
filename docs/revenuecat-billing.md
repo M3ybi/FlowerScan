@@ -1,6 +1,6 @@
 # RevenueCat billing architecture
 
-RevenueCat billing is integrated for native Capacitor runtimes only. Web purchases remain disabled. The app must not activate Premium from the frontend and must not fake successful purchases.
+RevenueCat billing uses `@revenuecat/purchases-capacitor` on iOS and Android and `@revenuecat/purchases-js` in the browser. Both use the authenticated Supabase user UUID as the RevenueCat App User ID. The frontend never grants Premium: the RevenueCat webhook updates Supabase, and household plan usage remains the access-control source of truth.
 
 ## Product and entitlement mapping
 
@@ -20,9 +20,11 @@ plantie_premium_yearly
 Google Play product IDs:
 
 ```text
-plantie_premium_monthly
-plantie_premium_yearly
+plantie_premium_monthly:monthly
+plantie_premium_yearly:yearly
 ```
+
+The Test Store and planned web catalog use `plantie_premium_monthly` and `plantie_premium_yearly`. Accepted store IDs and their canonical plans are centralized in `src/lib/revenueCatProducts.ts`.
 
 Supabase plans:
 
@@ -52,38 +54,40 @@ Interface:
 Current adapter:
 
 - Exposes stable product IDs.
-- Uses `@revenuecat/purchases-capacitor` only on iOS and Android.
+- Uses `@revenuecat/purchases-capacitor` on iOS and Android, and `@revenuecat/purchases-js` on web.
 - Detects runtime as `web`, `ios`, or `android`.
-- Returns `BillingWebDisabledError` on web.
-- Returns `BillingNotConfiguredError` on native if the platform RevenueCat key is missing.
-- Fetches products with `getProducts()` and purchases with `purchaseStoreProduct()`.
+- Returns `BillingNotConfiguredError` if the runtime's public SDK key is missing.
+- Fetches the current offering and purchases its monthly or yearly package through the platform SDK.
 - Uses the Supabase user id as RevenueCat `appUserID`.
-- Calls `syncEntitlements()` after purchase/restore to refresh Supabase server entitlement state.
+- Re-fetches RevenueCat customer info after web checkout, refreshes Supabase entitlement state, and waits for the webhook-driven household plan update.
+- On web, `restorePurchases()` refreshes the existing identified customer's info; mobile keeps the native restore operation.
 - Never activates Premium locally.
 
 ## Frontend environment variables
 
-These are public mobile SDK keys from RevenueCat Project Settings > API keys > App specific keys:
+These are browser-safe public SDK keys from RevenueCat Project Settings > API keys > App specific keys:
 
 ```bash
 VITE_REVENUECAT_API_KEY_IOS=
 VITE_REVENUECAT_API_KEY_ANDROID=
+VITE_REVENUECAT_API_KEY_WEB=
+VITE_REVENUECAT_API_KEY_TEST_STORE=
 ```
 
-Do not commit real keys. These are not service-role keys and do not replace server-side webhook validation.
+Development and Netlify deploy previews use only the `test_...` Test Store key. Production web builds require a separate `rcb_...` public Web Billing key and a configured web billing provider; if absent, purchase buttons fail closed. Never put the Test Store key in the production web key or expose webhook, Stripe, or Supabase service-role secrets to the browser. The production Netlify site does not enable real web billing until its Web Billing configuration is set up intentionally.
 
-## Webhook endpoint
+## Active webhook endpoint
 
-Netlify Function:
+Supabase Edge Function:
 
 ```text
-/.netlify/functions/revenuecat-webhook
+https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
 ```
 
 File:
 
 ```text
-netlify/functions/revenuecat-webhook.ts
+supabase/functions/revenuecat-webhook/index.ts
 ```
 
 Current behavior:
@@ -95,17 +99,23 @@ Current behavior:
 - Rejects invalid secret with `401`.
 - Parses JSON safely.
 - Logs only safe metadata: event type, event ID, product ID, and app user id prefix.
-- Stores every valid event in `subscription_events` idempotently.
+- Stores each accepted event ID in `subscription_events` after any subscription and entitlement writes succeed, so a failed write remains retryable.
 - Updates `user_subscriptions`, `user_entitlements`, and current-month `usage_counters` for known Supabase users and known products.
 - Never creates an entitlement for an unknown Supabase user.
 - Never grants Premium for an unknown product or missing `premium` entitlement.
-- Returns `202` for accepted webhooks and includes whether state updates were applied.
+- Leaves the current entitlement unchanged when a known subscription event lacks the `premium` entitlement or an active period has no valid expiration date.
+- Deployed with gateway JWT verification disabled; the function validates the RevenueCat bearer secret itself.
+- Returns `200` for accepted webhooks so RevenueCat does not retry successful deliveries.
+- Returns `500` on Supabase Auth lookup or entitlement-write outages so RevenueCat can retry the same event ID.
+
+The Netlify Function at `/.netlify/functions/revenuecat-webhook` remains a deprecated compatibility fallback.
 
 ## RevenueCat event mapping
 
 Handled event types:
 
-- `INITIAL_PURCHASE`, `RENEWAL`, `UNCANCELLATION`, `PRODUCT_CHANGE` -> subscription `active`, Premium active for known products/users.
+- `INITIAL_PURCHASE`, `RENEWAL`, `UNCANCELLATION` -> subscription `active`, Premium active for known products/users.
+- `PRODUCT_CHANGE` -> event recorded; the effective plan changes only when a subsequent purchase or renewal confirms it.
 - `BILLING_ISSUE` -> subscription `grace_period`, Premium remains active until RevenueCat sends expiration/refund.
 - `CANCELLATION` -> subscription `cancelled`, Premium remains active until expiration/refund.
 - `EXPIRATION` -> subscription `expired`, entitlement downgraded to Free.
@@ -177,23 +187,23 @@ Rules:
 - Do not prefix server-only keys with `VITE_`.
 - Do not expose service or secret keys in frontend code.
 - Do not store them in source control.
-- `SUPABASE_SERVICE_ROLE_KEY` must only be available to Netlify Functions.
+- `SUPABASE_SERVICE_ROLE_KEY` is available only to trusted server-side code and Edge Functions.
 
 ## RevenueCat webhook URL
 
-Configure RevenueCat webhook URL to:
+Configure the RevenueCat webhook URL to:
 
 ```text
-https://<your-netlify-site>/.netlify/functions/revenuecat-webhook
+https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
 ```
 
-Set the same shared secret in RevenueCat and Netlify:
+Set the same shared secret in RevenueCat and Supabase Edge Function secrets:
 
 ```bash
 REVENUECAT_WEBHOOK_SECRET=<shared secret>
 ```
 
-RevenueCat can send the secret as `Authorization: Bearer <secret>` or `x-revenuecat-webhook-secret`.
+RevenueCat should send the secret as `Authorization: Bearer <secret>`.
 
 ## Local webhook testing notes
 

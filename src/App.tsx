@@ -72,6 +72,7 @@ import { wateringIntervalsDays } from "./data/wateringIntervals";
 import { useAuth } from "./hooks/useAuth";
 import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
+import { useSubscriptionState } from "./hooks/useSubscriptionState";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
 import { captureImage, detectImageRuntime } from "./lib/imageCaptureService";
 import type { NormalizedImage } from "./lib/imageCaptureService";
@@ -106,7 +107,9 @@ import {
 import {
   createHousehold,
   createHouseholdInvite,
+  getHouseholdPlantById,
   getHouseholdPlantByLegacyId,
+  getPlantImageSignedUrl,
   getUserHouseholds,
   isValidInviteEmail,
   joinHouseholdByInvite,
@@ -124,10 +127,8 @@ import { resolveAiDiagnosisAccess } from "./lib/aiDiagnosisAccess";
 import type { AiDiagnosisAccessResult } from "./lib/aiDiagnosisAccess";
 import {
   assertCanAddPlant,
-  getHouseholdPlanUsage,
   recordCareTipGeneration,
 } from "./lib/householdPlanService";
-import type { HouseholdPlanUsage } from "./lib/householdPlanService";
 import { PLAN_LIMITS } from "./lib/householdPlanRules";
 import {
   createCustomFlowerId,
@@ -158,6 +159,7 @@ import {
 import { imageUploadRejectionMessage, validatePlantImageForUpload } from "./utils/imageUploadValidation";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
 import { callBackendFunction, isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
+import { normalizeDiagnosisConfidenceLevel } from "./lib/diagnosisConfidence";
 
 const isSupabaseReadThroughEnabled = isSupabaseConfigured && import.meta.env.VITE_DISABLE_SUPABASE_READS !== "true";
 const isSupabaseWriteThroughEnvEnabled =
@@ -217,10 +219,16 @@ export const App = () => {
   const { records: legacyRecords, replaceRecords, updateRecord } = useFlowerRecords(legacyAllFlowers);
   const [query, setQuery] = useState("");
   const [baseUrl, setBaseUrl] = useState(() => currentBaseUrl());
-  const [activeHousehold, setActiveHousehold] = useState<HouseholdSession | null>(() => getStoredHouseholdSession());
+  const [activeHousehold, setActiveHousehold] = useState<HouseholdSession | null>(() =>
+    isSupabaseBackend ? null : getStoredHouseholdSession(),
+  );
   const [previousHousehold, setPreviousHousehold] = useState<HouseholdSession | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(window.localStorage));
   const t = useMemo(() => createTranslator(selectedLanguage), [selectedLanguage]);
+  const localizedConfidenceLabel = (value: string) => {
+    const level = normalizeDiagnosisConfidenceLevel(value);
+    return level ? t(`diagnosis.confidenceLevel.${level}`) : value;
+  };
   const formatAppDate = (value: string) => formatLocalizedDate(value, selectedLanguage, t);
   const formatAppElapsedDays = (value: number | null) => formatLocalizedElapsedDays(value, t);
   const formatAppWateringStatus = (progress: ReturnType<typeof getWateringProgress>) => formatLocalizedWateringStatus(progress, t);
@@ -256,6 +264,7 @@ export const App = () => {
   const [revokeInviteId, setRevokeInviteId] = useState("");
   const [removingViewerId, setRemovingViewerId] = useState("");
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const signingOutRef = useRef(false);
   const [isAccessChecking, setIsAccessChecking] = useState(true);
   const [householdLookupStatus, setHouseholdLookupStatus] = useState<HouseholdLookupStatus>("idle");
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
@@ -303,10 +312,9 @@ export const App = () => {
   const [pendingQuickRecordKey, setPendingQuickRecordKey] = useState("");
   const [supabaseReadState, setSupabaseReadState] = useState<SupabaseReadThroughState | null>(null);
   const [supabaseReadError, setSupabaseReadError] = useState(false);
-  const [householdPlanUsage, setHouseholdPlanUsage] = useState<HouseholdPlanUsage | null>(null);
-  const [householdPlanUsageHouseholdId, setHouseholdPlanUsageHouseholdId] = useState("");
   const previousAuthUserIdRef = useRef<string | null>(null);
-  const activeSupabaseHouseholdIdRef = useRef("");
+  const isSupabaseAuthIdentityTransition =
+    isSupabaseBackend && !auth.loading && previousAuthUserIdRef.current !== (auth.user?.id ?? null);
   const transientMessageGenerationRef = useRef(0);
   const [isSupabaseWritesLocallyDisabled] = useState(
     () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
@@ -324,15 +332,21 @@ export const App = () => {
   const activeSupabaseHouseholdId =
     supabaseReadState?.household.id ??
     (!shouldUseSupabaseAccountData && activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
-  activeSupabaseHouseholdIdRef.current = activeSupabaseHouseholdId;
-  const currentHouseholdPlanUsage = householdPlanUsageHouseholdId === activeSupabaseHouseholdId ? householdPlanUsage : null;
+  const { subscription, refreshSubscriptionState } = useSubscriptionState(
+    auth.user?.id ?? null,
+    isSupabaseAuthIdentityTransition ? null : activeSupabaseHouseholdId || null,
+  );
+  const currentHouseholdPlanUsage = subscription.householdPlanUsage;
   const plantLimitReached = currentHouseholdPlanUsage?.plantsRemaining === 0;
   const plantLimitLabel = currentHouseholdPlanUsage
     ? currentHouseholdPlanUsage.isPremium
       ? "Premium: unlimited plants"
       : `${currentHouseholdPlanUsage.plantsRemaining ?? 0} / ${currentHouseholdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
     : "";
-  const accountSubscriptionLabel = currentHouseholdPlanUsage
+  const accountSubscriptionLabel = subscription.status === "error"
+    ? t("pricing.statusUnavailable")
+    : subscription.status === "loading" ? t("account.subscriptionServer")
+    : currentHouseholdPlanUsage
     ? currentHouseholdPlanUsage.isPremium
       ? t("account.subscriptionPremium")
       : t("account.subscriptionFree")
@@ -553,14 +567,12 @@ export const App = () => {
     setSupabaseReadState(null);
     setSupabaseReadError(false);
     setSupabasePlantIdsByLegacyId({});
-    setHouseholdPlanUsage(null);
-    setHouseholdPlanUsageHouseholdId("");
     setHouseholdInvites([]);
     setHouseholdMembers([]);
 
-    if (nextUserId && isSupabaseBackend) {
-      setHouseholdLookupStatus("checking");
-      setIsAccessChecking(true);
+    if (isSupabaseBackend) {
+      setHouseholdLookupStatus(nextUserId ? "checking" : "complete");
+      setIsAccessChecking(Boolean(nextUserId));
       clearHouseholdSession();
       setActiveHousehold(null);
       setPreviousHousehold(null);
@@ -735,19 +747,21 @@ export const App = () => {
     return nextState;
   };
 
-  const refreshHouseholdPlanUsage = async (householdId = activeSupabaseHouseholdId) => {
-    if (!auth.isAuthenticated || !householdId) {
-      setHouseholdPlanUsage(null);
-      setHouseholdPlanUsageHouseholdId("");
-      return null;
-    }
+  const refreshHouseholdPlanUsage = async () => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) return null;
+    const nextSnapshot = await refreshSubscriptionState();
+    if (nextSnapshot.status === "error") throw new Error(nextSnapshot.error ?? "Subscription status is unavailable.");
+    return nextSnapshot.householdPlanUsage;
+  };
 
-    const usage = await getHouseholdPlanUsage(householdId);
-    if (activeSupabaseHouseholdIdRef.current === householdId) {
-      setHouseholdPlanUsage(usage);
-      setHouseholdPlanUsageHouseholdId(householdId);
+  const refreshPlanAfterSubscription = async () => {
+    let nextSnapshot = await refreshSubscriptionState();
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      if (nextSnapshot.view !== "syncing") return nextSnapshot;
+      if (attempt < 5) await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      nextSnapshot = await refreshSubscriptionState();
     }
-    return usage;
+    return nextSnapshot;
   };
 
   const writeSupabaseFirst = async <T,>(operation: () => Promise<T>, mirrorLegacy: () => void) => {
@@ -828,28 +842,19 @@ export const App = () => {
   }, [activeHousehold, auth.isAuthenticated, auth.loading, auth.user?.id]);
 
   useEffect(() => {
-    const householdId = activeSupabaseHouseholdId;
-    setHouseholdPlanUsage(null);
-    setHouseholdPlanUsageHouseholdId("");
-
-    if (!auth.isAuthenticated || !householdId) {
-      setHouseholdPlanUsage(null);
-      setHouseholdPlanUsageHouseholdId("");
-      return;
-    }
-
-    void refreshHouseholdPlanUsage(householdId).catch(() => {
-      if (activeSupabaseHouseholdIdRef.current === householdId) {
-        setHouseholdPlanUsage(null);
-        setHouseholdPlanUsageHouseholdId("");
-      }
-    });
-  }, [activeSupabaseHouseholdId, auth.isAuthenticated, auth.user?.id]);
-
-  useEffect(() => {
+    if (auth.loading) return;
     let cancelled = false;
 
     const resolveHousehold = async () => {
+      if (isSupabaseBackend && !auth.isAuthenticated) {
+        clearHouseholdSession();
+        setActiveHousehold(null);
+        setAccessStatus("");
+        setIsAccessChecking(false);
+        setHouseholdLookupStatus("complete");
+        return;
+      }
+
       const urlToken = getHouseholdTokenFromUrl();
       const storedHousehold = getStoredHouseholdSession();
       const token = urlToken || storedHousehold?.publicToken || "";
@@ -929,7 +934,7 @@ export const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [auth.isAuthenticated, auth.user?.id, t]);
+  }, [auth.isAuthenticated, auth.loading, auth.user?.id, t]);
 
   useEffect(() => {
     if (!activeHousehold || !isLegacyNetlifyBackendEnabled || supabaseWriteMode === "supabase-first") {
@@ -1584,7 +1589,7 @@ export const App = () => {
   };
 
   const handleAccountSignOut = async () => {
-    if (isSigningOut) {
+    if (signingOutRef.current) {
       return;
     }
 
@@ -1592,6 +1597,7 @@ export const App = () => {
       return;
     }
 
+    signingOutRef.current = true;
     try {
       setIsSigningOut(true);
       setAccountActionStatus(t("account.signingOut"));
@@ -1607,6 +1613,7 @@ export const App = () => {
     } catch (error) {
       setAccountActionStatus(error instanceof Error ? error.message : t("account.signOutFailed"));
     } finally {
+      signingOutRef.current = false;
       setIsSigningOut(false);
     }
   };
@@ -1805,11 +1812,12 @@ export const App = () => {
         await assertCanAddPlant(activeSupabaseHouseholdId);
       }
       const imageDataUrl = newPlantImage.dataUrl;
-      await validatePlantImageForUpload(imageDataUrl);
+      await validatePlantImageForUpload(imageDataUrl, selectedLanguage);
       setNewPlantStatus(t("plantForm.generatingCare"));
       const care = await fetchGeneratedCare(plantName, imageDataUrl, {
         generationSource: "initial_plant_add",
         householdId: activeSupabaseHouseholdId,
+        language: selectedLanguage,
       });
       const { displayName: aiCareDisplayName, identificationConfidence, ...careProfile } = care;
       const aiDisplayName = aiCareDisplayName.trim();
@@ -1863,10 +1871,18 @@ export const App = () => {
       if (auth.isAuthenticated && !supabasePlantId) {
         throw new Error("Supabase plant is not available for AI care refresh.");
       }
-      const imageDataUrl = await imageSourceToDataUrl(flower.image);
+      let imageSource = flower.image;
+      if (supabasePlantId) {
+        const plant = await getHouseholdPlantById(supabasePlantId);
+        if (plant.imagePath) {
+          imageSource = await getPlantImageSignedUrl(plant.imagePath);
+        }
+      }
+      const imageDataUrl = await imageSourceToDataUrl(imageSource);
       const nextCare = await fetchGeneratedCare(flower.displayName, imageDataUrl, {
         generationSource: "manual_refresh",
         householdId: activeSupabaseHouseholdId,
+        language: selectedLanguage,
         plantId: supabasePlantId,
       });
       setCarePreview({ flowerId: flower.id, nextCare });
@@ -1957,7 +1973,7 @@ export const App = () => {
       const image = await captureImage({ file, source });
       capturedImage = image;
       setNewPlantStatus(t("image.validatingPlant"));
-      await validatePlantImageForUpload(image.dataUrl);
+      await validatePlantImageForUpload(image.dataUrl, selectedLanguage);
       if (newPlantImage?.previewUrl) {
         URL.revokeObjectURL(newPlantImage.previewUrl);
       }
@@ -1997,7 +2013,7 @@ export const App = () => {
       const image = await captureImage({ file, source });
       capturedImage = image;
       setDiagnosisStatus(t("image.validatingPlant"));
-      await validatePlantImageForUpload(image.dataUrl);
+      await validatePlantImageForUpload(image.dataUrl, selectedLanguage);
       if (diagnosisImagePreviewUrl) {
         URL.revokeObjectURL(diagnosisImagePreviewUrl);
       }
@@ -2029,7 +2045,7 @@ export const App = () => {
 
     try {
       setDiagnosisStatus(t("image.validatingSafety"));
-      await validatePlantImageForUpload(diagnosisImageDataUrl);
+      await validatePlantImageForUpload(diagnosisImageDataUrl, selectedLanguage);
 
       if (auth.isAuthenticated && !activeSupabaseHouseholdId) {
         const message = t("diagnosis.householdRequired");
@@ -2053,6 +2069,7 @@ export const App = () => {
         diagnosisImageDataUrl,
         diagnosisSymptomNotes,
         activeSupabaseHouseholdId,
+        selectedLanguage,
       );
       setDiagnosisDraft(diagnosis);
       await refreshHouseholdPlanUsage().catch(() => null);
@@ -2352,6 +2369,36 @@ export const App = () => {
 
     window.location.hash = fallbackHash;
   };
+
+  if (isSupabaseAuthIdentityTransition ||
+    (auth.loading && isSupabaseConfigured && route.page !== "legal" && route.page !== "health" && route.page !== "release-readiness")) {
+    return (
+      <main className="app-shell access-shell onboarding-shell">
+        <section className="access-card onboarding-card household-loading-panel" aria-busy="true" aria-live="polite">
+          <span className="loading-wheel" aria-hidden="true" />
+          <p>{t("auth.loading")}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (auth.callbackError) {
+    return (
+      <main className="app-shell access-shell onboarding-shell">
+        <section className="access-card onboarding-card" aria-labelledby="auth-callback-error-title">
+          <div className="section-title">
+            <KeyRound size={22} aria-hidden="true" />
+            <h1 id="auth-callback-error-title">{t("auth.invalidCallbackTitle")}</h1>
+          </div>
+          <p>{t("auth.invalidCallbackBody")}</p>
+          <button className="neutral-action" type="button" onClick={auth.dismissCallbackError}>
+            {t("auth.invalidCallbackAction")}
+          </button>
+          <AuthPanel compact initialMode="login" language={selectedLanguage} onSuccess={auth.dismissCallbackError} />
+        </section>
+      </main>
+    );
+  }
 
   if (auth.isPasswordRecovery) {
     return (
@@ -2983,7 +3030,7 @@ export const App = () => {
                       <h3>{diagnosis.diagnosisTitle}</h3>
                       <div className="diagnostic-card-meta" aria-label={t("diagnosis.summary")}>
                         <span>{t("diagnosis.confidenceShort", { percent: diagnosis.confidence })}</span>
-                        <span>{diagnosis.confidenceLabel}</span>
+                        <span>{localizedConfidenceLabel(diagnosis.confidenceLabel)}</span>
                         <span>{riskLevelLabel(diagnosis.riskLevel, t)}</span>
                         <span>{diagnosis.userConfirmation === "confirmed" ? t("diagnosis.confirmed") : t("diagnosis.rejected")}</span>
                       </div>
@@ -3234,7 +3281,10 @@ export const App = () => {
                       <small>{riskLevelLabel(diagnosisDraft.riskLevel, t)}</small>
                     </div>
                     <strong>
-                      {t("diagnosis.confidence", { percent: diagnosisDraft.confidence, label: diagnosisDraft.confidenceLabel })}
+                      {t("diagnosis.confidence", {
+                        percent: diagnosisDraft.confidence,
+                        label: localizedConfidenceLabel(diagnosisDraft.confidenceLabel),
+                      })}
                     </strong>
                   </div>
                   <div className="diagnosis-result-grid">
@@ -3296,7 +3346,13 @@ export const App = () => {
         ) : null}
 
         {diagnosisUpgradeReason ? (
-          <UpgradeModal limitReason={diagnosisUpgradeReason} onClose={() => setDiagnosisUpgradeReason("")} />
+          <UpgradeModal
+            limitReason={diagnosisUpgradeReason}
+            language={selectedLanguage}
+            onClose={() => setDiagnosisUpgradeReason("")}
+            subscription={subscription}
+            onSubscriptionChanged={refreshPlanAfterSubscription}
+          />
         ) : null}
 
         {deleteFlowerId === flower.id ? (
@@ -3648,12 +3704,16 @@ export const App = () => {
               {inviteStatus ? <p className={inviteStatusClass}>{inviteStatus}</p> : null}
             </div>
           </details>
-          <details className="menu-section">
+          <details className="menu-section" onToggle={(event) => { if (event.currentTarget.open) void refreshSubscriptionState(); }}>
             <summary>
               <span>{t("menu.subscription")}</span>
             </summary>
             <div className="menu-section-body">
-              <PricingPage householdPlanUsage={currentHouseholdPlanUsage} language={selectedLanguage} />
+              <PricingPage
+                language={selectedLanguage}
+                subscription={subscription}
+                onSubscriptionChanged={refreshPlanAfterSubscription}
+              />
             </div>
           </details>
 

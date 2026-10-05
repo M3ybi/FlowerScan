@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 const testScripts = [
   "test:supabase",
   "test:billing",
+  "test:subscription-state",
+  "test:subscription-ui",
   "test:diagnostics",
   "test:household",
   "test:household-plan",
@@ -15,6 +17,7 @@ const testScripts = [
   "test:release-readiness",
   "test:onboarding",
   "test:auth-ux",
+  "test:native-auth",
   "test:i18n",
   "test:backend-migration",
   "test:household-invites",

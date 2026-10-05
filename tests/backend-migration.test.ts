@@ -112,15 +112,28 @@ test("AI frontend calls use backend provider layer", () => {
   assert.match(careSource, /functionName: "plant-care-ai"/);
 });
 
-test("subscription UI is driven by household server plan usage", () => {
+test("AI care refresh fetches a fresh signed URL for Supabase plant images", () => {
+  const appSource = readFileSync("src/App.tsx", "utf8");
+  const careHandler = appSource.match(/const handleGenerateCarePreview = async \(flower: Flower\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
+
+  assert.match(careHandler, /getHouseholdPlantById\(supabasePlantId\)/);
+  assert.match(careHandler, /getPlantImageSignedUrl\(plant\.imagePath\)/);
+  assert.match(careHandler, /imageSourceToDataUrl\(imageSource\)/);
+});
+
+test("subscription UI uses one provider and household server state", () => {
   const appSource = readFileSync("src/App.tsx", "utf8");
   const pricingSource = readFileSync("src/components/PricingPage.tsx", "utf8");
+  const subscriptionHook = readFileSync("src/hooks/useSubscriptionState.ts", "utf8");
 
-  assert.match(appSource, /const currentHouseholdPlanUsage = householdPlanUsageHouseholdId === activeSupabaseHouseholdId \? householdPlanUsage : null/);
-  assert.match(appSource, /const accountSubscriptionLabel = currentHouseholdPlanUsage/);
-  assert.match(appSource, /<PricingPage householdPlanUsage=\{currentHouseholdPlanUsage\} language=\{selectedLanguage\} \/>/);
-  assert.match(pricingSource, /householdPlanUsage\?: HouseholdPlanUsage \| null/);
-  assert.match(pricingSource, /const hasServerPremium = householdPlanUsage\?\.isPremium === true/);
+  assert.match(appSource, /useSubscriptionState\(/);
+  assert.match(appSource, /const currentHouseholdPlanUsage = subscription\.householdPlanUsage/);
+  const pricingPage = appSource.match(/<PricingPage\b[\s\S]*?\/>/)?.[0] ?? "";
+  assert.match(pricingPage, /subscription=\{subscription\}/);
+  assert.match(pricingPage, /language=\{selectedLanguage\}/);
+  assert.match(subscriptionHook, /getHouseholdPlanUsage/);
+  assert.match(subscriptionHook, /getBillingService\(\)\.getCustomerInfo/);
+  assert.doesNotMatch(pricingSource, /billing\.getCustomerInfo\(/);
   assert.match(pricingSource, /pricing\.currentServerPremium/);
 });
 

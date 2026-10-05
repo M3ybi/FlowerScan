@@ -33,7 +33,8 @@ test("async actions share accessible loading button and logic-level duplicate gu
   assert.match(appSource, /import \{ LoadingButton \}/);
   assert.match(appSource, /if \(isCreatingInvite\) \{/);
   assert.match(appSource, /if \(isJoiningInvite\) \{/);
-  assert.match(appSource, /if \(isSigningOut\) \{/);
+  assert.match(appSource, /if \(signingOutRef\.current\) \{/);
+  assert.match(appSource, /finally \{\s*signingOutRef\.current = false;/);
   assert.match(appSource, /if \(isAddingPlant\) \{/);
   assert.match(appSource, /if \(isCapturingNewPlantImage \|\| isAddingPlant\) \{/);
   assert.match(appSource, /finally \{\s*setIsCreatingInvite\(false\);/);

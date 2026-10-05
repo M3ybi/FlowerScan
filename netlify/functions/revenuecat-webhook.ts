@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
+import { getRevenueCatPlan } from "../../src/lib/revenueCatProducts.js";
 
 const headers = {
   "Content-Type": "application/json; charset=utf-8",
@@ -8,14 +9,9 @@ const headers = {
 
 const premiumEntitlementId = "premium";
 
-const productToPlan = {
-  plantie_premium_monthly: { billingPeriod: "monthly", planKey: "premium_monthly" },
-  plantie_premium_yearly: { billingPeriod: "yearly", planKey: "premium_yearly" },
-} as const;
-
-const activeEventTypes = new Set(["INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION", "PRODUCT_CHANGE"]);
+const activeEventTypes = new Set(["INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION"]);
 const inactiveEventTypes = new Set(["EXPIRATION", "REFUND"]);
-const supportedEventTypes = new Set([...activeEventTypes, "BILLING_ISSUE", "CANCELLATION", ...inactiveEventTypes]);
+const stateChangingEventTypes = new Set([...activeEventTypes, "BILLING_ISSUE", "CANCELLATION", ...inactiveEventTypes]);
 
 export type RevenueCatSubscriptionStatus = "active" | "cancelled" | "expired" | "grace_period" | "refunded";
 export type RevenueCatSubscriptionPlatform = "ios" | "android" | "web" | "manual";
@@ -30,6 +26,7 @@ export type RevenueCatWebhookEvent = {
   periodType: string;
   price: number | null;
   productId: string;
+  newProductId?: string;
   purchasedAtMs: number | null;
   store: string;
   transactionId: string;
@@ -112,15 +109,17 @@ export const verifyWebhookSecret = (headersInput: Record<string, string | undefi
 
 const stringValue = (value: unknown) => (typeof value === "string" ? value : "");
 const nullableNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+const nullableTimestamp = (value: unknown) =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 8_640_000_000_000_000 ? value : null;
 
 const firstEntitlementId = (event: Record<string, unknown>) => {
-  const entitlementId = stringValue(event.entitlement_id);
-  if (entitlementId) {
-    return entitlementId;
-  }
-
   const entitlementIds = event.entitlement_ids;
-  return Array.isArray(entitlementIds) ? stringValue(entitlementIds[0]) : "";
+  if (Array.isArray(entitlementIds)) {
+    if (entitlementIds.includes(premiumEntitlementId)) return premiumEntitlementId;
+    const first = stringValue(entitlementIds[0]);
+    if (first) return first;
+  }
+  return stringValue(event.entitlement_id);
 };
 
 export const parseRevenueCatPayload = (body: string | null): RevenueCatWebhookEvent | null => {
@@ -140,12 +139,13 @@ export const parseRevenueCatPayload = (body: string | null): RevenueCatWebhookEv
       currency: stringValue(event.currency) || null,
       entitlementId: firstEntitlementId(event),
       eventId: stringValue(event.id),
-      expirationAtMs: nullableNumber(event.expiration_at_ms),
+      expirationAtMs: nullableTimestamp(event.expiration_at_ms),
       originalTransactionId: stringValue(event.original_transaction_id),
       periodType: stringValue(event.period_type),
       price: nullableNumber(event.price),
       productId: stringValue(event.product_id),
-      purchasedAtMs: nullableNumber(event.purchased_at_ms),
+      newProductId: stringValue(event.new_product_id),
+      purchasedAtMs: nullableTimestamp(event.purchased_at_ms),
       store: stringValue(event.store),
       transactionId: stringValue(event.transaction_id),
       type: stringValue(event.type),
@@ -167,6 +167,10 @@ export const mapRevenueCatStoreToPlatform = (store: string): RevenueCatSubscript
 
   if (normalized.includes("PLAY_STORE")) {
     return "android";
+  }
+
+  if (normalized === "RC_BILLING" || normalized === "STRIPE" || normalized === "PADDLE") {
+    return "web";
   }
 
   return "manual";
@@ -203,6 +207,7 @@ const createSanitizedPayload = (event: RevenueCatWebhookEvent) => ({
   period_type: event.periodType,
   price: event.price,
   product_id: event.productId,
+  new_product_id: event.newProductId ?? null,
   purchased_at_ms: event.purchasedAtMs,
   store: event.store,
 });
@@ -254,13 +259,14 @@ const insertEvent = async (
 };
 
 const findUser = async (client: SupabaseAdminClient, userId: string) => {
-  if (!userId) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
     return false;
   }
 
   const { data, error } = await client.auth.admin.getUserById(userId);
   if (error) {
-    return false;
+    if ((error as { status?: number }).status === 404) return false;
+    throw new Error("RevenueCat user lookup failed.");
   }
 
   return Boolean(data.user);
@@ -303,7 +309,7 @@ const upsertSubscription = async (
   userId: string,
   status: RevenueCatSubscriptionStatus,
 ) => {
-  const plan = productToPlan[event.productId as keyof typeof productToPlan];
+  const plan = getRevenueCatPlan(event.productId);
   if (!plan) {
     return null;
   }
@@ -365,7 +371,7 @@ const upsertEntitlement = async (
   subscriptionId: string | null,
   status: RevenueCatSubscriptionStatus,
 ) => {
-  const productPlan = productToPlan[event.productId as keyof typeof productToPlan];
+  const productPlan = getRevenueCatPlan(event.productId);
   const activatesPremium =
     Boolean(productPlan) &&
     event.entitlementId === premiumEntitlementId &&
@@ -433,31 +439,60 @@ export const processRevenueCatWebhookEvent = async (
   client: SupabaseAdminClient,
   event: RevenueCatWebhookEvent,
 ) => {
-  const status = mapRevenueCatStatus(event);
-  const productPlan = productToPlan[event.productId as keyof typeof productToPlan];
-  const isSupportedEvent = supportedEventTypes.has(event.type);
-  const isKnownUser = await findUser(client, event.appUserId);
-
-  const initialEventInsert = await insertEvent(client, event, isKnownUser ? event.appUserId : null, null);
-  if (initialEventInsert.duplicate) {
+  const { data: existingEvent, error: existingEventError } = await client
+    .from("subscription_events")
+    .select("id")
+    .eq("event_id", event.eventId)
+    .maybeSingle<{ id: string }>();
+  if (existingEventError) {
+    throw new Error("RevenueCat event lookup failed.");
+  }
+  if (existingEvent) {
     return { duplicate: true, entitlementUpdated: false, eventStored: true, subscriptionUpdated: false };
   }
 
-  if (!isSupportedEvent || !status || !productPlan || !isKnownUser) {
+  const isKnownUser = await findUser(client, event.appUserId);
+
+  // RevenueCat sends the effective INITIAL_PURCHASE or RENEWAL separately for plan changes.
+  if (event.type === "PRODUCT_CHANGE") {
+    const inserted = await insertEvent(client, event, isKnownUser ? event.appUserId : null, null);
+    return { duplicate: inserted.duplicate, entitlementUpdated: false, eventStored: true, subscriptionUpdated: false };
+  }
+
+  const status = mapRevenueCatStatus(event);
+  const productPlan = getRevenueCatPlan(event.productId);
+  const isSupportedEvent = stateChangingEventTypes.has(event.type);
+
+  const needsExpiration = status !== "expired" && status !== "refunded";
+  if (!isSupportedEvent || !status || !productPlan || !isKnownUser || event.entitlementId !== premiumEntitlementId || (needsExpiration && !event.expirationAtMs)) {
+    const inserted = await insertEvent(client, event, isKnownUser ? event.appUserId : null, null);
     return {
-      duplicate: false,
+      duplicate: inserted.duplicate,
       entitlementUpdated: false,
       eventStored: true,
       subscriptionUpdated: false,
     };
   }
 
+  if (event.expirationAtMs) {
+    const { data: current, error } = await client.from("user_entitlements")
+      .select("is_premium, valid_until")
+      .eq("user_id", event.appUserId)
+      .maybeSingle<{ is_premium: boolean; valid_until: string | null }>();
+    if (error) throw new Error("Current entitlement could not be loaded.");
+    if (current?.is_premium && current.valid_until && Date.parse(current.valid_until) > event.expirationAtMs) {
+      const inserted = await insertEvent(client, event, event.appUserId, null);
+      return { duplicate: inserted.duplicate, entitlementUpdated: false, eventStored: true, subscriptionUpdated: false };
+    }
+  }
+
   const subscriptionId = await upsertSubscription(client, event, event.appUserId, status);
   await upsertEntitlement(client, event, event.appUserId, subscriptionId, status);
   await ensureUsageCounter(client, event.appUserId);
+  const inserted = await insertEvent(client, event, event.appUserId, subscriptionId);
 
   return {
-    duplicate: false,
+    duplicate: inserted.duplicate,
     entitlementUpdated: true,
     eventStored: true,
     subscriptionUpdated: Boolean(subscriptionId),
@@ -511,7 +546,7 @@ export const handler: Handler = async (event) => {
     return {
       body: JSON.stringify({ status: "accepted", updatesApplied: result.entitlementUpdated, duplicate: result.duplicate }),
       headers,
-      statusCode: 202,
+      statusCode: 200,
     };
   } catch {
     return {

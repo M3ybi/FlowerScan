@@ -1,7 +1,18 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
 import { getUserHouseholds } from "./plantieRepository";
 import { supabase } from "./supabase";
-import { createAuthActions, createAuthRedirectUrl } from "./authRules";
+import { createAuthActions, mapSupabaseAuthError, requireWebAuthRedirectUrl } from "./authRules";
+import { authReturnPathStorageKey, createAuthReturnLocation, createSingleFlightAuthCodeExchange, safeAuthReturnLocation } from "./authRedirects";
+import type { AuthRedirectPurpose } from "./authRedirects";
+import {
+  createNativeAuthCallbackHandler,
+  nativeConfirmationRedirectUrl,
+  nativeOAuthErrorEvent,
+  nativeOAuthRedirectUrl,
+  nativeOAuthSuccessEvent,
+  nativeRecoveryRedirectUrl,
+} from "./nativeOAuth";
 import type { AuthActionsClient, AuthMode } from "./authRules";
 
 export type { AuthMode };
@@ -26,12 +37,26 @@ const getClient = () => {
   return supabase;
 };
 
-const getRedirectUrl = () => {
+const getRedirectUrl = (purpose: AuthRedirectPurpose = "callback") => {
+  if (Capacitor.isNativePlatform()) {
+    return purpose === "recovery" ? nativeRecoveryRedirectUrl
+      : purpose === "confirmation" ? nativeConfirmationRedirectUrl
+      : nativeOAuthRedirectUrl;
+  }
   if (typeof window === "undefined") {
     return undefined;
   }
 
-  return createAuthRedirectUrl(window.location.href);
+  return requireWebAuthRedirectUrl(window.location.href, purpose);
+};
+
+const rememberPostAuthRoute = () => {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(authReturnPathStorageKey, createAuthReturnLocation(window.location.href));
+  } catch {
+    // Authentication still works when the browser denies sessionStorage.
+  }
 };
 
 const profileDisplayName = (user: User) => {
@@ -48,10 +73,147 @@ const authActions = createAuthActions({
   getRedirectUrl,
 });
 
-export const signInWithMagicLink = async (email: string) => authActions.signInWithMagicLink(email);
+let nativeOAuthListener: Promise<void> | null = null;
+let nativeListenerHandle: { remove(): Promise<void> } | null = null;
+let nativeListenerActive = false;
+let nativeListenerGeneration = 0;
+let nativeOAuthInProgress = false;
+let nativeBrowserFinishedListener: { remove(): Promise<void> } | null = null;
+export const nativeAuthLinkErrorEvent = "planti-native-auth-link-error";
 
-export const registerWithEmailPassword = async (email: string, password: string) =>
-  authActions.registerWithEmailPassword(email, password);
+const clearNativeBrowserFinishedListener = async () => {
+  const listener = nativeBrowserFinishedListener;
+  nativeBrowserFinishedListener = null;
+  await listener?.remove().catch(() => undefined);
+};
+
+const nativeCallbackHandler = createNativeAuthCallbackHandler(async (code) => {
+  const { error } = await getClient().auth.exchangeCodeForSession(code);
+  return { error };
+});
+
+const emitNativeOAuthError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "Google sign-in could not be completed.";
+  window.dispatchEvent(new CustomEvent(nativeOAuthErrorEvent, { detail: message }));
+};
+
+const restorePostAuthRoute = () => {
+  try {
+    const savedPath = window.sessionStorage.getItem(authReturnPathStorageKey);
+    window.sessionStorage.removeItem(authReturnPathStorageKey);
+    if (savedPath) {
+      window.history.replaceState(window.history.state, "", safeAuthReturnLocation(savedPath));
+      window.dispatchEvent(new Event("hashchange"));
+    }
+  } catch {
+    // The current in-app route remains available if storage is restricted.
+  }
+};
+
+const handleIncomingNativeAuthUrl = async (url: string) => {
+  try {
+    const result = await nativeCallbackHandler(url);
+    if (!result || result.status === "duplicate") return;
+    if (result.kind !== "recovery") restorePostAuthRoute();
+    if (result.kind === "oauth") {
+      nativeOAuthInProgress = false;
+      await clearNativeBrowserFinishedListener();
+      window.dispatchEvent(new Event(nativeOAuthSuccessEvent));
+    }
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.close().catch(() => undefined);
+  } catch (error) {
+    window.dispatchEvent(new Event(nativeAuthLinkErrorEvent));
+    if (nativeOAuthInProgress) emitNativeOAuthError(error);
+    nativeOAuthInProgress = false;
+    await clearNativeBrowserFinishedListener();
+  }
+};
+
+export const ensureNativeAuthListener = async () => {
+  if (!Capacitor.isNativePlatform()) return;
+  nativeListenerActive = true;
+  nativeListenerGeneration += 1;
+  if (!nativeOAuthListener) {
+    nativeOAuthListener = import("@capacitor/app")
+      .then(async ({ App }) => {
+        nativeListenerHandle = await App.addListener("appUrlOpen", ({ url }) => {
+          void handleIncomingNativeAuthUrl(url);
+        });
+        if (!nativeListenerActive) {
+          await nativeListenerHandle.remove();
+          nativeListenerHandle = null;
+          return;
+        }
+        const launch = await App.getLaunchUrl();
+        if (launch?.url) await handleIncomingNativeAuthUrl(launch.url);
+      })
+      .catch((error) => {
+        nativeOAuthListener = null;
+        throw error;
+      });
+  }
+
+  await nativeOAuthListener;
+};
+
+export const removeNativeAuthListener = async () => {
+  nativeListenerActive = false;
+  const generation = ++nativeListenerGeneration;
+  await nativeOAuthListener?.catch(() => undefined);
+  if (generation !== nativeListenerGeneration) return;
+  await nativeListenerHandle?.remove();
+  nativeListenerHandle = null;
+  nativeOAuthListener = null;
+};
+
+const startNativeGoogleSignIn = async () => {
+  if (nativeOAuthInProgress) return;
+  nativeOAuthInProgress = true;
+  try {
+    await ensureNativeAuthListener();
+
+    const { data, error } = await getClient().auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: nativeOAuthRedirectUrl,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) {
+      throw mapSupabaseAuthError(error, "oauth_failure");
+    }
+
+    if (!data.url) {
+      throw new Error("Google sign-in did not return an authorization URL.");
+    }
+
+    const { Browser } = await import("@capacitor/browser");
+    await clearNativeBrowserFinishedListener();
+    nativeBrowserFinishedListener = await Browser.addListener("browserFinished", () => {
+      void clearNativeBrowserFinishedListener();
+      if (!nativeOAuthInProgress) return;
+      nativeOAuthInProgress = false;
+      emitNativeOAuthError(new Error("Google sign-in was cancelled."));
+    });
+    await Browser.open({ url: data.url });
+  } catch (error) {
+    nativeOAuthInProgress = false;
+    await clearNativeBrowserFinishedListener();
+    throw error;
+  }
+};
+
+export const signInWithMagicLink = async (email: string) => {
+  rememberPostAuthRoute();
+  return authActions.signInWithMagicLink(email);
+};
+
+export const registerWithEmailPassword = async (email: string, password: string) => {
+  rememberPostAuthRoute();
+  return authActions.registerWithEmailPassword(email, password);
+};
 
 export const signInWithEmailPassword = async (email: string, password: string) =>
   authActions.signInWithEmailPassword(email, password);
@@ -61,7 +223,14 @@ export const requestPasswordReset = async (email: string) => authActions.request
 export const updatePassword = async (password: string, confirmPassword: string) =>
   authActions.updatePassword(password, confirmPassword);
 
-export const signInWithGoogle = async () => authActions.signInWithGoogle();
+export const signInWithGoogle = async () => {
+  rememberPostAuthRoute();
+  if (Capacitor.isNativePlatform()) {
+    return startNativeGoogleSignIn();
+  }
+
+  return authActions.signInWithGoogle();
+};
 
 export const signOut = async () => {
   const { error } = await getClient().auth.signOut();
@@ -78,6 +247,11 @@ export const getCurrentSession = async () => {
 
   return data.session;
 };
+
+export const exchangeAuthCodeForSession = createSingleFlightAuthCodeExchange(async (code) => {
+  const { error } = await getClient().auth.exchangeCodeForSession(code);
+  if (error) throw new Error("Authentication link is invalid or expired.");
+});
 
 export const getCurrentUser = async () => {
   const { data, error } = await getClient().auth.getUser();
@@ -98,7 +272,7 @@ export const bootstrapAuthenticatedAccount = async (user: User) => {
       display_name: profileDisplayName(user),
       id: user.id,
     },
-    { onConflict: "id" },
+    { onConflict: "id", ignoreDuplicates: true },
   );
 
   if (profileError) {

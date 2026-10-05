@@ -1,12 +1,13 @@
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
 
 const diagnosisSchema = {
   additionalProperties: false,
   properties: {
     diagnosis_title: { type: "string" },
     confidence: { maximum: 100, minimum: 0, type: "integer" },
-    confidence_label: { enum: ["nízka", "stredná", "vysoká"], type: "string" },
+    confidence_label: { enum: ["low", "medium", "high"], type: "string" },
     reasoning_summary: { type: "string" },
     observed_symptoms: { items: { type: "string" }, type: "array" },
     recommended_steps: { items: { type: "string" }, type: "array" },
@@ -50,7 +51,7 @@ const parseDiagnosis = (outputText: string) => {
     !Number.isInteger(confidence) ||
     observedSymptoms.length === 0 ||
     recommendedSteps.length === 0 ||
-    (parsed.confidence_label !== "nízka" && parsed.confidence_label !== "stredná" && parsed.confidence_label !== "vysoká") ||
+    (parsed.confidence_label !== "low" && parsed.confidence_label !== "medium" && parsed.confidence_label !== "high") ||
     (parsed.risk_level !== "low" && parsed.risk_level !== "medium" && parsed.risk_level !== "high")
   ) {
     return null;
@@ -60,14 +61,14 @@ const parseDiagnosis = (outputText: string) => {
     confidence: Math.max(0, Math.min(100, confidence)),
     confidence_label: parsed.confidence_label,
     diagnosis_title: sanitizeText(parsed.diagnosis_title, 140),
-    disclaimer: sanitizeText(parsed.disclaimer, 240) || "AI diagnostika je iba odhad podľa fotografie.",
+    disclaimer: sanitizeText(parsed.disclaimer, 240),
     observed_symptoms: observedSymptoms,
     reasoning_summary: sanitizeText(parsed.reasoning_summary, 800),
     recommended_steps: recommendedSteps,
     risk_level: parsed.risk_level,
   };
 
-  return diagnosis.diagnosis_title && diagnosis.reasoning_summary ? diagnosis : null;
+  return diagnosis.diagnosis_title && diagnosis.reasoning_summary && diagnosis.disclaimer ? diagnosis : null;
 };
 
 const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -82,7 +83,7 @@ Deno.serve(async (request) => {
   const auth = await requireUser(request.headers.get("authorization") ?? "");
   if (!auth) return json(401, { error: "Authentication is required." });
 
-  let body: { householdId?: string; imageDataUrl?: string; plantName?: string; symptomNotes?: string };
+  let body: { householdId?: string; imageDataUrl?: string; language?: unknown; plantName?: string; symptomNotes?: string };
   try {
     body = await request.json();
   } catch {
@@ -107,11 +108,12 @@ Deno.serve(async (request) => {
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     body: JSON.stringify({
+      instructions: buildAiLanguageInstruction(body.language),
       input: [{
         content: [
-          { text: "Diagnostikuj problém izbovej rastliny podľa fotky postihnutej časti. Odpovedz po slovensky a vráť iba JSON podľa schémy. Buď opatrný a zníž confidence pri nejasnej fotke.", type: "input_text" },
-          { text: `Rastlina: ${plantName}`, type: "input_text" },
-          ...(symptomNotes ? [{ text: `Poznámky používateľa: ${symptomNotes}`, type: "input_text" }] : []),
+          { text: "Diagnose the houseplant problem from the affected part shown in the photo. Return only JSON matching the schema. Be cautious: lower confidence and state uncertainty when the photo or symptoms are unclear. Do not state a definitive diagnosis without visual evidence.", type: "input_text" },
+          { text: `Plant: ${plantName}`, type: "input_text" },
+          ...(symptomNotes ? [{ text: `User notes: ${symptomNotes}`, type: "input_text" }] : []),
           { detail: "high", image_url: imageDataUrl, type: "input_image" },
         ],
         role: "user",

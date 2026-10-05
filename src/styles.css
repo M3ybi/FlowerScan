@@ -2787,6 +2787,171 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
+.pricing-subscription-summary {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(47, 123, 91, 0.22);
+  border-radius: 18px;
+  background: rgba(47, 123, 91, 0.08);
+  color: var(--ink);
+}
+
+.pricing-subscription-summary p {
+  margin: 0;
+  color: var(--text);
+}
+
+.pricing-subscription-summary.status-cancelled,
+.pricing-subscription-summary.status-expired {
+  border-color: rgba(182, 103, 42, 0.28);
+  background: rgba(231, 168, 79, 0.1);
+}
+
+.pricing-subscription-summary.status-free,
+.pricing-subscription-summary.status-loading,
+.pricing-subscription-summary.status-syncing {
+  border-color: var(--line);
+  background: var(--surface-tint);
+}
+
+.pricing-subscription-summary.status-error {
+  border-color: rgba(163, 61, 50, 0.3);
+  background: rgba(242, 213, 203, 0.35);
+}
+
+.pricing-summary-heading,
+.pricing-summary-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.pricing-summary-heading {
+  justify-content: space-between;
+}
+
+.pricing-summary-heading h3 {
+  margin: 4px 0 0;
+  color: var(--brand);
+  font-size: clamp(1.3rem, 2vw, 1.75rem);
+  line-height: 1.2;
+}
+
+.pricing-summary-eyebrow,
+.pricing-summary-detail span {
+  color: var(--muted);
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.pricing-status-badge {
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.status-cancelled .pricing-status-badge,
+.status-expired .pricing-status-badge {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.status-free .pricing-status-badge,
+.status-shared .pricing-status-badge {
+  background: var(--surface-strong);
+  color: var(--brand);
+}
+
+.pricing-summary-detail {
+  display: grid;
+  gap: 3px;
+}
+
+.pricing-summary-detail strong {
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+
+.pricing-summary-actions:empty {
+  display: none;
+}
+
+.pricing-action-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pricing-provider-action,
+.pricing-refresh-action,
+.pricing-secondary-action,
+.pricing-keep-action,
+.pricing-cancel-action {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(18, 61, 49, 0.2);
+  border-radius: 16px;
+  padding: 10px 16px;
+  background: #fff;
+  color: var(--brand);
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pricing-provider-action:hover,
+.pricing-refresh-action:hover,
+.pricing-secondary-action:hover,
+.pricing-keep-action:hover {
+  background: #f1f8ed;
+}
+
+.pricing-provider-action:focus-visible,
+.pricing-refresh-action:focus-visible,
+.pricing-secondary-action:focus-visible,
+.pricing-keep-action:focus-visible,
+.pricing-cancel-action:focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 3px;
+}
+
+.pricing-cancel-action {
+  justify-self: start;
+  border-color: rgba(163, 61, 50, 0.35);
+  color: var(--danger-text);
+}
+
+.pricing-cancel-action:hover {
+  background: #fff3ef;
+}
+
+.pricing-provider-action:disabled,
+.pricing-refresh-action:disabled,
+.pricing-secondary-action:disabled,
+.pricing-keep-action:disabled,
+.pricing-cancel-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.subscription-cancel-modal > p {
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+.subscription-cancel-modal .modal-actions button {
+  min-width: 170px;
+}
+
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2843,6 +3008,49 @@ textarea:focus-visible {
   background: rgba(18, 61, 49, 0.08);
   color: var(--muted);
   font-weight: 850;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.pricing-card button:not(:disabled) {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent),
+    linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(23, 59, 47, 0.2);
+}
+
+.pricing-card button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(23, 59, 47, 0.25);
+}
+
+.pricing-card button:not(:disabled):focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 3px;
+}
+
+.pricing-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.74;
+}
+
+.pricing-current-status {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(47, 123, 91, 0.12);
+  color: var(--brand);
+  font-weight: 850;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .upgrade-modal {

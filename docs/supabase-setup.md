@@ -1,6 +1,6 @@
 # Supabase setup for Plantie
 
-This project now contains the Supabase foundation, but the running app still uses the existing localStorage and Netlify Blob flows. Do not remove the Netlify functions or blob storage until the app logic is explicitly migrated.
+The app uses Supabase Auth and, when configured for the Supabase backend, reads and writes household data through Supabase. Legacy localStorage and Netlify Blob paths remain for compatibility; keep their configuration until those paths are retired deliberately.
 
 ## Required frontend environment variables
 
@@ -103,7 +103,7 @@ This validation does not connect to Supabase.
 - `households.legacy_public_token` preserves the current public household token model for future migration.
 - `plant_catalog.legacy_id`, `plants.legacy_id`, and `plant_diagnostics.legacy_id` preserve current IDs such as `flower-04`, `custom-*`, and `diag-*`.
 - Existing localStorage keys and Netlify Blob keys are intentionally untouched.
-- Existing app code does not yet read from or write to Supabase.
+- The active Supabase backend reads and writes household data through the repository layer; legacy storage remains available in its configured compatibility modes.
 
 ## Repository layer
 
@@ -121,7 +121,7 @@ Current functions:
 - `updateHouseholdPlant(id, patch)`
 - `updatePlantCareRecord(plantId, patch)`
 
-These functions use the browser Supabase client and rely on RLS. They are intentionally not called from `App.tsx` yet.
+These functions use the browser Supabase client and rely on RLS. The Supabase backend in `App.tsx` uses this repository layer for authenticated household data.
 
 ## Auth infrastructure
 
@@ -159,8 +159,8 @@ Required Supabase Auth settings:
 
 - Enable Email provider with password sign-up/sign-in.
 - Configure password minimum length at least 8 characters.
-- Enable password reset emails and set the site URL / redirect URLs for web and Capacitor deep links before production.
-- Enable Google OAuth with the configured web, Android, and iOS redirect URIs.
+- Enable email confirmation and password reset emails; configure the Site URL and all application callback URLs below before testing those flows.
+- Enable Google OAuth with Google's callback pointing to Supabase, then allow Supabase to redirect to the web or Capacitor callback URL.
 - Apple Sign-In is shown as a disabled placeholder until Apple Developer setup is ready.
 - Amazon Login is shown as a disabled placeholder and should stay disabled unless a complete provider integration is added.
 
@@ -173,16 +173,29 @@ Google Play Data Safety notes:
 - Does not migrate legacy household-token data.
 - Does not replace localStorage or Netlify Blob sync.
 
-### Manual Supabase Auth dashboard settings
+### Hosted Supabase Auth settings
 
-In Supabase Dashboard > Authentication:
+In the linked project `hzigkjukqpxryziscvag`, open **Authentication > URL Configuration**. Set **Site URL** to `https://flowerscann.netlify.app`. Site URL is only the fallback; the app supplies an explicit callback for Google sign-in, email confirmation, magic links, and password reset. Add the following **Redirect URLs** for the environments you use. Keep any existing entries when adding new ones.
 
-1. Enable Email provider if magic links should be available.
-2. Configure Site URL for the deployed app URL.
-3. Add local and deployed redirect URLs, for example `http://localhost:5173/**` and the production app URL.
-4. Enable Google provider before using Google sign-in.
-5. Add Google OAuth client ID and secret in Supabase, not in frontend code.
-6. Confirm email templates and redirect URLs are appropriate for Plantie.
+| Environment | Google OAuth / email confirmation / magic link | Password reset |
+| --- | --- | --- |
+| Local web | `http://localhost:5173/auth/callback` | `http://localhost:5173/auth/recovery` |
+| Production web | `https://flowerscann.netlify.app/auth/callback` | `https://flowerscann.netlify.app/auth/recovery` |
+| Capacitor Android/iOS | `com.plantie.app://auth/callback` for Google OAuth and magic link; `com.plantie.app://auth/confirm` for email confirmation | `com.plantie.app://auth/recovery` |
+
+If local development uses `127.0.0.1` instead of `localhost`, add its two exact `http://127.0.0.1:5173/auth/...` URLs too. For web testing on another device, use a hostname or HTTPS tunnel reachable from that device and add its exact callback and recovery URLs to the allow-list. Numeric non-loopback IP addresses (such as `http://192.168.0.115:5173`) **cannot** be used for Supabase Auth redirects: GoTrue rejects them before checking the allow-list and falls back to the production Site URL. The app blocks Google sign-in and email-link requests on those addresses with a clear error; email/password sign-in remains available. For Netlify deploy previews, add each preview's exact callback and recovery URLs, or use Supabase's documented Netlify wildcard form scoped to this site: `https://**--flowerscann.netlify.app/auth/callback` and `https://**--flowerscann.netlify.app/auth/recovery`. Keep production callbacks exact. The web app extracts the current origin, routes the incoming callback through its dedicated pre-hash URL, then restores a validated internal `#/...` route and, when present, a validated `householdId` query. Netlify rewrites both callback paths to `index.html`.
+
+On 2026-10-02, the hosted project was updated additively with native `/confirm` and `/recovery` and both Netlify-preview patterns. The two previously added numeric LAN URLs remain in the hosted list but are ineffective because of GoTrue's IP check. A CLI readback confirmed the unchanged production Site URL and existing localhost and production entries.
+
+In **Authentication > Providers > Google**, enable the provider and configure its client ID and secret in Supabase. In the Google Cloud OAuth client's **Authorized redirect URIs**, use **only the Google-to-Supabase endpoint** `https://hzigkjukqpxryziscvag.supabase.co/auth/v1/callback` for this hosted project. The web URLs and `com.plantie.app://...` links above are Supabase-to-application destinations, not Google redirect URIs. If the Google client requires Authorized JavaScript origins, enter web origins there as a separate setting. See [native callback setup](native-google-auth.md) for Android and iOS intent/scheme registration and PKCE behavior.
+
+For the hosted Email provider, keep confirmation enabled and set the server password minimum to at least the app's 8-character minimum. Review **Authentication > Email Templates > Reset Password**: the default `{{ .ConfirmationURL }}` carries the chosen redirect; a custom link must preserve the request's `{{ .RedirectTo }}` rather than hard-code the Site URL. Password-reset requests intentionally do not reveal whether an account exists, so a successful API response does **not** prove that an email was sent. The UI must use neutral wording. If an expected message does not arrive, inspect **Authentication > Logs** for the request and any rate-limit, `email_address_not_authorized`, SMTP, or template error; then check the SMTP provider's delivery/suppression logs and the recipient's spam or quarantine folder. Supabase's default sender is limited to organization-team recipients and is unsuitable for production delivery; configure custom SMTP with a verified sender domain and appropriate SPF/DKIM/DMARC records. Test with a known account on the same device/browser that requested the PKCE link, without changing existing users or passwords for diagnostics.
+
+The reported `POST /recover` returned 200 for an address that was absent from **Authentication > Users**. Supabase intentionally does not send a reset email for an unknown user, so this particular missing email was expected. The hosted Auth config currently has no custom SMTP settings; real-user email delivery still requires a provider before production use.
+
+`supabase/config.toml` is a local development configuration, **not** a snapshot of the hosted Auth settings. Use `npx supabase config diff` to inspect drift. Do not push the current local file directly to the hosted project: it declares a localhost Site URL and different email-confirmation behavior. Update the hosted allow-list additively in the Dashboard, or read its current `uri_allow_list` through the Management API before submitting the complete revised list.
+
+References: [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls), [GoTrue redirect validation](https://github.com/supabase/auth/blob/master/internal/utilities/request.go#L640-L711), [Google provider setup](https://supabase.com/docs/guides/auth/social-login/auth-google), [SMTP limits and setup](https://supabase.com/docs/guides/auth/auth-smtp), [email delivery troubleshooting](https://supabase.com/docs/guides/troubleshooting/not-receiving-auth-emails-from-the-supabase-project-OFSNzw), and [password-reset behavior](https://supabase.com/docs/guides/auth/passwords).
 
 Security notes:
 
@@ -228,33 +241,12 @@ Standalone UI components:
 - `src/components/PricingPage.tsx`
 - `src/components/UpgradeModal.tsx`
 
-Important constraints:
-
-- Current production flows do not enforce these limits yet.
-- Login remains optional.
-- No RevenueCat, App Store, Google Play, Stripe, or fake purchase flow is implemented.
-- Frontend cannot update subscription status directly; there are no client write policies for subscription status tables.
-- Server-side functions or future billing webhooks should write subscription state using server credentials only.
+The frontend cannot update subscription status directly; there are no client write policies for subscription status tables. RevenueCat purchases use the web or native SDK where configured, and the server-side webhook updates the authenticated user's Supabase entitlements.
 
 Manual SQL step:
 
 1. Apply `supabase/migrations/20260531213000_subscription_entitlements.sql` after the existing foundation/auth migrations.
 
-## RevenueCat billing preparation
+## RevenueCat billing
 
-RevenueCat billing is documented and stubbed, but real purchases are disabled.
-
-See:
-
-```text
-docs/revenuecat-billing.md
-```
-
-Server-only environment variables for future setup:
-
-- `REVENUECAT_WEBHOOK_SECRET`
-- `REVENUECAT_API_KEY_IOS`
-- `REVENUECAT_API_KEY_ANDROID`
-- `REVENUECAT_PROJECT_ID`
-
-The frontend billing adapter currently throws `BillingNotConfiguredError` and never activates Premium locally.
+See [RevenueCat billing](revenuecat-billing.md) for the current product, webhook, and environment configuration. The frontend must never grant Premium locally; the server-side entitlement remains the access-control source of truth.

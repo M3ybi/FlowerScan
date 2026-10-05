@@ -110,7 +110,7 @@ export const legalPages: LegalPage[] = [
       {
         heading: "Known beta limits",
         body: [
-          "Real App Store and Google Play subscription products are not configured yet. Web purchases remain disabled.",
+          "Test Store subscriptions are available in test builds. Live web checkout requires a configured RevenueCat Web Billing provider and public key.",
           "Google Play identity verification and Apple Developer Program enrollment are still external release blockers.",
         ],
       },

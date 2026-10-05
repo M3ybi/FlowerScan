@@ -1,5 +1,6 @@
 import type { Flower } from "../data/flowers";
 import { callBackendFunction } from "../lib/backendConfig.js";
+import type { PlantieLanguage } from "../lib/onboarding.js";
 
 export type GeneratedCare = {
   displayName: string;
@@ -18,6 +19,7 @@ export type GeneratedCare = {
 export type GenerateCareOptions = {
   generationSource?: "initial_plant_add" | "manual_refresh";
   householdId?: string;
+  language?: PlantieLanguage | null;
   plantId?: string;
 };
 
@@ -93,6 +95,7 @@ export const fetchGeneratedCare = async (
         generationSource: options.generationSource ?? "initial_plant_add",
         householdId: options.householdId ?? "",
         imageDataUrl,
+        language: options.language,
         plantId: options.plantId ?? "",
         plantName,
       },

@@ -1,5 +1,6 @@
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
 
 const rejectionMessage =
   "Image contains sensitive/explicit information or does not contain a valid plant/tree. Please upload a clear plant image without sensitive background content.";
@@ -101,7 +102,7 @@ Deno.serve(async (request) => {
   const auth = await requireUser(request.headers.get("authorization") ?? "");
   if (!auth) return json(401, { error: "Authentication is required." });
 
-  let body: { imageDataUrl?: string };
+  let body: { imageDataUrl?: string; language?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -119,6 +120,7 @@ Deno.serve(async (request) => {
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       body: JSON.stringify({
+        instructions: buildAiLanguageInstruction(body.language),
         input: [
           {
             content: [

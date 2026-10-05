@@ -1,4 +1,5 @@
 import { callBackendFunction } from "../lib/backendConfig.js";
+import type { PlantieLanguage } from "../lib/onboarding.js";
 import {
   imageUploadRejectionMessage,
   isImageUploadAllowed,
@@ -7,10 +8,10 @@ import {
 
 export { imageUploadRejectionMessage };
 
-export const validatePlantImageForUpload = async (imageDataUrl: string) => {
+export const validatePlantImageForUpload = async (imageDataUrl: string, language?: PlantieLanguage | null) => {
   try {
     const data = await callBackendFunction<{ validation?: unknown }>({
-      body: { imageDataUrl },
+      body: { imageDataUrl, language },
       functionName: "validate-plant-image",
       netlifyPath: "/.netlify/functions/validate-plant-image",
     });

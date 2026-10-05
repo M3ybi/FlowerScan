@@ -1,5 +1,6 @@
 import { createServiceClient, requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
 
 const rejectionMessage =
   "Image contains sensitive/explicit information or does not contain a valid plant/tree. Please upload a clear plant image without sensitive background content.";
@@ -98,13 +99,14 @@ const parseDataUrl = (imageDataUrl: string) => {
   return { bytes, contentType };
 };
 
-const validateImage = async (apiKey: string, imageDataUrl: string, userId: string) => {
+const validateImage = async (apiKey: string, imageDataUrl: string, userId: string, language: unknown) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       body: JSON.stringify({
+        instructions: buildAiLanguageInstruction(language),
         input: [
           {
             content: [
@@ -155,7 +157,7 @@ Deno.serve(async (request) => {
   const auth = await requireUser(request.headers.get("authorization") ?? "");
   if (!auth) return json(401, { error: "Authentication is required." });
 
-  let body: { householdId?: string; imageDataUrl?: string; imageId?: string; kind?: ImageKind };
+  let body: { householdId?: string; imageDataUrl?: string; imageId?: string; kind?: ImageKind; language?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -177,7 +179,7 @@ Deno.serve(async (request) => {
     return json(403, { error: "Editor or owner access is required to upload images." });
   }
 
-  const validation = await validateImage(apiKey, imageDataUrl, auth.user.id);
+  const validation = await validateImage(apiKey, imageDataUrl, auth.user.id, body.language);
   if (!validation) {
     return json(422, { error: rejectionMessage });
   }

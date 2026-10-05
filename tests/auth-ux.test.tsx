@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  AuthFlowError,
   createAuthActions,
   createAuthRedirectUrl,
+  mapSupabaseAuthError,
+  requireWebAuthRedirectUrl,
   validateLoginInput,
   validatePasswordResetInput,
   validatePasswordUpdateInput,
   validateRegistrationInput,
 } from "../src/lib/authRules.js";
+import { createAuthReturnLocation, createSingleFlightAuthCodeExchange, readWebAuthCallback, safeAuthReturnLocation, safeAuthReturnPath } from "../src/lib/authRedirects.js";
 
 const createMockAuthClient = () => {
   const calls: Array<{ method: string; input: unknown }> = [];
@@ -54,6 +58,10 @@ test("email registration validation rejects invalid input", () => {
     validateRegistrationInput({ confirmPassword: "short", email: "user@example.com", password: "short" }),
     "Password must be at least 8 characters.",
   );
+  assert.equal(
+    validateRegistrationInput({ confirmPassword: "", email: "user@example.com", password: "" }),
+    "Enter your password.",
+  );
 });
 
 test("confirm password mismatch is rejected", () => {
@@ -73,14 +81,14 @@ test("password reset trigger calls Supabase reset only after validation", async 
   const mock = createMockAuthClient();
   const actions = createAuthActions({
     getClient: () => mock.client as never,
-    getRedirectUrl: () => "https://plantie.example/reset",
+    getRedirectUrl: (purpose) => createAuthRedirectUrl("https://plantie.example/#/menu", purpose),
   });
 
   await actions.requestPasswordReset("USER@EXAMPLE.COM");
 
   assert.deepEqual(mock.calls, [
     {
-      input: { email: "user@example.com", options: { redirectTo: "https://plantie.example/reset" } },
+      input: { email: "user@example.com", options: { redirectTo: "https://plantie.example/auth/recovery" } },
       method: "resetPasswordForEmail",
     },
   ]);
@@ -108,16 +116,95 @@ test("password update validates confirmation and calls Supabase updateUser", asy
   ]);
 });
 
-test("auth redirects strip hash routes and query parameters before Supabase callback", () => {
-  assert.equal(createAuthRedirectUrl("https://plantie.example/app?householdId=abc#/join?invite=secret"), "https://plantie.example/app");
+test("auth redirects use the current origin and dedicated callback paths", () => {
+  assert.equal(createAuthRedirectUrl("https://plantie.example/app?householdId=abc#/join?invite=secret"), "https://plantie.example/auth/callback");
+  assert.equal(createAuthRedirectUrl("http://localhost:5173/#/menu"), "http://localhost:5173/auth/callback");
+  assert.equal(createAuthRedirectUrl("http://127.0.0.1:5173/#/menu"), "http://127.0.0.1:5173/auth/callback");
+  assert.equal(createAuthRedirectUrl("http://[::1]:5173/#/menu", "recovery"), "http://[::1]:5173/auth/recovery");
+  assert.equal(createAuthRedirectUrl("http://plantie.local:5173/#/menu"), "http://plantie.local:5173/auth/callback");
+  assert.equal(createAuthRedirectUrl("https://flowerscann.netlify.app/#/menu", "recovery"), "https://flowerscann.netlify.app/auth/recovery");
   assert.equal(createAuthRedirectUrl("not a url"), undefined);
+  assert.equal(createAuthRedirectUrl("javascript:alert(1)"), undefined);
+  assert.equal(createAuthRedirectUrl("https://user:password@example.com/#/menu"), undefined);
+});
+
+test("web auth refuses numeric non-loopback IP redirects instead of falling back to the production site", async () => {
+  for (const origin of ["http://192.168.0.115:5173", "http://10.0.0.8:5173", "https://[2001:db8::1]:5173"]) {
+    assert.equal(createAuthRedirectUrl(`${origin}/#/menu`), undefined);
+  }
+
+  const mock = createMockAuthClient();
+  const actions = createAuthActions({
+    getClient: () => mock.client as never,
+    getRedirectUrl: (purpose) => requireWebAuthRedirectUrl("http://192.168.0.115:5173/#/menu", purpose),
+  });
+
+  for (const request of [
+    () => actions.signInWithGoogle(),
+    () => actions.signInWithMagicLink("user@example.com"),
+    () => actions.registerWithEmailPassword("user@example.com", "password123"),
+    () => actions.requestPasswordReset("user@example.com"),
+  ]) {
+    await assert.rejects(request, (error: unknown) => error instanceof AuthFlowError && error.code === "unsupported_redirect_origin");
+  }
+  assert.deepEqual(mock.calls, []);
+
+  await actions.signInWithEmailPassword("user@example.com", "password123");
+  assert.equal(mock.calls[0]?.method, "signInWithPassword");
+});
+
+test("web auth callbacks require one valid code and keep return paths internal", () => {
+  assert.deepEqual(readWebAuthCallback("http://192.168.0.115:5173/auth/callback?code=abc"), {
+    kind: "callback", code: "abc", error: false,
+  });
+  assert.deepEqual(readWebAuthCallback("https://flowerscann.netlify.app/auth/recovery?code=abc"), {
+    kind: "recovery", code: "abc", error: false,
+  });
+  assert.equal(readWebAuthCallback("https://flowerscann.netlify.app/#/menu"), null);
+  assert.equal(readWebAuthCallback("https://flowerscann.netlify.app/auth/recovery?code=a&code=b")?.error, true);
+  assert.equal(readWebAuthCallback("https://flowerscann.netlify.app/auth/recovery?error_code=otp_expired")?.error, true);
+  assert.equal(readWebAuthCallback("https://flowerscann.netlify.app/auth/recovery")?.error, true);
+  assert.equal(safeAuthReturnPath("#/menu?section=account"), "#/menu?section=account");
+  assert.equal(safeAuthReturnPath("https://evil.example"), "#/menu");
+  assert.equal(safeAuthReturnPath("#//evil.example"), "#/menu");
+  assert.equal(safeAuthReturnPath("#/\\evil.example"), "#/menu");
+});
+
+test("React StrictMode remount exchanges one callback code only once", async () => {
+  const exchanged: string[] = [];
+  const exchange = createSingleFlightAuthCodeExchange(async (code) => {
+    exchanged.push(code);
+    await Promise.resolve();
+  });
+  await Promise.all([exchange("first-code"), exchange("first-code")]);
+  await exchange("first-code");
+  assert.deepEqual(exchanged, ["first-code"]);
+  await exchange("second-code");
+  assert.deepEqual(exchanged, ["first-code", "second-code"]);
+});
+
+test("auth returns to an authorized household route without accepting external destinations", () => {
+  const location = createAuthReturnLocation("http://192.168.0.115:5173/?householdId=123456789012345678#/menu?section=account");
+  assert.equal(location, "/?householdId=123456789012345678#/menu?section=account");
+  assert.equal(safeAuthReturnLocation(location), location);
+  assert.equal(safeAuthReturnLocation("#/menu?section=account"), "/#/menu?section=account");
+  assert.equal(createAuthReturnLocation("https://plantie.example/?household=abcdefghijklmnopqr#/"), "/?householdId=abcdefghijklmnopqr#/");
+  assert.equal(createAuthReturnLocation("https://plantie.example/?code=secret#/menu"), "/#/menu");
+  for (const unsafe of [
+    "https://evil.example/#/menu",
+    "//evil.example/#/menu",
+    "/other#/menu",
+    "/?householdId=short#/menu",
+    "/?householdId=abcdefghijklmnopqr&householdId=other#/menu",
+    "/?next=https://evil.example/#/menu",
+  ]) assert.equal(safeAuthReturnLocation(unsafe), "/#/menu");
 });
 
 test("registration uses a hash-free email confirmation redirect", async () => {
   const mock = createMockAuthClient();
   const actions = createAuthActions({
     getClient: () => mock.client as never,
-    getRedirectUrl: () => createAuthRedirectUrl("https://plantie.example/#/menu"),
+    getRedirectUrl: (purpose) => createAuthRedirectUrl("https://plantie.example/#/menu", purpose),
   });
 
   await actions.registerWithEmailPassword("USER@EXAMPLE.COM", "password123");
@@ -126,7 +213,7 @@ test("registration uses a hash-free email confirmation redirect", async () => {
     {
       input: {
         email: "user@example.com",
-        options: { emailRedirectTo: "https://plantie.example/" },
+        options: { emailRedirectTo: "https://plantie.example/auth/callback" },
         password: "password123",
       },
       method: "signUp",
@@ -164,7 +251,7 @@ test("login explains when email confirmation is still required", async () => {
 
   await assert.rejects(
     () => actions.signInWithEmailPassword("user@example.com", "password123"),
-    /Confirm your email address first/,
+    /Confirm your email address before signing in/,
   );
 });
 
@@ -198,8 +285,29 @@ test("auth errors explain rate limiting and invalid credentials", async () => {
 
   await assert.rejects(
     () => loginActions.signInWithEmailPassword("user@example.com", "password123"),
-    /password does not match/,
+    /Check your email and password/,
   );
+});
+
+test("auth error mapping uses stable codes and avoids account discovery during sign-in", () => {
+  assert.equal(mapSupabaseAuthError({ code: "invalid_credentials" }).code, "invalid_credentials");
+  assert.equal(mapSupabaseAuthError({ code: "email_not_confirmed" }).code, "unconfirmed_email");
+  assert.equal(mapSupabaseAuthError({ code: "user_already_exists" }).code, "existing_account");
+  assert.equal(mapSupabaseAuthError({ code: "otp_expired" }).code, "invalid_link");
+  assert.equal(mapSupabaseAuthError({ code: "email_address_invalid" }).code, "invalid_email");
+  assert.equal(mapSupabaseAuthError({ code: "session_expired" }).code, "session_expired");
+  assert.equal(mapSupabaseAuthError({ code: "identity_already_exists" }).code, "provider_conflict");
+  assert.equal(mapSupabaseAuthError({ code: "bad_oauth_state" }).code, "oauth_failure");
+  assert.equal(mapSupabaseAuthError({ status: 429 }).code, "rate_limited");
+});
+
+test("unexpected transport failure is normalized across email auth flows", async () => {
+  const actions = createAuthActions({
+    getClient: () => ({ auth: { resetPasswordForEmail: async () => { throw new TypeError("Failed to fetch"); } } }) as never,
+    getRedirectUrl: () => "https://plantie.example/auth/recovery",
+  });
+  await assert.rejects(() => actions.requestPasswordReset("user@example.com"), (error: unknown) =>
+    mapSupabaseAuthError(error).code === "network");
 });
 
 test("Apple and Amazon login are disabled placeholders", () => {

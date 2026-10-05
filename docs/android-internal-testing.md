@@ -125,7 +125,7 @@ Current app permissions:
 13. Add tester email list or Google Group.
 14. Upload `app-release.aab`.
 15. Submit internal test release.
-16. Configure subscription products later; do not enable real payments until Play products and RevenueCat offerings are ready.
+16. Configure Play subscription products and RevenueCat offerings as described in [RevenueCat subscriptions](revenuecat-subscriptions.md) before testing real Play billing.
 
 ## Android QA checklist
 
@@ -157,4 +157,4 @@ Run after installing from internal testing:
 - Google Play identity verification must be accepted before full publishing workflows are available.
 - A private upload keystore must exist locally or in CI secrets.
 - Store listing, data safety, content rating, support URL, terms URL, and privacy URL must be completed.
-- Real subscription products remain a later step.
+- Play subscription products, RevenueCat Play credentials, and a `goog_...` public SDK key are required before testing real Play billing.

@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { buildAiLanguageInstruction } from "../../src/lib/onboarding.js";
 
 type CareTone = "green" | "amber" | "blue" | "rose";
 type IdentificationConfidence = "confident" | "likely" | "needs-confirmation";
@@ -9,7 +10,7 @@ type AiCareProfile = {
   identificationConfidence: IdentificationConfidence;
   shortCare: string;
   carePills: {
-    label: "Svetlo" | "Zálievka" | "Vlhkosť" | "Náročnosť" | "Presádzanie";
+    label: string;
     value: string;
     tone: CareTone;
   }[];
@@ -32,11 +33,11 @@ const careSchema = {
   additionalProperties: false,
   properties: {
     displayName: {
-      description: "Finálny krátky slovenský názov rastliny pre UI, podľa AI identifikácie z fotky a vstupného názvu.",
+      description: "Final short localized plant name for the UI, based on image identification and the supplied name.",
       type: "string",
     },
     likelyName: {
-      description: "Najpravdepodobnejší botanický alebo kultivarový názov. Ak kultivar nie je istý, uveď bezpečnejší druh/rod.",
+      description: "Most likely botanical or cultivar name. Prefer the safest species or genus if cultivar identification is uncertain.",
       type: "string",
     },
     identificationConfidence: {
@@ -48,7 +49,7 @@ const careSchema = {
       items: {
         additionalProperties: false,
         properties: {
-          label: { enum: ["Svetlo", "Zálievka", "Vlhkosť", "Náročnosť", "Presádzanie"], type: "string" },
+          label: { type: "string" },
           value: { type: "string" },
           tone: { enum: ["green", "amber", "blue", "rose"], type: "string" },
         },
@@ -83,7 +84,6 @@ const careSchema = {
   type: "object",
 };
 
-const requiredPillLabels = ["Svetlo", "Zálievka", "Vlhkosť", "Náročnosť", "Presádzanie"];
 
 const extractOutputText = (response: unknown) => {
   const outputText = (response as { output_text?: unknown }).output_text;
@@ -149,22 +149,21 @@ const parseCareProfile = (outputText: string): AiCareProfile | null => {
   }
 
   const carePills = parsed.carePills.map((pill) => ({
-    label: pill.label,
+    label: sanitizeText(pill.label, 40),
     value: sanitizeText(pill.value, 55),
     tone: pill.tone,
   }));
 
-  const hasRequiredPills = requiredPillLabels.every((label) => carePills.some((pill) => pill.label === label));
   const hasValidPills = carePills.every(
     (pill) =>
-      requiredPillLabels.includes(pill.label) &&
+      pill.label &&
       pill.value &&
       (pill.tone === "green" || pill.tone === "amber" || pill.tone === "blue" || pill.tone === "rose"),
   );
 
   const careTips = Array.isArray(parsed.careTips) ? parsed.careTips.map((tip) => sanitizeText(tip, 150)).filter(Boolean) : [];
 
-  if (!hasRequiredPills || !hasValidPills || careTips.length !== 3) {
+  if (new Set(carePills.map((pill) => pill.label)).size !== 5 || !hasValidPills || careTips.length !== 3) {
     return null;
   }
 
@@ -197,10 +196,10 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "OPENAI_API_KEY is not configured." }), headers, statusCode: 503 };
   }
 
-  let body: { imageDataUrl?: string; plantName?: string };
+  let body: { imageDataUrl?: string; language?: unknown; plantName?: string };
 
   try {
-    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; plantName?: string };
+    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; language?: unknown; plantName?: string };
   } catch {
     return { body: JSON.stringify({ error: "Invalid JSON body." }), headers, statusCode: 400 };
   }
@@ -219,15 +218,15 @@ export const handler: Handler = async (event) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      instructions: buildAiLanguageInstruction(body.language),
       input: [
         {
           content: [
             {
               text:
-                "Identifikuj izbovú rastlinu z fotografie a vstupného názvu. Vráť len JSON podľa schémy. displayName musí byť finálny krátky slovenský názov podľa tvojho rozhodnutia, nie slepé zopakovanie používateľského názvu. likelyName musí byť botanický názov alebo najbezpečnejší rod/druh. Ak si nie si istý, nepíš presný kultivar ako fakt a nastav identificationConfidence na likely alebo needs-confirmation. Starostlivosť musí byť konkrétna pre identifikovanú rastlinu v bežných interiérových podmienkach na Slovensku. wateringIntervalDays vypočítaj podľa rastliny, typu rastu a nárokov na presychanie substrátu; musí to byť praktický priemer v dňoch, nie všeobecný text. carePills musia obsahovať presne položky Svetlo, Zálievka, Vlhkosť, Náročnosť a Presádzanie. careTips musia obsahovať presne 3 krátke praktické tipy. Nepouži všeobecný profil, ak fotka alebo názov umožňujú presnejšiu identifikáciu.",
-              type: "input_text",
+                "Identify the houseplant from its photo and supplied name. Return only JSON matching the schema. displayName must be a short localized name for the UI, not merely a copy of the supplied name. likelyName should be the botanical name or safest likely genus/species. If uncertain, avoid presenting a cultivar as fact and lower identificationConfidence. Give care suitable for ordinary indoor conditions. Calculate a practical average watering interval in days based on the plant and its substrate drying needs. Include exactly five carePills for light, watering, humidity, difficulty, and repotting; localize their labels and all user-facing values. Include exactly three concise practical care tips. Use a specific profile when the photo or name allows accurate identification.", type: "input_text",
             },
-            { text: `Názov od používateľa: ${plantName}`, type: "input_text" },
+            { text: `User-provided name: ${plantName}`, type: "input_text" },
             { detail: "high", image_url: imageDataUrl, type: "input_image" },
           ],
           role: "user",

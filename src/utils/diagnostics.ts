@@ -1,4 +1,6 @@
 import { callBackendFunction } from "../lib/backendConfig.js";
+import type { PlantieLanguage } from "../lib/onboarding.js";
+import { normalizeDiagnosisConfidenceLevel } from "../lib/diagnosisConfidence.js";
 
 export type DiagnosisRiskLevel = "low" | "medium" | "high";
 export type DiagnosisConfirmation = "confirmed" | "rejected";
@@ -7,7 +9,7 @@ export type DiagnosisStorageMode = "local" | "supabase";
 export type PlantDiagnosisDraft = {
   diagnosisTitle: string;
   confidence: number;
-  confidenceLabel: "nízka" | "stredná" | "vysoká";
+  confidenceLabel: string;
   reasoningSummary: string;
   observedSymptoms: string[];
   recommendedSteps: string[];
@@ -15,7 +17,8 @@ export type PlantDiagnosisDraft = {
   disclaimer: string;
 };
 
-export type PlantDiagnosticEntry = PlantDiagnosisDraft & {
+export type PlantDiagnosticEntry = Omit<PlantDiagnosisDraft, "confidenceLabel"> & {
+  confidenceLabel: string;
   id: string;
   plantId: string;
   imageDataUrl: string;
@@ -71,6 +74,7 @@ export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[
         typeof diagnosis.diagnosisTitle === "string" &&
         typeof diagnosis.confidence === "number" &&
         typeof diagnosis.confidenceLabel === "string" &&
+        normalizeDiagnosisConfidenceLevel(diagnosis.confidenceLabel) !== null &&
         typeof diagnosis.reasoningSummary === "string" &&
         Array.isArray(diagnosis.observedSymptoms) &&
         Array.isArray(diagnosis.recommendedSteps) &&
@@ -83,6 +87,7 @@ export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[
     .map((diagnosis) => ({
       ...diagnosis,
       confidence: Math.max(0, Math.min(100, Math.round(diagnosis.confidence))),
+      confidenceLabel: normalizeDiagnosisConfidenceLevel(diagnosis.confidenceLabel) ?? "medium",
       observedSymptoms: diagnosis.observedSymptoms.filter((item): item is string => typeof item === "string").slice(0, 8),
       recommendedSteps: diagnosis.recommendedSteps.filter((item): item is string => typeof item === "string").slice(0, 8),
       storageMode: diagnosis.storageMode === "supabase" ? "supabase" : "local",
@@ -142,7 +147,7 @@ const normalizeDiagnosis = (value: unknown): PlantDiagnosisDraft | null => {
     disclaimer?: unknown;
   };
   const confidence = Number(raw.confidence);
-  const confidenceLabel = raw.confidence_label;
+  const confidenceLabel = normalizeDiagnosisConfidenceLevel(raw.confidence_label);
   const riskLevel = raw.risk_level;
   const observedSymptoms = Array.isArray(raw.observed_symptoms)
     ? raw.observed_symptoms.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
@@ -159,7 +164,7 @@ const normalizeDiagnosis = (value: unknown): PlantDiagnosisDraft | null => {
     !raw.reasoning_summary.trim() ||
     observedSymptoms.length === 0 ||
     recommendedSteps.length === 0 ||
-    (confidenceLabel !== "nízka" && confidenceLabel !== "stredná" && confidenceLabel !== "vysoká") ||
+    !confidenceLabel ||
     (riskLevel !== "low" && riskLevel !== "medium" && riskLevel !== "high") ||
     typeof raw.disclaimer !== "string"
   ) {
@@ -183,11 +188,12 @@ export const fetchPlantDiagnosis = async (
   imageDataUrl: string,
   symptomNotes = "",
   householdId = "",
+  language?: PlantieLanguage | null,
 ): Promise<PlantDiagnosisDraft> => {
   let data: { diagnosis?: unknown };
   try {
     data = await callBackendFunction<{ diagnosis?: unknown }>({
-      body: { householdId, imageDataUrl, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) },
+      body: { householdId, imageDataUrl, language, plantName, symptomNotes: sanitizeDiagnosticNote(symptomNotes) },
       functionName: "plant-diagnosis-ai",
       netlifyPath: "/.netlify/functions/plant-diagnosis-ai",
     });

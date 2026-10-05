@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { buildAiLanguageInstruction } from "../../src/lib/onboarding.js";
 
 const headers = {
   "Access-Control-Allow-Headers": "Content-Type",
@@ -12,7 +13,7 @@ const diagnosisSchema = {
   properties: {
     diagnosis_title: { type: "string" },
     confidence: { maximum: 100, minimum: 0, type: "integer" },
-    confidence_label: { enum: ["nízka", "stredná", "vysoká"], type: "string" },
+    confidence_label: { enum: ["low", "medium", "high"], type: "string" },
     reasoning_summary: { type: "string" },
     observed_symptoms: { items: { type: "string" }, type: "array" },
     recommended_steps: { items: { type: "string" }, type: "array" },
@@ -86,7 +87,7 @@ const parseDiagnosis = (outputText: string) => {
     !Number.isInteger(confidence) ||
     observedSymptoms.length === 0 ||
     recommendedSteps.length === 0 ||
-    (parsed.confidence_label !== "nízka" && parsed.confidence_label !== "stredná" && parsed.confidence_label !== "vysoká") ||
+    (parsed.confidence_label !== "low" && parsed.confidence_label !== "medium" && parsed.confidence_label !== "high") ||
     (parsed.risk_level !== "low" && parsed.risk_level !== "medium" && parsed.risk_level !== "high")
   ) {
     return null;
@@ -96,14 +97,14 @@ const parseDiagnosis = (outputText: string) => {
     confidence: Math.max(0, Math.min(100, confidence)),
     confidence_label: parsed.confidence_label,
     diagnosis_title: sanitizeText(parsed.diagnosis_title, 140),
-    disclaimer: sanitizeText(parsed.disclaimer, 240) || "AI diagnostika je iba odhad podľa fotografie.",
+    disclaimer: sanitizeText(parsed.disclaimer, 240),
     observed_symptoms: observedSymptoms,
     reasoning_summary: sanitizeText(parsed.reasoning_summary, 800),
     recommended_steps: recommendedSteps,
     risk_level: parsed.risk_level,
   };
 
-  if (!diagnosis.diagnosis_title || !diagnosis.reasoning_summary) {
+  if (!diagnosis.diagnosis_title || !diagnosis.reasoning_summary || !diagnosis.disclaimer) {
     return null;
   }
 
@@ -124,9 +125,9 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "AI diagnostic service is not configured." }), headers, statusCode: 503 };
   }
 
-  let body: { imageDataUrl?: string; plantName?: string; symptomNotes?: string };
+  let body: { imageDataUrl?: string; language?: unknown; plantName?: string; symptomNotes?: string };
   try {
-    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; plantName?: string; symptomNotes?: string };
+    body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; language?: unknown; plantName?: string; symptomNotes?: string };
   } catch {
     return { body: JSON.stringify({ error: "Invalid JSON body." }), headers, statusCode: 400 };
   }
@@ -147,16 +148,15 @@ export const handler: Handler = async (event) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      instructions: buildAiLanguageInstruction(body.language),
       input: [
         {
           content: [
             {
-              text:
-                "Diagnostikuj problém izbovej rastliny podľa fotky postihnutej časti. Odpovedz po slovensky a vráť iba JSON podľa schémy. Buď opatrný: ak fotka nie je jasná alebo symptómy nie sú jednoznačné, zníž confidence a explicitne uveď neistotu. Neuvádzaj definitívnu diagnózu bez vizuálnych dôkazov. recommended_steps musia byť praktické, bezpečné a vhodné pre bežnú domácu starostlivosť. observed_symptoms musia popisovať iba to, čo vidíš na fotke.",
-              type: "input_text",
+              text: "Diagnose the houseplant problem from the affected part shown in the photo. Return only JSON matching the schema. Be cautious: lower confidence and state uncertainty when the photo or symptoms are unclear. Do not state a definitive diagnosis without visual evidence. Keep recommended steps practical and safe for ordinary home care. observed_symptoms must describe only what is visible in the photo.", type: "input_text",
             },
-            { text: `Rastlina: ${plantName}`, type: "input_text" },
-            ...(symptomNotes ? [{ text: `Poznámky používateľa: ${symptomNotes}`, type: "input_text" }] : []),
+            { text: `Plant: ${plantName}`, type: "input_text" },
+            ...(symptomNotes ? [{ text: `User notes: ${symptomNotes}`, type: "input_text" }] : []),
             { detail: "high", image_url: imageDataUrl, type: "input_image" },
           ],
           role: "user",

@@ -68,6 +68,15 @@ test("language switch updates UI strings", () => {
   assert.equal(slovak("auth.login"), "Prihlásiť sa");
 });
 
+test("diagnosis confidence labels are localized for each supported app language", () => {
+  for (const language of ["en", "sk", "de", "fr", "es"] as const) {
+    const t = createTranslator(language);
+    assert.ok(t("diagnosis.confidenceLevel.low"));
+    assert.ok(t("diagnosis.confidenceLevel.medium"));
+    assert.ok(t("diagnosis.confidenceLevel.high"));
+  }
+});
+
 test("subscription restriction copy is user-friendly and localized", () => {
   const i18nSource = readFileSync("src/lib/i18n.ts", "utf8");
   const upgradeModalSource = readFileSync("src/components/UpgradeModal.tsx", "utf8");

@@ -1,7 +1,7 @@
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
+import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
 
-const requiredPillLabels = ["Svetlo", "Zálievka", "Vlhkosť", "Náročnosť", "Presádzanie"];
 
 const careSchema = {
   additionalProperties: false,
@@ -14,7 +14,7 @@ const careSchema = {
       items: {
         additionalProperties: false,
         properties: {
-          label: { enum: requiredPillLabels, type: "string" },
+          label: { type: "string" },
           value: { type: "string" },
           tone: { enum: ["green", "amber", "blue", "rose"], type: "string" },
         },
@@ -81,8 +81,8 @@ const parseCare = (outputText: string) => {
 
   const hasValidPills =
     carePills.length === 5 &&
-    requiredPillLabels.every((label) => carePills.some((pill) => pill.label === label)) &&
-    carePills.every((pill) => ["green", "amber", "blue", "rose"].includes(pill.tone) && pill.value);
+    new Set(carePills.map((pill) => pill.label)).size === 5 &&
+    carePills.every((pill) => pill.label && ["green", "amber", "blue", "rose"].includes(pill.tone) && pill.value);
 
   if (
     !care.displayName ||
@@ -117,7 +117,7 @@ Deno.serve(async (request) => {
   const auth = await requireUser(request.headers.get("authorization") ?? "");
   if (!auth) return json(401, { error: "Authentication is required." });
 
-  let body: { generationSource?: string; householdId?: string; imageDataUrl?: string; plantId?: string; plantName?: string };
+  let body: { generationSource?: string; householdId?: string; imageDataUrl?: string; language?: unknown; plantId?: string; plantName?: string };
   try {
     body = await request.json();
   } catch {
@@ -148,10 +148,11 @@ Deno.serve(async (request) => {
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     body: JSON.stringify({
+      instructions: buildAiLanguageInstruction(body.language),
       input: [{
         content: [
-          { text: "Identifikuj izbovú rastlinu z fotografie a vstupného názvu. Vráť iba JSON podľa schémy. Starostlivosť musí byť konkrétna pre bežné interiérové podmienky na Slovensku.", type: "input_text" },
-          { text: `Názov od používateľa: ${plantName}`, type: "input_text" },
+          { text: "Identify the houseplant from its photo and supplied name. Return only JSON matching the schema. Localize all user-facing string values, including the display name, care pill labels and values, care description, identification note, and care tips. Give care suitable for ordinary indoor conditions. Calculate a practical watering interval in days based on the plant and its substrate drying needs. Include exactly five carePills for light, watering, humidity, difficulty, and repotting, and exactly three concise practical care tips. Prefer a specific identification when supported by the photo or name.", type: "input_text" },
+          { text: `User-provided name: ${plantName}`, type: "input_text" },
           { detail: "high", image_url: imageDataUrl, type: "input_image" },
         ],
         role: "user",

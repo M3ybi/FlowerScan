@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import {
   registerWithEmailPassword,
   requestPasswordReset,
@@ -9,15 +10,18 @@ import {
   updatePassword,
 } from "../lib/authService";
 import {
+  AuthFlowError,
   minimumAuthPasswordLength,
-  validateLoginInput,
-  validatePasswordResetInput,
-  validatePasswordUpdateInput,
-  validateRegistrationInput,
+  validateLoginCode,
+  validatePasswordResetCode,
+  validatePasswordUpdateCode,
+  validateRegistrationCode,
 } from "../lib/authRules";
 import type { AuthMode } from "../lib/authRules";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
+import { nativeOAuthErrorEvent, nativeOAuthSuccessEvent } from "../lib/nativeOAuth";
+import { LoadingButton } from "./LoadingButton";
 
 type AuthPanelProps = {
   compact?: boolean;
@@ -27,13 +31,37 @@ type AuthPanelProps = {
 };
 
 export const AuthPanel = ({ compact = false, initialMode = "register", language = null, onSuccess }: AuthPanelProps) => {
-  const t = createTranslator(language);
+  const t = useMemo(() => createTranslator(language), [language]);
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitting = useRef(false);
+
+  useEffect(() => {
+    const handleNativeOAuthSuccess = () => {
+      setIsSubmitting(false);
+      submitting.current = false;
+      setStatus(t("auth.signedIn"));
+      setPassword("");
+      setConfirmPassword("");
+      onSuccess?.();
+    };
+    const handleNativeOAuthError = () => {
+      setIsSubmitting(false);
+      submitting.current = false;
+      setStatus(t("auth.googleFailed"));
+    };
+
+    window.addEventListener(nativeOAuthSuccessEvent, handleNativeOAuthSuccess);
+    window.addEventListener(nativeOAuthErrorEvent, handleNativeOAuthError);
+    return () => {
+      window.removeEventListener(nativeOAuthSuccessEvent, handleNativeOAuthSuccess);
+      window.removeEventListener(nativeOAuthErrorEvent, handleNativeOAuthError);
+    };
+  }, [onSuccess, t]);
 
   const resetSensitiveFields = () => {
     setPassword("");
@@ -42,23 +70,25 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
 
   const submitEmailAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting.current) return;
 
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     const validationError =
       mode === "register"
-        ? validateRegistrationInput({ confirmPassword, email: normalizedEmail, password })
+        ? validateRegistrationCode({ confirmPassword, email: normalizedEmail, password })
         : mode === "login"
-          ? validateLoginInput({ email: normalizedEmail, password })
+          ? validateLoginCode({ email: normalizedEmail, password })
           : mode === "updatePassword"
-            ? validatePasswordUpdateInput({ confirmPassword, password })
-            : validatePasswordResetInput(normalizedEmail);
+            ? validatePasswordUpdateCode({ confirmPassword, password })
+            : validatePasswordResetCode(normalizedEmail);
 
     if (validationError) {
-      setStatus(validationError);
+      setStatus(t(`auth.error.${validationError}`));
       return;
     }
 
     try {
+      submitting.current = true;
       setIsSubmitting(true);
       setStatus("");
       if (mode === "register") {
@@ -75,23 +105,31 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
         setStatus(t("auth.resetSent"));
       }
       resetSensitiveFields();
-      onSuccess?.();
+      if (mode === "login" || mode === "updatePassword") onSuccess?.();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("auth.failed"));
+      setStatus(error instanceof AuthFlowError ? t(`auth.error.${error.code}`) : t("auth.failed"));
     } finally {
+      submitting.current = false;
       setIsSubmitting(false);
     }
   };
 
   const startGoogle = async () => {
+    if (submitting.current) return;
+    let waitingForNativeCallback = false;
     try {
+      submitting.current = true;
       setIsSubmitting(true);
       setStatus("");
       await signInWithGoogle();
-      onSuccess?.();
+      waitingForNativeCallback = Capacitor.isNativePlatform();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("auth.googleFailed"));
-      setIsSubmitting(false);
+      setStatus(error instanceof AuthFlowError ? t(`auth.error.${error.code}`) : t("auth.googleFailed"));
+    } finally {
+      if (!waitingForNativeCallback) {
+        submitting.current = false;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -99,13 +137,13 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
     <div className={compact ? "auth-panel auth-panel-compact" : "auth-panel"}>
       {mode === "updatePassword" ? null : (
         <div className="auth-mode-tabs" role="tablist" aria-label={t("auth.modeLabel")}>
-          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+          <button type="button" disabled={isSubmitting} className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setStatus(""); resetSensitiveFields(); }}>
             {t("auth.create")}
           </button>
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+          <button type="button" disabled={isSubmitting} className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setStatus(""); resetSensitiveFields(); }}>
             {t("auth.login")}
           </button>
-          <button type="button" className={mode === "reset" ? "active" : ""} onClick={() => setMode("reset")}>
+          <button type="button" disabled={isSubmitting} className={mode === "reset" ? "active" : ""} onClick={() => { setMode("reset"); setStatus(""); resetSensitiveFields(); }}>
             {t("auth.reset")}
           </button>
         </div>
@@ -146,7 +184,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
             />
           </label>
         ) : null}
-        <button className="primary-action" type="submit" disabled={isSubmitting}>
+        <LoadingButton className="primary-action" type="submit" disabled={isSubmitting} isLoading={isSubmitting}>
           <Mail size={17} aria-hidden="true" />
           {mode === "register"
             ? t("auth.create")
@@ -155,7 +193,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
               : mode === "updatePassword"
                 ? t("auth.updatePassword")
                 : t("auth.sendReset")}
-        </button>
+        </LoadingButton>
       </form>
 
       {mode === "updatePassword" ? null : <div className="auth-provider-list" aria-label="Sign-in providers">

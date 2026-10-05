@@ -8,6 +8,8 @@ import {
 } from "./imageStoragePaths.js";
 import { createPrivateImageSignedUrl } from "./imageCaptureService.js";
 import { validateHouseholdName } from "./householdNameValidation.js";
+import { readStoredLanguage } from "./onboarding.js";
+import { normalizeDiagnosisConfidenceLevel, type DiagnosisConfidenceLevel } from "./diagnosisConfidence.js";
 
 export type IdentificationStatus = "confident" | "likely" | "needs_confirmation";
 export type CarePillTone = "green" | "amber" | "blue" | "rose";
@@ -303,7 +305,8 @@ export type HouseholdReportSettings = {
   recipientEmail: string;
 };
 
-export type SupabasePlantDiagnostic = PlantDiagnosisDraft & {
+export type SupabasePlantDiagnostic = Omit<PlantDiagnosisDraft, "confidenceLabel"> & {
+  confidenceLabel: string;
   createdBy: string | null;
   id: string;
   householdId: string;
@@ -316,7 +319,8 @@ export type SupabasePlantDiagnostic = PlantDiagnosisDraft & {
   updatedAt: string;
 };
 
-export type CreatePlantDiagnosticInput = PlantDiagnosisDraft & {
+export type CreatePlantDiagnosticInput = Omit<PlantDiagnosisDraft, "confidenceLabel"> & {
+  confidenceLabel: string;
   imagePath?: string | null;
   legacyId?: string | null;
   plantId: string;
@@ -367,6 +371,7 @@ const uploadValidatedImage = async ({
       householdId,
       imageDataUrl: await blobToDataUrl(imageBlob),
       imageId,
+      language: typeof globalThis.localStorage === "undefined" ? null : readStoredLanguage(globalThis.localStorage),
       kind,
     },
   });
@@ -569,15 +574,15 @@ const mapHouseholdPlant = (plant: DbPlant): HouseholdPlant => ({
   wateringIntervalDays: plant.watering_interval_days,
 });
 
-const toDisplayConfidenceLabel = (label: DbDiagnosisConfidenceLabel): PlantDiagnosisDraft["confidenceLabel"] => {
-  if (label === "nizka") return "nízka";
-  if (label === "vysoka") return "vysoká";
-  return "stredná";
+const toDisplayConfidenceLabel = (label: DbDiagnosisConfidenceLabel): DiagnosisConfidenceLevel => {
+  if (label === "nizka") return "low";
+  if (label === "vysoka") return "high";
+  return "medium";
 };
 
-const toDbConfidenceLabel = (label: PlantDiagnosisDraft["confidenceLabel"]): DbDiagnosisConfidenceLabel => {
-  if (label === "nízka") return "nizka";
-  if (label === "vysoká") return "vysoka";
+const toDbConfidenceLabel = (label: string): DbDiagnosisConfidenceLabel => {
+  if (normalizeDiagnosisConfidenceLevel(label) === "low") return "nizka";
+  if (normalizeDiagnosisConfidenceLevel(label) === "high") return "vysoka";
   return "stredna";
 };
 

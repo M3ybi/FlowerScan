@@ -12,6 +12,10 @@ const createSupabaseBrowserClient = () => {
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
+      flowType: "pkce",
+      // The auth hook exchanges callback codes after its listener is installed,
+      // so PASSWORD_RECOVERY cannot be missed during client initialization.
+      detectSessionInUrl: false,
     },
   });
 };
