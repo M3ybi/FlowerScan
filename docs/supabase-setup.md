@@ -92,13 +92,15 @@ This validation does not connect to Supabase.
 - Users can read only households where they have a `household_members` row.
 - `owner` and `editor` members can insert, update, and delete household plants, plant care records, diagnostics, report settings, and related child rows.
 - `viewer` members can read household-owned data but cannot write it.
-- Household invites are manageable only by owners.
+- Household owners and editors can manage non-owner invitations; only owners can manage owner invitations or remove non-owner members.
 - Push subscriptions are writable only by authenticated members of the household.
 - Notification delivery rows are readable by household members and have no client insert/update/delete policy.
 - Plant catalog rows are publicly readable but not publicly writable.
 - AI request rows are insertable/readable only by the related authenticated user and household members.
 
 ## Compatibility notes
+
+The `20261005120000_household_people_management.sql` migration keeps invitation history but returns only actionable pending invitations in the household menu. It normalizes email addresses, revokes stale duplicates, and enforces one current pending invitation per household/email. Revoking an invite invalidates its hashed-token link; removing a member also revokes any pending link for that email and preserves the removed user's access to their other household or creates a standalone household. Membership and invitation writes must use the permission-checked RPCs, including `remove_household_member`; the older viewer-removal RPC delegates to it for existing clients. A new invite can be created after revocation or member removal.
 
 - `households.legacy_public_token` preserves the current public household token model for future migration.
 - `plant_catalog.legacy_id`, `plants.legacy_id`, and `plant_diagnostics.legacy_id` preserve current IDs such as `flower-04`, `custom-*`, and `diag-*`.
@@ -242,6 +244,14 @@ Standalone UI components:
 - `src/components/UpgradeModal.tsx`
 
 The frontend cannot update subscription status directly; there are no client write policies for subscription status tables. RevenueCat purchases use the web or native SDK where configured, and the server-side webhook updates the authenticated user's Supabase entitlements.
+
+The household subscription migration `20261005180000_household_subscription_membership.sql` binds an owner's trusted provider subscription to their household, converts existing Editors to Viewers, and limits Premium households to three active members including the Owner. Pending invitations reserve slots. Free households allow only the Owner; Viewers remain recorded but lose access until Premium is restored. The migration also introduces `household_subscriptions`, `household_subscription_history`, and `get_household_entitlement(household_id)`. All invitation and membership capacity changes run under a household row lock. The app reads this RPC for plan and member usage; client writes to billing fields are revoked. The migration was applied to the linked project on 2026-10-05.
+
+`20261005183000_bind_provider_purchase_to_household.sql` adds `begin_household_purchase(household_id)` and a private purchaser-to-household binding. Both web and native checkout call this owner-checked RPC before opening RevenueCat, so a user who owns several households upgrades only the selected one. RevenueCat's webhook remains the source of paid status; the purchase binding alone grants no Premium access. This migration was also applied to the linked project on 2026-10-05.
+
+`20261005184500_validate_household_invite_email.sql` authorizes the invitation email function against a current Owner-issued Premium Viewer invite. `20261005190000_household_billing_binding_visibility.sql` lets an authenticated Owner determine whether their provider purchase is bound to the currently selected household, without exposing other households' bindings. Both were applied on 2026-10-05.
+
+Cancellation leaves Premium active through the paid period. At expiry, household access checks immediately reject Viewers, and the next entitlement read or provider event reconciles stored member status and pending invitations. The Owner can read billing history; Viewers can read the current household plan but cannot manage it.
 
 Manual SQL step:
 

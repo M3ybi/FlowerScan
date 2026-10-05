@@ -38,15 +38,22 @@ const readableErrorMessage = (error: unknown) => {
 export const inviteErrorMessage = (error: unknown) => {
   const message = readableErrorMessage(error);
 
+  if (message.includes("already belongs to the household")) {
+    return "household.peopleAlreadyMember";
+  }
+
   if (message.includes("active invite already exists") || message.includes("duplicate")) {
     return "household.inviteStatusDuplicate";
   }
+
+  if (message.includes("sharing requires premium")) return "household.invitePremiumRequired";
+  if (message.includes("member limit reached")) return "household.inviteLimitReached";
 
   if (message.includes("invalid invite email") || message.includes("valid family member email") || message.includes("invalid email")) {
     return "household.inviteStatusInvalidEmail";
   }
 
-  if (message.includes("permission") || message.includes("access") || message.includes("owner") || message.includes("editor") || message.includes("42501")) {
+  if (message.includes("permission") || message.includes("access") || message.includes("owner") || message.includes("42501")) {
     return "household.inviteStatusPermission";
   }
 
@@ -75,6 +82,9 @@ export const safeInviteDebugMessage = (error: unknown, isProduction = import.met
 
 export const joinInviteErrorMessage = (error: unknown) => {
   const message = readableErrorMessage(error);
+
+  if (message.includes("sharing requires premium")) return "household.invitePremiumRequired";
+  if (message.includes("member limit reached")) return "household.inviteLimitReached";
 
   if (message.includes("revoked") || message.includes("invalid") || message.includes("used")) {
     return "household.inviteStatusInvalidInvite";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { BillingCustomerInfo } from "../src/lib/billingService.js";
-import type { HouseholdPlanUsage } from "../src/lib/householdPlanService.js";
+import type { HouseholdEntitlement, HouseholdPlanUsage } from "../src/lib/householdPlanService.js";
 import { createSubscriptionStateController } from "../src/lib/subscriptionState.js";
 
 const usage = (isPremium: boolean): HouseholdPlanUsage => ({
@@ -25,6 +25,42 @@ const customer = (plan: "monthly" | "yearly" | null, willRenew: boolean | null =
   managementUrl: plan ? "https://billing.example/manage" : null,
   productId: plan ? `plantie_premium_${plan}` : null,
   willRenew: plan ? willRenew : null,
+});
+
+const householdEntitlement = (isPremium: boolean, role: "owner" | "viewer" = "owner"): HouseholdEntitlement => ({
+  planKey: isPremium ? "premium_monthly" : "free", isPremium,
+  status: isPremium ? "active" : "free", validUntil: isPremium ? "2026-11-01T00:00:00Z" : null,
+  maxMembers: isPremium ? 3 : 1, invitationsEnabled: isPremium,
+  activeMemberCount: 1, pendingInviteCount: 0, suspendedMemberCount: 0, role, billingBoundHere: role === "owner",
+});
+
+test("household tier is authoritative for Viewers and provider/server disagreement stays unresolved", async () => {
+  const viewer = createSubscriptionStateController({
+    getCustomerInfo: async () => customer("monthly"),
+    getHouseholdPlanUsage: async () => usage(true),
+    getHouseholdEntitlement: async () => householdEntitlement(true, "viewer"),
+    onChange: () => undefined,
+  });
+  viewer.bind("user-a", "shared-home");
+  assert.equal((await viewer.refresh()).view, "shared_premium");
+
+  const owner = createSubscriptionStateController({
+    getCustomerInfo: async () => customer("monthly"),
+    getHouseholdPlanUsage: async () => usage(false),
+    getHouseholdEntitlement: async () => householdEntitlement(false),
+    onChange: () => undefined,
+  });
+  owner.bind("user-a", "new-home");
+  assert.equal((await owner.refresh()).view, "syncing");
+
+  const otherHousehold = createSubscriptionStateController({
+    getCustomerInfo: async () => customer("monthly"),
+    getHouseholdPlanUsage: async () => usage(false),
+    getHouseholdEntitlement: async () => ({ ...householdEntitlement(false), billingBoundHere: false }),
+    onChange: () => undefined,
+  });
+  otherHousehold.bind("user-a", "other-home");
+  assert.equal((await otherHousehold.refresh()).view, "free");
 });
 
 const deferred = <T>() => {

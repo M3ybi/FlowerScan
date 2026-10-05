@@ -6,9 +6,12 @@ import type { BillingProduct, BillingStatus } from "../lib/billingService";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
+import { listHouseholdSubscriptionHistory } from "../lib/householdSubscriptionHistory";
+import type { HouseholdSubscriptionEvent } from "../lib/householdSubscriptionHistory";
+import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
+import { beginHouseholdPurchase } from "../lib/householdPlanService";
 import {
   canCancelSubscription,
-  canSwitchToYearly,
   createCancellationHandoff,
   formatSubscriptionDate,
   getSubscriptionPresentation,
@@ -53,13 +56,16 @@ const matchesPurchasedPlan = (subscription: SubscriptionSnapshot, period: "month
 export const PricingPage = ({
   subscription,
   language = null,
+  householdMemberCount = 0,
   onSubscriptionChanged,
 }: {
   subscription: SubscriptionSnapshot;
   language?: PlantieLanguage | null;
+  householdMemberCount?: number;
   onSubscriptionChanged: () => Promise<SubscriptionSnapshot>;
 }) => {
   const t = useMemo(() => createTranslator(language), [language]);
+  const copy = householdSubscriptionCopy(language);
   const billingStatus = billing.getStatus();
   const [products, setProducts] = useState<BillingProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
@@ -70,6 +76,8 @@ export const PricingPage = ({
   const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [history, setHistory] = useState<HouseholdSubscriptionEvent[]>([]);
+  const [historyError, setHistoryError] = useState("");
   const actionInProgress = useRef(false);
   const pendingPlanRef = useRef<"monthly" | "yearly" | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -81,8 +89,14 @@ export const PricingPage = ({
   const fallbackPlans = useMemo(() => createFallbackPlans(t), [t]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const presentation = getSubscriptionPresentation(subscription);
+  const entitlement = subscription.householdEntitlement;
+  const isOwner = entitlement?.role === "owner";
+  const isPremium = entitlement?.isPremium === true;
+  const householdPeriod = entitlement?.planKey === "premium_monthly" ? "monthly"
+    : entitlement?.planKey === "premium_yearly" ? "yearly" : null;
   const hasSubscriptionError = presentation.status === "error";
-  const canPurchasePlan = presentation.status === "free" || presentation.status === "expired";
+  const canPurchasePlan = isOwner && !subscription.customerInfo?.hasRevenueCatPremium &&
+    (presentation.status === "free" || presentation.status === "expired");
   const billingDisabled = !billingStatus.configured;
   const managementUrl = safeBillingManagementUrl(subscription.customerInfo?.managementUrl);
   const formattedDate = formatSubscriptionDate(presentation.date, language);
@@ -101,6 +115,19 @@ export const PricingPage = ({
   const dateLabel = presentation.dateMeaning === "renews" ? t("pricing.nextRenewal")
     : presentation.dateMeaning === "accessUntil" ? t("pricing.validUntil")
     : presentation.dateMeaning === "ended" ? t("pricing.endedOn") : null;
+
+  useEffect(() => {
+    setHistory([]);
+    setHistoryError("");
+    if (!isOwner || !subscription.householdId) return;
+    let cancelled = false;
+    void listHouseholdSubscriptionHistory(subscription.householdId).then((events) => {
+      if (!cancelled) setHistory(events);
+    }).catch(() => {
+      if (!cancelled) setHistoryError(copy.historyUnavailable);
+    });
+    return () => { cancelled = true; };
+  }, [isOwner, subscription.householdId, subscription.householdEntitlement?.status, subscription.householdEntitlement?.validUntil, copy.historyUnavailable]);
 
   useEffect(() => () => { void managementListenerRef.current?.remove(); }, []);
 
@@ -224,21 +251,23 @@ export const PricingPage = ({
   };
 
   const runPurchase = async (period: "monthly" | "yearly") => {
-    if (actionInProgress.current || !(canPurchasePlan || (period === "yearly" && canSwitchToYearly(subscription)))) return;
+    if (actionInProgress.current || !isOwner || !(canPurchasePlan || isOwnPaidSubscription(subscription))) return;
     actionInProgress.current = true;
     setIsPurchasing(true);
     setBillingMessage(t("pricing.openingPurchase"));
     let providerPurchaseCompleted = false;
     try {
-      const changingPlan = period === "yearly" && canSwitchToYearly(subscription);
+      const changingPlan = isOwnPaidSubscription(subscription) && subscription.customerInfo?.activePlan !== period;
       if (changingPlan && billingStatus.runtime === "web") {
         if (!managementUrl) throw new Error(t("pricing.manageUnavailable"));
         await openManagementPage(managementUrl);
         setBillingMessage(t("pricing.manageHint"));
         return;
       }
+      if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
+      await beginHouseholdPurchase(subscription.householdId);
       const info = changingPlan
-        ? await billing.changePlan("yearly")
+        ? await billing.changePlan(period)
         : period === "monthly" ? await billing.purchasePremiumMonthly() : await billing.purchasePremiumYearly();
       providerPurchaseCompleted = true;
       pendingPlanRef.current = period;
@@ -256,34 +285,6 @@ export const PricingPage = ({
     } finally {
       actionInProgress.current = false;
       setIsPurchasing(false);
-    }
-  };
-
-  const refreshOrRestore = async () => {
-    if (actionInProgress.current || !subscription.userId) return;
-    actionInProgress.current = true;
-    setIsRefreshing(true);
-    setBillingMessage(t("pricing.restoring"));
-    try {
-      if (billingStatus.runtime === "web") {
-        const refreshed = await onSubscriptionChanged();
-        if (refreshed.status === "error") throw new Error(t("pricing.refreshFailed"));
-        setBillingMessage(refreshed.view === "syncing" ? t("pricing.purchaseSubmitted") : t("pricing.refreshComplete"));
-      } else {
-        const info = await billing.restorePurchases();
-        const refreshed = await onSubscriptionChanged();
-        if (refreshed.status === "error") throw new Error(t("pricing.refreshFailed"));
-        const pending = info.hasRevenueCatPremium && !isOwnPaidSubscription(refreshed);
-        pendingPlanRef.current = pending ? info.activePlan : null;
-        setIsAwaitingConfirmation(pending);
-        setBillingMessage(isOwnPaidSubscription(refreshed) ? t("pricing.currentServerPremium")
-          : info.hasRevenueCatPremium ? t("pricing.restoreSubmitted") : t("pricing.restoreNoPurchases"));
-      }
-    } catch (error) {
-      setBillingMessage(error instanceof Error ? error.message : t("pricing.restoreFailed"));
-    } finally {
-      actionInProgress.current = false;
-      setIsRefreshing(false);
     }
   };
 
@@ -306,74 +307,77 @@ export const PricingPage = ({
   return (
     <section className="pricing-page" aria-labelledby="pricing-title">
       <div className="section-title"><h2 id="pricing-title">{t("pricing.title")}</h2></div>
-      {canPurchasePlan ? <p>{t("pricing.body")}</p> : null}
+      <p className="pricing-intro">{copy.subtitle}</p>
       {billingMessage ? <p className="report-status" role="status">{billingMessage}</p> : null}
+      {subscription.status === "loading" ? <div className="pricing-loading" role="status">{t("pricing.resolving")}</div> : null}
+      {subscription.status !== "loading" ? <>
       <section className={`pricing-subscription-summary status-${presentation.status}`} aria-label={t("pricing.currentSubscription")} role={hasSubscriptionError ? "alert" : "status"}>
         <div className="pricing-summary-heading">
           <div>
-            <span className="pricing-summary-eyebrow">{t("pricing.currentSubscription")}</span>
-            <h3>{planName ?? statusName}</h3>
+            <span className="pricing-summary-eyebrow">{copy.currentPlan}</span>
+            <h3>{isPremium ? copy.householdPremium : planName ?? statusName}</h3>
+            {isPremium ? <span className="pricing-included-badge">{copy.included}</span> : null}
           </div>
           {planName ? <span className="pricing-status-badge">{statusName}</span> : null}
         </div>
-        {presentation.period ? <div className="pricing-summary-detail"><span>{t("pricing.billingPeriod")}</span><strong>{presentation.period === "monthly" ? t("pricing.periodMonthly") : t("pricing.periodYearly")}</strong></div> : null}
+        {entitlement ? <div className="pricing-summary-detail"><span>{t("household.members")}</span><strong>{copy.members(entitlement.activeMemberCount || householdMemberCount, entitlement.maxMembers)}</strong></div> : null}
+        {householdPeriod || presentation.period ? <div className="pricing-summary-detail"><span>{t("pricing.billingPeriod")}</span><strong>{householdPeriod === "monthly" || !householdPeriod && presentation.period === "monthly" ? t("pricing.periodMonthly") : t("pricing.periodYearly")}{householdPeriod ? ` · ${productsById.get(householdPeriod === "monthly" ? revenueCatProductIds.premiumMonthly : revenueCatProductIds.premiumYearly)?.price ?? ""}` : ""}</strong></div> : null}
         {presentation.previousPlan ? <div className="pricing-summary-detail"><span>{t("pricing.previousPlan")}</span><strong>{presentation.previousPlan === "monthly" ? t("pricing.monthlyPlan") : t("pricing.yearlyPlan")}</strong></div> : null}
-        {dateLabel && formattedDate && presentation.date ? <div className="pricing-summary-detail"><span>{dateLabel}</span><strong><time dateTime={presentation.date}>{formattedDate}</time></strong></div> : null}
+        {entitlement?.validUntil ? <div className="pricing-summary-detail"><span>{entitlement.status === "cancelled" ? copy.activeUntil : copy.periodEnds}</span><strong><time dateTime={entitlement.validUntil}>{formatSubscriptionDate(entitlement.validUntil, language)}</time></strong></div> : dateLabel && formattedDate && presentation.date ? <div className="pricing-summary-detail"><span>{dateLabel}</span><strong><time dateTime={presentation.date}>{formattedDate}</time></strong></div> : null}
         {presentation.status === "free" ? <p>{t("pricing.noActiveSubscription")}</p> : null}
+        {presentation.status === "free" && isOwner && subscription.customerInfo?.hasRevenueCatPremium && !entitlement?.billingBoundHere ? <p>{copy.purchaseLinkedElsewhere}</p> : null}
         {presentation.status === "expired" ? <p>{t("pricing.expiredNotice")}</p> : null}
-        {presentation.status === "cancelled" ? <p>{t("pricing.cancelledNotice")}</p> : null}
+        {entitlement?.status === "cancelled" ? <p>{copy.cancelledNotice}</p> : null}
+        {!isPremium && entitlement?.suspendedMemberCount ? <p>{copy.suspended(entitlement.suspendedMemberCount)}</p> : null}
         {presentation.status === "shared" ? <p>{t("pricing.householdAccessBody")}</p> : null}
         {hasSubscriptionError ? <p>{t("pricing.refreshFailed")}</p> : null}
         <div className="pricing-summary-actions">
-          {canSwitchToYearly(subscription) ? (
-            billingStatus.runtime === "web" ? managementUrl
-              ? <a className="pricing-provider-action" href={managementUrl} rel="noopener noreferrer" target="_blank" aria-disabled={isBusy || isAwaitingConfirmation} onClick={(event) => { if (isBusy || isAwaitingConfirmation) event.preventDefault(); else setBillingMessage(t("pricing.manageHint")); }}>{t("pricing.switchYearly")}</a>
-              : <span className="pricing-action-note">{t("pricing.manageUnavailable")}</span>
-              : <LoadingButton className="pricing-secondary-action" type="button" disabled={billingDisabled || isBusy || isAwaitingConfirmation || !productsById.has(revenueCatProductIds.premiumYearly)} isLoading={isPurchasing} onClick={() => void runPurchase("yearly")}>{t("pricing.switchYearly")}</LoadingButton>
-          ) : null}
-          {(presentation.status === "cancelled" || presentation.plan === "yearly" && presentation.status === "active") && managementUrl
-            ? <a className="pricing-provider-action" href={managementUrl} rel="noopener noreferrer" target="_blank" aria-disabled={isBusy} onClick={(event) => { if (isBusy) event.preventDefault(); else setBillingMessage(t("pricing.manageHint")); }}>{t("pricing.manage")}</a>
+          {isOwner && isOwnPaidSubscription(subscription) ? <a className="pricing-provider-action" href="#pricing-plans">{copy.changePlan}</a> : null}
+          {isOwner && (presentation.status === "cancelled" || presentation.plan === "yearly" && presentation.status === "active") && managementUrl
+            ? <a className="pricing-provider-action" href={managementUrl} rel="noopener noreferrer" target="_blank" aria-disabled={isBusy} onClick={(event) => { if (isBusy) event.preventDefault(); else setBillingMessage(t("pricing.manageHint")); }}>{presentation.status === "cancelled" ? copy.resumeSubscription : t("pricing.manage")}</a>
             : null}
-          {canCancelSubscription(subscription) ? <button ref={cancelButtonRef} className="pricing-cancel-action" type="button" disabled={isBusy} onClick={() => { if (cancellationHandoff.openDialog(subscription)) { setCancelError(""); setIsCancelModalOpen(true); } }}>{t("pricing.cancelSubscription")}</button> : null}
+          {isOwner && canCancelSubscription(subscription) ? <button ref={cancelButtonRef} className="pricing-cancel-action" type="button" disabled={isBusy} onClick={() => { if (cancellationHandoff.openDialog(subscription)) { setCancelError(""); setIsCancelModalOpen(true); } }}>{t("pricing.cancelSubscription")}</button> : null}
           {hasSubscriptionError ? <LoadingButton className="pricing-secondary-action" type="button" disabled={isBusy || !subscription.userId} isLoading={isRefreshing} onClick={() => void retrySubscription()}>{t("pricing.retry")}</LoadingButton> : null}
         </div>
       </section>
+      <div className="pricing-section-heading"><h3>{copy.availablePlans}</h3><p>{copy.plansApply}</p></div>
       <div className="pricing-grid" id="pricing-plans">
         {fallbackPlans.map((plan) => {
           const productId = "productId" in plan ? plan.productId : null;
           const product = productId ? productsById.get(productId) : null;
           const isPremiumPlan = productId !== null;
           const period = productId === revenueCatProductIds.premiumYearly ? "yearly" : "monthly";
-          const isCurrentPlan = period === "monthly"
-            ? subscription.view === "monthly_active" || subscription.view === "monthly_cancelled_active"
-            : subscription.view === "yearly_active" || subscription.view === "yearly_cancelled_active";
+          const isCurrentPlan = isPremiumPlan && isPremium && entitlement?.planKey === `premium_${period}`;
+          const isChangingPlan = isOwnPaidSubscription(subscription) && !isCurrentPlan;
           return (
-            <article className="pricing-card" key={plan.name}>
+            <article className={`pricing-card ${isCurrentPlan ? "is-current" : ""}`} key={plan.name}>
               <div>
                 <h3>{plan.name}</h3>
                 <strong>{product?.price ?? plan.price}</strong>
                 <p>{product?.description || plan.description}</p>
               </div>
-              <ul>{plan.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
+              <ul>{plan.features.map((feature) => <li key={feature}>{feature}</li>)}<li>{isPremiumPlan ? copy.premiumMembers : copy.freeMembers}</li></ul>
               {isPremiumPlan ? (
-                canPurchasePlan ? (
-                  <LoadingButton type="button" disabled={billingDisabled || isBusy || isAwaitingConfirmation || !product || !subscription.userId} isLoading={isPurchasing} onClick={() => void runPurchase(period)}>
+                isOwner && (canPurchasePlan || isChangingPlan) ? (
+                  <LoadingButton type="button" disabled={billingDisabled || isBusy || isAwaitingConfirmation || !subscription.userId || !product && !(billingStatus.runtime === "web" && isOwnPaidSubscription(subscription))} isLoading={isPurchasing} onClick={() => void runPurchase(period)}>
                     {billingDisabled ? billingDisabledLabel(billingStatus, t)
                       : !subscription.userId ? t("pricing.signInRequired")
+                      : isChangingPlan && billingStatus.runtime === "web" ? copy.changePlan
                       : !product ? isLoadingProducts ? t("pricing.processing") : t("pricing.productsUnavailable")
                       : isAwaitingConfirmation ? t("pricing.awaitingConfirmation")
                       : isPurchasing ? t("pricing.processing")
                       : period === "monthly" ? t("pricing.buyMonthly") : t("pricing.buyYearly")}
                   </LoadingButton>
                 ) : isCurrentPlan ? <p className="pricing-current-status" role="status">{t("pricing.currentPlan")}</p> : null
-              ) : canPurchasePlan ? <p className="pricing-current-status" role="status">{t("pricing.currentPlan")}</p> : null}
+              ) : entitlement && !isPremium ? <p className="pricing-current-status" role="status">{t("pricing.currentPlan")}</p> : null}
             </article>
           );
         })}
       </div>
-      <LoadingButton className="pricing-refresh-action" type="button" disabled={isBusy || !subscription.userId || (billingStatus.runtime !== "web" && billingDisabled)} isLoading={isRefreshing} onClick={() => void refreshOrRestore()}>
-        {billingStatus.runtime === "web" ? t("pricing.refreshWeb") : t("pricing.restore")}
-      </LoadingButton>
+      {isOwner ? <section className="pricing-history" aria-labelledby="pricing-history-title">
+        <div className="pricing-section-heading"><h3 id="pricing-history-title">{copy.history}</h3><p>{copy.historyBody}</p></div>
+        {historyError ? <p role="alert">{historyError}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><time dateTime={entry.createdAt}>{formatSubscriptionDate(entry.createdAt, language)}</time><strong>{entry.eventType.replace(/_/g, " ")} · {entry.planKey.replace(/_/g, " ")}</strong></li>)}</ol> : <p>{copy.historyEmpty}</p>}
+      </section> : null}
       {isCancelModalOpen ? (
         <div className="modal-backdrop" role="presentation">
           <section ref={cancelDialogRef} className="confirm-modal subscription-cancel-modal" role="dialog" aria-modal="true" aria-labelledby="subscription-cancel-title" aria-describedby="subscription-cancel-description" tabIndex={-1} onKeyDown={handleCancelDialogKeyDown}>
@@ -381,6 +385,7 @@ export const PricingPage = ({
             <p id="subscription-cancel-description">{t("pricing.cancelBody")}</p>
             <p>{t("pricing.cancelProviderHint")}</p>
             {formattedDate ? <p>{t("pricing.cancelPaidUntil", { date: formattedDate })}</p> : null}
+            <p>{copy.cancelImpact}</p>
             {!managementUrl ? <p className="report-status" role="alert">{t("pricing.cancelUnavailable")}</p> : null}
             {cancelError ? <p className="report-status" role="alert">{cancelError}</p> : null}
             <div className="modal-actions">
@@ -390,6 +395,7 @@ export const PricingPage = ({
           </section>
         </div>
       ) : null}
+      </> : null}
     </section>
   );
 };

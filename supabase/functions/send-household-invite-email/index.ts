@@ -41,7 +41,7 @@ Deno.serve(async (request) => {
   const householdId = sanitizeText(body.householdId, 80);
   const householdName = sanitizeText(body.householdName, 120) || "Plantie household";
   const recipientEmail = sanitizeText(body.recipientEmail, 240).toLowerCase();
-  const role = body.role === "owner" || body.role === "viewer" ? body.role : "editor";
+  const role = "viewer";
   const inviteUrl = typeof body.inviteUrl === "string" ? body.inviteUrl.trim() : "";
 
   let parsedInviteUrl: URL;
@@ -55,9 +55,18 @@ Deno.serve(async (request) => {
     return json(400, { message: "Invite email request is not valid." });
   }
 
-  const { data: canEdit, error: accessError } = await auth.client.rpc("can_edit_household", { target_household_id: householdId });
-  if (accessError || !canEdit) {
-    return json(403, { message: "Editor or owner access is required to email invites." });
+  const inviteToken = /^#\/join\?/.test(parsedInviteUrl.hash)
+    ? new URLSearchParams(parsedInviteUrl.hash.slice(parsedInviteUrl.hash.indexOf("?") + 1)).get("invite") ?? ""
+    : "";
+  if (!/^[A-Za-z0-9_-]{32,}$/.test(inviteToken)) {
+    return json(400, { message: "Invite link is not valid." });
+  }
+
+  const { data: activeInvite, error: accessError } = await auth.client.rpc("is_active_household_invite_for_email", {
+    target_household_id: householdId, recipient_email: recipientEmail, raw_token: inviteToken,
+  });
+  if (accessError || !activeInvite) {
+    return json(403, { message: "Only the owner can email a current Premium household invite." });
   }
 
   const from = Deno.env.get("RESEND_FROM_EMAIL") || defaultFromEmail;

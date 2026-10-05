@@ -14,7 +14,7 @@ import { normalizeDiagnosisConfidenceLevel, type DiagnosisConfidenceLevel } from
 export type IdentificationStatus = "confident" | "likely" | "needs_confirmation";
 export type CarePillTone = "green" | "amber" | "blue" | "rose";
 export type PlantSource = "built_in" | "custom";
-export type HouseholdRole = "owner" | "editor" | "viewer";
+export type HouseholdRole = "owner" | "viewer";
 
 type DbCarePill = {
   id: string;
@@ -74,6 +74,7 @@ type DbHouseholdMember = {
   email: string;
   household_id: string;
   role: HouseholdRole;
+  status?: "active" | "suspended_plan_limit";
   user_id: string;
 };
 
@@ -201,6 +202,7 @@ export type HouseholdMember = {
   email: string;
   householdId: string;
   role: HouseholdRole;
+  status?: "active" | "suspended_plan_limit";
   userId: string;
 };
 
@@ -546,6 +548,7 @@ const mapHouseholdMember = (member: DbHouseholdMember): HouseholdMember => ({
   email: member.email,
   householdId: member.household_id,
   role: member.role,
+  status: member.status ?? "active",
   userId: member.user_id,
 });
 
@@ -822,7 +825,6 @@ export const renameHousehold = async (householdId: string, name: string) => {
 export const createHouseholdInvite = async (
   householdId: string,
   email: string,
-  role: HouseholdRole = "editor",
 ) => {
   const normalizedEmail = normalizeInviteEmail(email);
   if (!isValidInviteEmail(normalizedEmail)) {
@@ -832,7 +834,7 @@ export const createHouseholdInvite = async (
   const { data, error } = await getClient()
     .rpc("create_household_invite", {
       invite_email: normalizedEmail,
-      invite_role: role,
+      invite_role: "viewer",
       target_household_id: householdId,
     })
     .single<DbHouseholdInvite>();
@@ -889,6 +891,15 @@ export const removeHouseholdViewer = async (householdId: string, userId: string)
   if (error) {
     throw error;
   }
+};
+
+export const removeHouseholdMember = async (householdId: string, userId: string) => {
+  const { error } = await getClient().rpc("remove_household_member", {
+    target_household_id: householdId,
+    target_user_id: userId,
+  });
+
+  if (error) throw error;
 };
 
 export const joinHouseholdByInvite = async (token: string) => {

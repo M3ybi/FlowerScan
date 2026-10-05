@@ -37,6 +37,16 @@ export const formatLocalizedDate = (
   }).format(new Date(`${value}T00:00:00`));
 };
 
+export const formatLocalizedTimestampDate = (value: string, language: PlantieLanguage | null) => {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return new Intl.DateTimeFormat(localeByLanguage[language ?? defaultLanguage], {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+};
+
 export const formatLocalizedElapsedDays = (value: number | null, t: ReturnType<typeof createTranslator>) => {
   if (value === null) {
     return t("date.new");

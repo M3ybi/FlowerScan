@@ -48,11 +48,16 @@ test("invite creation validates email and rejects active duplicate targets witho
   assert.doesNotMatch(createFunction, /expires_at|invite_expires_at|expiration/i);
 });
 
-test("invite creation still enforces owner and editor permissions", () => {
-  const createFunction = functionSlice("create_household_invite", "join_household_by_invite");
-
-  assert.match(createFunction, /invite_role = 'owner' and not public\.is_household_owner/);
-  assert.match(createFunction, /invite_role <> 'owner' and not public\.can_edit_household/);
+test("current invite RPC is owner-only, Viewer-only, and checks Premium capacity", () => {
+  const currentSql = read("supabase/migrations/20261005180000_household_subscription_membership.sql");
+  const createFunction = currentSql.slice(
+    currentSql.indexOf("create or replace function public.create_household_invite"),
+    currentSql.indexOf("create or replace function public.join_household_by_invite"),
+  );
+  assert.match(createFunction, /public\.is_household_owner\(target_household_id\)/);
+  assert.match(createFunction, /invite_role <> 'viewer'/);
+  assert.match(createFunction, /public\.is_household_premium_at\(target_household_id, now\(\)\)/);
+  assert.match(createFunction, /used_slots >= 3/);
 });
 
 test("join rejects invalid revoked or reused invites for new members without expiry logic", () => {
@@ -167,24 +172,40 @@ test("frontend invite flow creates invites without expiration UI state or payloa
 
   assert.match(appSource, /normalizeInviteEmail\(inviteEmail\)/);
   assert.match(appSource, /isValidInviteEmail\(normalizedEmail\)/);
-  assert.match(appSource, /invite\.inviteeEmail === normalizedEmail/);
-  assert.match(appSource, /createHouseholdInvite\(activeSupabaseHouseholdId, normalizedEmail, inviteRole\)/);
+  assert.match(appSource, /normalizeInviteEmail\(invite\.inviteeEmail\) === normalizedEmail/);
+  assert.match(appSource, /createHouseholdInvite\(activeSupabaseHouseholdId, normalizedEmail\)/);
   assert.match(appSource, /sendHouseholdInviteEmail\(/);
-  assert.match(appSource, /household\.inviteStatusSent/);
+  assert.match(appSource, /household\.invitationSent/);
   assert.match(inviteSource, /export const inviteErrorMessage/);
   assert.match(appSource, /inviteErrorMessage\(error\)/);
   assert.doesNotMatch(appSource, /inviteExpiresAt|setInviteExpiresAt|datetime-local|invite_expires_at|expiresAt/);
 });
 
-test("frontend keeps manual invite revoke and owner-only viewer removal actions", () => {
+test("frontend uses one current-state list and owner-only member removal", () => {
   const appSource = read("src/App.tsx");
 
-  assert.match(appSource, /handleRevokeInvite/);
-  assert.match(appSource, /revokeHouseholdInvite\(inviteId\)/);
-  assert.match(appSource, /handleRemoveViewer/);
-  assert.match(appSource, /isCurrentHouseholdOwner && member\.role === "viewer" && member\.userId !== auth\.user\?\.id/);
-  assert.match(appSource, /removeHouseholdViewer\(activeSupabaseHouseholdId, member\.userId\)/);
-  assert.match(appSource, /listHouseholdMembers\(activeSupabaseHouseholdId\)/);
+  assert.match(appSource, /<HouseholdPeopleList/);
+  assert.match(appSource, /buildHouseholdPeople\(/);
+  assert.match(appSource, /revokeHouseholdInvite\(item\.inviteId!\)/);
+  assert.match(appSource, /removeHouseholdMember\(householdId, item\.userId!\)/);
+  assert.match(appSource, /currentRole !== "owner"/);
+  assert.match(appSource, /item\.userId === auth\.user\?\.id/);
+  assert.match(appSource, /Promise\.all\(\[/);
+});
+
+test("current household migration keeps only actionable invites and enforces removal permissions", () => {
+  const managementSql = read("supabase/migrations/20261005120000_household_people_management.sql");
+  assert.match(managementSql, /create unique index household_invites_active_email_idx/);
+  assert.match(managementSql, /partition by household_id, lower\(btrim\(invitee_email\)\)/);
+  assert.match(managementSql, /hi\.used_at is null and hi\.revoked_at is null/);
+  assert.match(managementSql, /create or replace function public\.remove_household_member/);
+  assert.match(managementSql, /target_user_id = auth\.uid\(\)/);
+  assert.match(managementSql, /hm\.role = 'owner'/);
+  assert.match(managementSql, /target_membership\.role = 'owner'/);
+  assert.match(managementSql, /revoke insert, update, delete on public\.household_members, public\.household_invites/);
+  assert.match(managementSql, /for update/);
+  assert.match(managementSql, /joining_email is distinct from lower\(btrim\(invite\.invitee_email\)\)/);
+  assert.match(managementSql, /where hi\.household_id = target_household_id[\s\S]*hi\.used_at is null and hi\.revoked_at is null/);
 });
 
 test("frontend exposes owner-only household rename in sheet and menu", () => {
@@ -192,8 +213,8 @@ test("frontend exposes owner-only household rename in sheet and menu", () => {
 
   assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && isCurrentHouseholdOwner/);
   assert.match(appSource, /renderHouseholdNameEditor\("sheet", "household-sheet-title"\)/);
-  assert.match(appSource, /renderHouseholdNameEditor\("menu"\)/);
-  assert.match(appSource, /canRenameHousehold \? \(/);
+  assert.match(appSource, /renderHouseholdNameEditor\("menu", undefined, false\)/);
+  assert.match(appSource, /canRenameHousehold && householdNameEditSurface !== "menu" \?/);
   assert.match(appSource, /validateHouseholdName\(householdNameEditDraft\)/);
   assert.match(appSource, /household\.renameUnsafe/);
   assert.match(appSource, /renameHousehold\(activeSupabaseHouseholdId, nameValidation\.name\)/);

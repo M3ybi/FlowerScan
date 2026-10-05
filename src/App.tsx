@@ -9,6 +9,7 @@ import {
   FileDown,
   ImagePlus,
   Home,
+  Mail,
   KeyRound,
   Leaf,
   Pencil,
@@ -51,6 +52,8 @@ import {
   normalizeInviteTokenInput,
   safeInviteDebugMessage,
 } from "./app/householdInvites";
+import { buildHouseholdPeople } from "./app/householdPeople";
+import type { HouseholdPersonItem } from "./app/householdPeople";
 import {
   diagnosticsStorageKey,
   flowerDiagnosticsCount,
@@ -61,6 +64,7 @@ import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
 import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
 import { AuthPanel } from "./components/AuthPanel";
+import { HouseholdPeopleList } from "./components/HouseholdPeopleList";
 import { LoadingButton } from "./components/LoadingButton";
 import { PricingPage } from "./components/PricingPage";
 import { QrCode } from "./components/QrCode";
@@ -116,7 +120,7 @@ import {
   listHouseholdInvites,
   listHouseholdMembers,
   normalizeInviteEmail,
-  removeHouseholdViewer,
+  removeHouseholdMember,
   renameHousehold,
   revokeHouseholdInvite,
   sendHouseholdInviteEmail,
@@ -130,6 +134,8 @@ import {
   recordCareTipGeneration,
 } from "./lib/householdPlanService";
 import { PLAN_LIMITS } from "./lib/householdPlanRules";
+import { canInviteHouseholdMember, usedHouseholdSlots as countUsedHouseholdSlots } from "./lib/householdMembershipRules";
+import { householdSubscriptionCopy } from "./lib/householdSubscriptionCopy";
 import {
   createCustomFlowerId,
   fetchGeneratedCare,
@@ -225,6 +231,7 @@ export const App = () => {
   const [previousHousehold, setPreviousHousehold] = useState<HouseholdSession | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(window.localStorage));
   const t = useMemo(() => createTranslator(selectedLanguage), [selectedLanguage]);
+  const subscriptionCopy = householdSubscriptionCopy(selectedLanguage);
   const localizedConfidenceLabel = (value: string) => {
     const level = normalizeDiagnosisConfidenceLevel(value);
     return level ? t(`diagnosis.confidenceLevel.${level}`) : value;
@@ -250,19 +257,24 @@ export const App = () => {
   const [householdNameEditStatusTone, setHouseholdNameEditStatusTone] = useState<"error" | "info" | "success">("info");
   const [isSavingHouseholdName, setIsSavingHouseholdName] = useState(false);
   const [isHouseholdSheetOpen, setIsHouseholdSheetOpen] = useState(false);
-  const [inviteRole, setInviteRole] = useState<HouseholdRole>("editor");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [isInvitePanelOpen, setIsInvitePanelOpen] = useState(false);
   const [inviteStatus, setInviteStatus] = useState("");
   const [inviteStatusTone, setInviteStatusTone] = useState<"error" | "info" | "success">("info");
   const inviteStatusClass = inviteStatus ? `report-status invite-status invite-status-${inviteStatusTone}` : "";
   const [createdInviteLink, setCreatedInviteLink] = useState("");
+  const [createdInviteId, setCreatedInviteId] = useState("");
   const [householdInvites, setHouseholdInvites] = useState<HouseholdInvite[]>([]);
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
+  const [householdPeopleLoading, setHouseholdPeopleLoading] = useState(false);
+  const [householdPeopleError, setHouseholdPeopleError] = useState("");
+  const [removingPersonKeys, setRemovingPersonKeys] = useState<Set<string>>(() => new Set());
+  const removingPersonKeysRef = useRef(new Set<string>());
+  const householdPeopleRequestRef = useRef(0);
+  const householdPeopleScopeRef = useRef("");
   const [joinInviteInput, setJoinInviteInput] = useState("");
   const [isJoiningInvite, setIsJoiningInvite] = useState(false);
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
-  const [revokeInviteId, setRevokeInviteId] = useState("");
-  const [removingViewerId, setRemovingViewerId] = useState("");
   const [isSigningOut, setIsSigningOut] = useState(false);
   const signingOutRef = useRef(false);
   const [isAccessChecking, setIsAccessChecking] = useState(true);
@@ -421,12 +433,20 @@ export const App = () => {
   const currentUserEmail = auth.user?.email ?? t("account.noEmail");
   const currentHouseholdMember = householdMembers.find((member) => member.userId === auth.user?.id);
   const isCurrentHouseholdOwner = currentHouseholdMember?.role === "owner";
+  const householdEntitlement = subscription.householdEntitlement;
+  const usedHouseholdSlots = householdEntitlement ? countUsedHouseholdSlots(householdEntitlement) : 0;
+  const canInviteToHousehold = subscription.status === "ready" && canInviteHouseholdMember(householdEntitlement);
+  const householdPeople = useMemo(
+    () => buildHouseholdPeople(activeSupabaseHouseholdId ?? "", householdMembers, householdInvites),
+    [activeSupabaseHouseholdId, householdMembers, householdInvites],
+  );
+  householdPeopleScopeRef.current = activeSupabaseHouseholdId ?? "";
   const canRenameHousehold = auth.isAuthenticated && Boolean(activeSupabaseHouseholdId) && isCurrentHouseholdOwner;
   const householdNameEditStatusClass = householdNameEditStatus
     ? `household-name-edit-status household-name-edit-status-${householdNameEditStatusTone}`
     : "";
   const householdRoleLabel = (role: HouseholdRole) =>
-    role === "editor" ? t("household.roleEditor") : role === "viewer" ? t("household.roleViewer") : t("household.roleOwner");
+    role === "viewer" ? t("household.roleViewer") : t("household.roleOwner");
   const isSupabaseHouseholdPending =
     shouldUseSupabaseAccountData &&
     !supabaseReadState &&
@@ -455,6 +475,7 @@ export const App = () => {
     setAccountActionStatus("");
     setCarePreviewStatus("");
     setCreatedInviteLink("");
+    setCreatedInviteId("");
     setDeleteAccountStatus("");
     setDiagnosticHistoryStatus("");
     setDiagnosisStatus("");
@@ -465,6 +486,7 @@ export const App = () => {
     setHouseholdNameEditSurface(null);
     setInviteStatus("");
     setInviteStatusTone("info");
+    setIsInvitePanelOpen(false);
     setNewPlantStatus("");
     setOnboardingStatus("");
     setQrExportStatus("");
@@ -475,6 +497,15 @@ export const App = () => {
     setIsHouseholdSheetOpen(false);
     setIsSavingHouseholdName(false);
   };
+
+  useEffect(() => {
+    if (route.page !== "menu" || (!inviteStatus && !householdNameEditStatus)) return;
+    const timeout = window.setTimeout(() => {
+      setInviteStatus("");
+      setHouseholdNameEditStatus("");
+    }, 6_000);
+    return () => window.clearTimeout(timeout);
+  }, [route.page, inviteStatus, householdNameEditStatus]);
 
   const isTransientMessageGenerationCurrent = (generation: number) =>
     generation === transientMessageGenerationRef.current;
@@ -654,22 +685,41 @@ export const App = () => {
 
   useEffect(() => {
     if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
+      householdPeopleRequestRef.current += 1;
       setHouseholdInvites([]);
       setHouseholdMembers([]);
+      setHouseholdPeopleLoading(false);
+      setHouseholdPeopleError("");
       return;
     }
 
-    void Promise.all([
-      refreshHouseholdInvites().catch(() => {
-        setHouseholdInvites([]);
-      }),
-      listHouseholdMembers(activeSupabaseHouseholdId)
-        .then(setHouseholdMembers)
-        .catch(() => {
-          setHouseholdMembers([]);
-        }),
-    ]);
+    setHouseholdInvites([]);
+    setHouseholdMembers([]);
+    setHouseholdPeopleError("");
+    void refreshHouseholdPeople(true);
   }, [activeSupabaseHouseholdId, auth.isAuthenticated]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId || route.page !== "menu") return;
+    const refreshOnReturn = () => {
+      if (document.visibilityState !== "hidden") void refreshHouseholdPeople();
+    };
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    const interval = window.setInterval(refreshOnReturn, 60_000);
+    return () => {
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.clearInterval(interval);
+    };
+  }, [auth.isAuthenticated, activeSupabaseHouseholdId, route.page]);
+
+  useEffect(() => {
+    if (createdInviteId && !householdInvites.some((invite) => invite.id === createdInviteId && isActiveInvite(invite))) {
+      setCreatedInviteLink("");
+      setCreatedInviteId("");
+    }
+  }, [createdInviteId, householdInvites]);
 
   useEffect(() => {
     if (route.page !== "health") {
@@ -1035,6 +1085,15 @@ export const App = () => {
       return;
     }
 
+    if (subscription.status !== "ready" || !subscription.householdEntitlement) {
+      setQrExportStatus(subscriptionCopy.entitlementUnknown);
+      return;
+    }
+    if (!subscription.householdEntitlement.isPremium && allFlowers.length > 10) {
+      setQrExportStatus(subscriptionCopy.freeQrLimit);
+      return;
+    }
+
     try {
       setIsExportingQrPdf(true);
       setQrExportStatus(t("qr.exportGenerating"));
@@ -1144,7 +1203,7 @@ export const App = () => {
     }
   };
 
-  const renderHouseholdNameEditor = (surface: HouseholdNameEditSurface, headingId?: string) => {
+  const renderHouseholdNameEditor = (surface: HouseholdNameEditSurface, headingId?: string, showTrigger = true) => {
     const isEditing = householdNameEditSurface === surface;
     const inputId = `household-name-${surface}`;
     const statusId = `household-name-status-${surface}`;
@@ -1208,7 +1267,7 @@ export const App = () => {
         ) : (
           <strong className="household-name-display">{householdDisplayName}</strong>
         )}
-        {canRenameHousehold ? (
+        {canRenameHousehold && showTrigger ? (
           <button className="household-name-edit-trigger" type="button" onClick={() => startHouseholdNameEdit(surface)} aria-label={t("household.renameAction")}>
             <Pencil size={15} aria-hidden="true" />
           </button>
@@ -1425,14 +1484,34 @@ export const App = () => {
     removeFlower(flowerId);
   };
 
-  const refreshHouseholdInvites = async () => {
-    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
-      setHouseholdInvites([]);
-      return;
+  const refreshHouseholdPeople = async (showLoading = false) => {
+    if (!auth.isAuthenticated || !activeSupabaseHouseholdId) return false;
+    const householdId = activeSupabaseHouseholdId;
+    const requestId = ++householdPeopleRequestRef.current;
+    if (showLoading) {
+      setHouseholdPeopleLoading(true);
+      setHouseholdPeopleError("");
     }
-
-    const invites = await listHouseholdInvites(activeSupabaseHouseholdId);
-    setHouseholdInvites(invites);
+    try {
+      const [members, invites] = await Promise.all([
+        listHouseholdMembers(householdId),
+        listHouseholdInvites(householdId),
+      ]);
+      if (householdPeopleScopeRef.current !== householdId || requestId !== householdPeopleRequestRef.current) return false;
+      setHouseholdMembers(members);
+      setHouseholdInvites(invites);
+      setHouseholdPeopleError("");
+      return true;
+    } catch {
+      if (householdPeopleScopeRef.current === householdId && requestId === householdPeopleRequestRef.current) {
+        setHouseholdPeopleError(t("household.peopleLoadFailed"));
+      }
+      return false;
+    } finally {
+      if (householdPeopleScopeRef.current === householdId && requestId === householdPeopleRequestRef.current) {
+        setHouseholdPeopleLoading(false);
+      }
+    }
   };
 
   const setInviteFeedback = (message: string, tone: "error" | "info" | "success" = "info") => {
@@ -1455,6 +1534,10 @@ export const App = () => {
       setInviteFeedback(t("household.inviteStatusNoHousehold"), "error");
       return;
     }
+    if (!canInviteToHousehold) {
+      setInviteFeedback(t("household.inviteStatusPermission"), "error");
+      return;
+    }
 
     const normalizedEmail = normalizeInviteEmail(inviteEmail);
     if (!isValidInviteEmail(normalizedEmail)) {
@@ -1462,7 +1545,12 @@ export const App = () => {
       return;
     }
 
-    if (householdInvites.some((invite) => isActiveInvite(invite) && invite.inviteeEmail === normalizedEmail)) {
+    if (householdMembers.some((member) => normalizeInviteEmail(member.email) === normalizedEmail)) {
+      setInviteFeedback(t("household.peopleAlreadyMember"), "error");
+      return;
+    }
+
+    if (householdInvites.some((invite) => isActiveInvite(invite) && normalizeInviteEmail(invite.inviteeEmail) === normalizedEmail)) {
       setInviteFeedback(t("household.inviteStatusDuplicate"), "error");
       return;
     }
@@ -1471,13 +1559,16 @@ export const App = () => {
 
     try {
       setIsCreatingInvite(true);
-      setInviteFeedback(t("household.inviteStatusCreating"), "info");
-      const invite = await createHouseholdInvite(activeSupabaseHouseholdId, normalizedEmail, inviteRole);
+      setInviteStatus("");
+      const invite = await createHouseholdInvite(activeSupabaseHouseholdId, normalizedEmail);
       const link = createInviteUrl(invite.token);
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
         setCreatedInviteLink(link);
+        setCreatedInviteId(invite.id);
         setInviteEmail("");
-        await refreshHouseholdInvites();
+        setHouseholdInvites((current) => [invite, ...current]);
+        await refreshHouseholdPeople();
+        void refreshSubscriptionState();
       }
       try {
         await sendHouseholdInviteEmail({
@@ -1485,10 +1576,10 @@ export const App = () => {
           householdName: householdDisplayName,
           inviteUrl: link,
           recipientEmail: normalizedEmail,
-          role: inviteRole,
+          role: "viewer",
         });
         if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-          setInviteFeedback(t("household.inviteStatusSent", { email: normalizedEmail }), "success");
+          setInviteFeedback(t("household.invitationSent", { email: normalizedEmail }), "success");
         }
       } catch {
         if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
@@ -1500,6 +1591,8 @@ export const App = () => {
         const debugMessage = safeInviteDebugMessage(error);
         setInviteFeedback(`${t(inviteErrorMessage(error))}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
       }
+      void refreshSubscriptionState();
+      void refreshHouseholdPeople();
     } finally {
       setIsCreatingInvite(false);
     }
@@ -1515,69 +1608,46 @@ export const App = () => {
     try {
       await navigator.clipboard.writeText(createdInviteLink);
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteStatus(t("household.inviteCopied"));
+        setInviteFeedback(t("household.inviteCopied"), "success");
       }
     } catch {
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteStatus(createdInviteLink);
+        setInviteFeedback(createdInviteLink, "info");
       }
     }
   };
 
-  const handleRevokeInvite = async (inviteId: string) => {
-    if (revokeInviteId) {
-      return;
-    }
+  const handleRemoveHouseholdPerson = async (item: HouseholdPersonItem) => {
+    if (!activeSupabaseHouseholdId || removingPersonKeysRef.current.has(item.key)) return;
+    const householdId = activeSupabaseHouseholdId;
+    const currentRole = currentHouseholdMember?.role;
+    if (item.status !== "pending" && (!item.userId || currentRole !== "owner" || item.role === "owner" || item.userId === auth.user?.id)) return;
+    if (item.status === "pending" && (!item.inviteId || currentRole !== "owner")) return;
 
+    removingPersonKeysRef.current.add(item.key);
+    setRemovingPersonKeys(new Set(removingPersonKeysRef.current));
     const feedbackGeneration = transientMessageGenerationRef.current;
-
     try {
-      setRevokeInviteId(inviteId);
-      await revokeHouseholdInvite(inviteId);
+      if (item.status === "pending") await revokeHouseholdInvite(item.inviteId!);
+      else await removeHouseholdMember(householdId, item.userId!);
+
+      if (householdPeopleScopeRef.current !== householdId) return;
+      setHouseholdPeopleError("");
+      if (item.status === "pending") setHouseholdInvites((current) => current.filter((invite) => invite.id !== item.inviteId));
+      else setHouseholdMembers((current) => current.filter((member) => member.userId !== item.userId));
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteStatus(t("household.inviteRevoked"));
-        await refreshHouseholdInvites();
+        setInviteFeedback(item.status === "pending" ? t("household.inviteRevoked") : t("household.peopleRemoved", { email: item.email }), "success");
       }
-    } catch (error) {
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteStatus(error instanceof Error ? error.message : t("household.inviteRevokeFailed"));
+      void refreshHouseholdPeople();
+      void refreshSubscriptionState();
+    } catch {
+      if (householdPeopleScopeRef.current === householdId) {
+        if (isTransientMessageGenerationCurrent(feedbackGeneration)) setInviteFeedback(t("household.peopleRemoveFailed"), "error");
+        void refreshHouseholdPeople();
       }
     } finally {
-      setRevokeInviteId("");
-    }
-  };
-
-  const handleRemoveViewer = async (member: HouseholdMember) => {
-    if (removingViewerId) {
-      return;
-    }
-
-    if (!activeSupabaseHouseholdId || !isCurrentHouseholdOwner || member.role !== "viewer" || member.userId === auth.user?.id) {
-      return;
-    }
-
-    if (!window.confirm(t("household.removeViewerConfirm", { email: member.email }))) {
-      return;
-    }
-
-    const feedbackGeneration = transientMessageGenerationRef.current;
-
-    try {
-      setRemovingViewerId(member.userId);
-      setInviteFeedback(t("household.removeViewerWorking"), "info");
-      await removeHouseholdViewer(activeSupabaseHouseholdId, member.userId);
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteFeedback(t("household.removeViewerSuccess", { email: member.email }), "success");
-        const members = await listHouseholdMembers(activeSupabaseHouseholdId);
-        setHouseholdMembers(members);
-      }
-    } catch (error) {
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        const debugMessage = safeInviteDebugMessage(error);
-        setInviteFeedback(`${t("household.removeViewerFailed")}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
-      }
-    } finally {
-      setRemovingViewerId("");
+      removingPersonKeysRef.current.delete(item.key);
+      setRemovingPersonKeys(new Set(removingPersonKeysRef.current));
     }
   };
 
@@ -3523,145 +3593,83 @@ export const App = () => {
             )}
           </details>
 
-          <details className="menu-section" open={openMenuSection === "household"}>
+          <details className="menu-section household-management" open={openMenuSection === "household"} onToggle={(event) => {
+            if (event.currentTarget.open) void refreshHouseholdPeople();
+          }}>
             <summary>
-              <span>{t("menu.household")}</span>
+              <span className="household-management-summary-icon" aria-hidden="true"><Home size={22} /></span>
+              <span className="household-management-summary-copy"><strong>{t("menu.household")}</strong><small>{t("household.managementSubtitle")}</small></span>
             </summary>
             <div className="menu-section-body">
-              <div className="account-summary-list household-menu-summary">
-                <div className="household-menu-identity-card">
-                  <span>{t("account.household")}</span>
-                  {activeHousehold || supabaseReadState ? (
-                    <>
-                      {renderHouseholdNameEditor("menu")}
-                      {householdNameEditStatus && householdNameEditSurface !== "menu" ? (
-                        <p className={householdNameEditStatusClass}>{householdNameEditStatus}</p>
-                      ) : null}
-                    </>
-                  ) : (
-                    <strong>{t("account.householdRequired")}</strong>
-                  )}
+              {activeHousehold || supabaseReadState ? <>
+                <div className="household-management-toolbar">
+                  <span className="household-management-mobile-name">{householdDisplayName}</span>
+                  {canRenameHousehold && householdNameEditSurface !== "menu" ? <button className="household-edit-button" type="button" onClick={() => startHouseholdNameEdit("menu")}>
+                    <Pencil size={16} aria-hidden="true" />{t("household.editHousehold")}
+                  </button> : null}
                 </div>
-                <div>
-                  <span>{t("household.members")}</span>
-                  <strong>
-                    {householdMembers.length > 0
-                      ? t("household.memberCount", { count: householdMembers.length })
-                      : auth.user?.email ?? t("household.signedInUser")}
-                  </strong>
+                <div className={`household-overview-card ${householdNameEditSurface === "menu" ? "is-editing" : ""}`}>
+                  <div className="household-overview-name"><span>{t("household.name")}</span>{renderHouseholdNameEditor("menu", undefined, false)}</div>
+                  <div className="household-overview-metric"><UsersRound size={19} aria-hidden="true" /><span><small>{t("household.members")}</small><strong>{householdEntitlement ? `${householdEntitlement.activeMemberCount} / ${householdEntitlement.maxMembers}` : "…"}</strong></span></div>
+                  <div className="household-overview-metric"><Mail size={19} aria-hidden="true" /><span><small>{t("household.pendingInvites")}</small><strong>{householdPeople.filter((person) => person.status === "pending").length}</strong></span></div>
                 </div>
-              </div>
-              {auth.isAuthenticated && (activeHousehold || supabaseReadState) ? (
-                <div className="menu-action-row">
-                  <button className="neutral-action" type="button" onClick={changeHousehold}>
-                    <UsersRound size={17} aria-hidden="true" />
-                    {t("household.createOrJoin")}
-                  </button>
-                </div>
-              ) : null}
-              {householdMembers.length > 0 ? (
-                <section className="household-member-management" aria-labelledby="household-members-title">
-                  <div className="household-member-management-head">
-                    <span className="household-member-management-icon" aria-hidden="true">
-                      <UsersRound size={18} />
-                    </span>
-                    <div>
-                      <h2 id="household-members-title">{t("household.members")}</h2>
-                      <p>{t("household.memberCount", { count: householdMembers.length })}</p>
-                    </div>
-                  </div>
-                  <div className="household-member-list" aria-label={t("household.members")}>
-                    {householdMembers.map((member) => (
-                      <div key={member.userId}>
-                        <span className="household-member-identity">
-                          <strong>{member.email}</strong>
-                          <span className="household-member-role">{householdRoleLabel(member.role)}</span>
-                        </span>
-                        {isCurrentHouseholdOwner && member.role === "viewer" && member.userId !== auth.user?.id ? (
-                          <LoadingButton
-                            className="household-member-remove-action"
-                            type="button"
-                            onClick={() => void handleRemoveViewer(member)}
-                            isLoading={removingViewerId === member.userId}
-                            disabled={Boolean(removingViewerId && removingViewerId !== member.userId)}
-                            loadingLabel={t("household.removeViewerWorking")}
-                          >
-                            {t("household.removeViewer")}
-                          </LoadingButton>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              </> : null}
               {activeSupabaseHouseholdId && auth.isAuthenticated ? (
                 <>
-                  <div className="menu-form-grid">
+                  <HouseholdPeopleList
+                    key={activeSupabaseHouseholdId}
+                    items={householdPeople}
+                    loading={householdPeopleLoading}
+                    error={householdPeopleError}
+                    currentUserId={auth.user?.id ?? null}
+                    currentRole={currentHouseholdMember?.role ?? null}
+                    removingKeys={removingPersonKeys}
+                    language={selectedLanguage}
+                    t={t}
+                    canInvite={canInviteToHousehold}
+                    capacityLabel={householdEntitlement ? `${usedHouseholdSlots} / ${householdEntitlement.maxMembers}` : null}
+                    inviteOpen={isInvitePanelOpen}
+                    onInvite={() => setIsInvitePanelOpen((open) => !open)}
+                    onRemove={(item) => void handleRemoveHouseholdPerson(item)}
+                    onRetry={() => void refreshHouseholdPeople(true)}
+                  />
+                  {subscription.status === "ready" && !householdEntitlement?.isPremium ? <p className="household-sharing-note">{subscriptionCopy.sharingRequiresPremium}{householdEntitlement?.suspendedMemberCount ? ` ${subscriptionCopy.suspended(householdEntitlement.suspendedMemberCount)}` : ""}</p> : null}
+                  {subscription.status === "ready" && householdEntitlement?.isPremium && usedHouseholdSlots >= householdEntitlement.maxMembers ? <p className="household-sharing-note">{subscriptionCopy.memberLimitReached}</p> : null}
+                  {canInviteToHousehold && isInvitePanelOpen ? <section className="household-invite-panel" id="household-invite-panel" aria-labelledby="household-invite-title">
+                    <div className="household-invite-panel-heading">
+                      <div><h3 id="household-invite-title">{t("household.invitePanelTitle")}</h3><p>{t("household.invitePanelBody")}</p></div>
+                      <button type="button" className="household-invite-close" onClick={() => setIsInvitePanelOpen(false)} aria-label={t("household.inviteClose")} disabled={isCreatingInvite}><X size={18} aria-hidden="true" /></button>
+                    </div>
+                  <form className="household-invite-form" onSubmit={(event) => { event.preventDefault(); void handleCreateInvite(); }}>
                     <label className="field">
-                      <span>{t("household.inviteEmail")}</span>
+                      <span>{t("household.emailAddress")}</span>
                       <input
                         type="email"
                         value={inviteEmail}
                         placeholder="rodina@example.com"
                         onChange={(event) => setInviteEmail(event.target.value)}
+                        disabled={isCreatingInvite}
+                        autoFocus
                       />
                     </label>
-                    <label className="field">
-                      <span>{t("household.role")}</span>
-                      <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as HouseholdRole)}>
-                        <option value="editor">{t("household.roleEditor")}</option>
-                        <option value="viewer">{t("household.roleViewer")}</option>
-                      </select>
-                    </label>
                     <LoadingButton
-                      className="primary-action"
-                      type="button"
-                      onClick={() => void handleCreateInvite()}
+                      className="primary-action household-invite-submit"
+                      type="submit"
                       isLoading={isCreatingInvite}
-                      loadingLabel={t("household.inviteStatusCreating")}
+                      loadingLabel={t("household.inviteSending")}
                     >
-                      {t("household.createEmailInvite")}
+                      {t("household.sendInvitation")}
                     </LoadingButton>
-                  </div>
+                  </form>
                   {createdInviteLink ? (
-                    <div className="report-status">
-                      <span>{createdInviteLink}</span>
-                      <button type="button" onClick={() => void handleCopyInviteLink()}>
+                    <div className="household-invite-link">
+                      <span title={createdInviteLink}>{createdInviteLink}</span>
+                      <button className="neutral-action" type="button" onClick={() => void handleCopyInviteLink()}>
                         {t("household.copyInvite")}
                       </button>
                     </div>
                   ) : null}
-                  <div className="menu-invite-list" aria-label="Pending email invites">
-                    {householdInvites.length > 0 ? (
-                      householdInvites.map((invite) => (
-                        <div key={invite.id}>
-                          <strong>{invite.inviteeEmail}</strong>
-                          <span>
-                            {invite.revokedAt
-                              ? t("household.inviteStatusRevoked")
-                              : invite.usedAt
-                                ? t("household.inviteStatusAccepted")
-                                : t("household.inviteStatusPending")}
-                            {" - "}
-                            {householdRoleLabel(invite.role)}
-                          </span>
-                          {!invite.revokedAt && !invite.usedAt ? (
-                            <LoadingButton
-                              type="button"
-                              onClick={() => void handleRevokeInvite(invite.id)}
-                              isLoading={revokeInviteId === invite.id}
-                              disabled={Boolean(revokeInviteId && revokeInviteId !== invite.id)}
-                              loadingLabel={t("household.inviteRevoking")}
-                            >
-                              {t("household.revokeInvite")}
-                            </LoadingButton>
-                          ) : null}
-                        </div>
-                      ))
-                    ) : (
-                      <span>{t("household.noPendingInvites")}</span>
-                    )}
-                  </div>
+                  </section> : null}
                 </>
               ) : auth.isAuthenticated && isSupabaseBackend ? (
                 <div className="menu-form-grid">
@@ -3701,7 +3709,13 @@ export const App = () => {
               ) : (
                 <p>{t("household.inviteRequiresSupabase")}</p>
               )}
-              {inviteStatus ? <p className={inviteStatusClass}>{inviteStatus}</p> : null}
+              {auth.isAuthenticated && (activeHousehold || supabaseReadState) ? <button className="household-switch-action" type="button" onClick={changeHousehold}>
+                <UsersRound size={16} aria-hidden="true" />{t("household.switchOrJoin")}
+              </button> : null}
+              {route.page === "menu" && (inviteStatus || householdNameEditStatus && householdNameEditSurface !== "menu") ? <div className={`household-toast household-toast-${inviteStatus ? inviteStatusTone : householdNameEditStatusTone}`} role={(inviteStatus ? inviteStatusTone : householdNameEditStatusTone) === "error" ? "alert" : "status"} aria-live="polite">
+                <span>{inviteStatus || householdNameEditStatus}</span>
+                <button type="button" onClick={() => { setInviteStatus(""); setHouseholdNameEditStatus(""); }} aria-label={t("household.toastDismiss")}><X size={16} aria-hidden="true" /></button>
+              </div> : null}
             </div>
           </details>
           <details className="menu-section" onToggle={(event) => { if (event.currentTarget.open) void refreshSubscriptionState(); }}>
@@ -3712,6 +3726,7 @@ export const App = () => {
               <PricingPage
                 language={selectedLanguage}
                 subscription={subscription}
+                householdMemberCount={householdEntitlement?.activeMemberCount ?? 0}
                 onSubscriptionChanged={refreshPlanAfterSubscription}
               />
             </div>

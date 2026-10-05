@@ -43,7 +43,7 @@ export interface BillingService {
   getAvailableProducts(): Promise<BillingProduct[]>;
   purchasePremiumMonthly(): Promise<BillingCustomerInfo>;
   purchasePremiumYearly(): Promise<BillingCustomerInfo>;
-  changePlan(targetPlan: "yearly"): Promise<BillingCustomerInfo>;
+  changePlan(targetPlan: "monthly" | "yearly"): Promise<BillingCustomerInfo>;
   restorePurchases(): Promise<BillingCustomerInfo>;
   getCustomerInfo(forceRefresh?: boolean): Promise<BillingCustomerInfo>;
   syncEntitlements(): Promise<void>;
@@ -430,7 +430,9 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
     try {
       return await withConfiguredUser(async (userId) => {
         const current = mapCustomerInfo((await deps.purchases.getCustomerInfo()).customerInfo);
-        if (changingPlan ? current.activePlan !== "monthly" : current.hasRevenueCatPremium) {
+        if (changingPlan
+          ? !current.hasRevenueCatPremium || getRevenueCatPlan(current.productId ?? "")?.productId === productId
+          : current.hasRevenueCatPremium) {
           throw new BillingUnavailableError("The current subscription must be refreshed before changing plans.");
         }
         const packages = await getPackages();

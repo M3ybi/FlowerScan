@@ -7,6 +7,7 @@ import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
 import { canSwitchToYearly, isOwnPaidSubscription, safeBillingManagementUrl } from "../lib/subscriptionUiRules";
 import { LoadingButton } from "./LoadingButton";
+import { beginHouseholdPurchase } from "../lib/householdPlanService";
 
 type UpgradeModalProps = {
   limitReason?: string;
@@ -30,7 +31,9 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
   const billingDisabled = !billingStatus.configured;
   const isResolving = subscription.status === "loading" || subscription.view === "loading" || subscription.view === "syncing";
   const hasSubscriptionError = subscription.status === "error" || subscription.view === "error";
-  const isFree = subscription.status === "ready" && (subscription.view === "free" || subscription.view === "expired");
+  const isFree = subscription.status === "ready" && !subscription.customerInfo?.hasRevenueCatPremium &&
+    (subscription.view === "free" || subscription.view === "expired") &&
+    (!subscription.householdEntitlement || subscription.householdEntitlement.role === "owner");
   const isPremium = isOwnPaidSubscription(subscription) || subscription.view === "shared_premium";
   const canUpgradeYearly = canSwitchToYearly(subscription);
   const managementUrl = safeBillingManagementUrl(subscription.customerInfo?.managementUrl);
@@ -70,6 +73,8 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
     setStatusMessage(t("pricing.openingPurchase"));
     let providerPurchaseCompleted = false;
     try {
+      if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
+      await beginHouseholdPurchase(subscription.householdId);
       const info = period === "monthly" ? await billing.purchasePremiumMonthly()
         : canUpgradeYearly ? await billing.changePlan("yearly")
         : await billing.purchasePremiumYearly();

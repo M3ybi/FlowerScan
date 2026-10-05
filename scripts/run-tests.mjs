@@ -21,6 +21,8 @@ const testScripts = [
   "test:i18n",
   "test:backend-migration",
   "test:household-invites",
+  "test:household-people",
+  "test:household-membership",
   "test:mobile-ux",
   "test:menu-ux",
   "test:app-helpers",

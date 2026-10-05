@@ -82,8 +82,7 @@ test("household family section uses email invites and no manual join form", () =
   assert.match(householdSection, /inviteEmail/);
   assert.match(householdSection, /type="email"/);
   assert.match(householdSection, /handleCreateInvite/);
-  assert.match(householdSection, /invite\.inviteeEmail/);
-  assert.match(householdSection, /Pending email invites/);
+  assert.match(householdSection, /<HouseholdPeopleList/);
   assert.doesNotMatch(householdSection, /inviteExpiresAt|datetime-local|inviteStatusExpires/);
   assert.doesNotMatch(householdSection, /Join by invite/);
 });
@@ -102,13 +101,11 @@ test("household family section renders Supabase household members", () => {
   const householdSection = appSource.slice(appSource.indexOf('t("menu.household")'), appSource.indexOf('t("menu.subscription")'));
   assert.match(appSource, /listHouseholdMembers/);
   assert.match(repositorySource, /rpc\("list_household_members"/);
-  assert.match(repositorySource, /rpc\("remove_household_viewer"/);
+  assert.match(repositorySource, /rpc\("remove_household_member"/);
   assert.match(repositorySource, /rpc\("rename_household"/);
-  assert.match(householdSection, /className="household-member-list"/);
-  assert.match(householdSection, /member\.email/);
-  assert.match(householdSection, /isCurrentHouseholdOwner && member\.role === "viewer"/);
-  assert.match(householdSection, /handleRemoveViewer\(member\)/);
-  assert.match(householdSection, /renderHouseholdNameEditor\("menu"\)/);
+  assert.match(householdSection, /items=\{householdPeople\}/);
+  assert.match(householdSection, /handleRemoveHouseholdPerson\(item\)/);
+  assert.match(householdSection, /renderHouseholdNameEditor\("menu", undefined, false\)/);
 });
 
 test("household rename UI is owner-gated and localized", () => {
@@ -151,15 +148,18 @@ test("transient UI feedback is cleared on route, auth, and household changes", (
   assert.doesNotMatch(appSource, /setAccountActionStatus\(t\("account\.signedOut"\)\)/);
 });
 
-test("household member management is visually distinct from account summaries", () => {
+test("household overview and people list use compact responsive cards", () => {
   const householdSection = appSource.slice(appSource.indexOf('t("menu.household")'), appSource.indexOf('t("menu.subscription")'));
 
-  assert.match(householdSection, /className="household-member-management"/);
-  assert.match(householdSection, /className="household-member-management-head"/);
+  assert.match(householdSection, /<HouseholdPeopleList/);
+  assert.match(householdSection, /household-overview-card/);
+  assert.match(householdSection, /householdNameEditSurface === "menu" \? "is-editing"/);
+  assert.match(householdSection, /household\.pendingInvites/);
+  assert.match(householdSection, /isInvitePanelOpen \? <section className="household-invite-panel"/);
   assert.match(styleSource, /\.account-summary-list > div\s*\{/);
-  assert.match(styleSource, /\.household-member-management\s*\{[\s\S]*rgba\(45, 83, 100, 0\.2\)/);
-  assert.match(styleSource, /\.household-member-list > div\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto/);
-  assert.doesNotMatch(styleSource, /\.household-member-list div\s*\{/);
+  assert.match(styleSource, /\.menu-invite-row\s*\{[\s\S]*grid-template-columns: 44px minmax\(0, 1fr\)/);
+  assert.match(styleSource, /\.menu-invite-identity strong\s*\{[\s\S]*text-overflow: ellipsis/);
+  assert.match(styleSource, /\.household-overview-card\.is-editing \.household-overview-name\s*\{ display: grid/);
   assert.doesNotMatch(styleSource, /\.account-summary-list div\s*\{/);
 });
 
@@ -182,9 +182,10 @@ test("role select uses styled dropdown controls", () => {
 test("menu language strings are translated and not mojibake", () => {
   const householdSection = appSource.slice(appSource.indexOf('t("menu.household")'), appSource.indexOf('t("menu.subscription")'));
   assert.match(householdSection, /t\("household\.members"\)/);
-  assert.match(householdSection, /t\("household\.inviteEmail"\)/);
-  assert.match(householdSection, /t\("household\.createEmailInvite"\)/);
-  assert.match(householdSection, /t\("household\.revokeInvite"\)/);
+  assert.match(householdSection, /t\("household\.emailAddress"\)/);
+  assert.match(householdSection, /t\("household\.sendInvitation"\)/);
+  assert.match(householdSection, /<HouseholdPeopleList/);
+  assert.match(i18nSource, /"household\.peopleRemove"/);
   assert.doesNotMatch(`${appSource}\n${i18nSource}`, /[\uFFFD\u00C2\u0102\u0139\u00C4]|\u00E2\u20AC/);
 });
 

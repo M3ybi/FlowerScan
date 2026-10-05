@@ -21,6 +21,19 @@ const activeSubscription = (view: SubscriptionSnapshot["view"], willRenew: boole
   userId: "user-1",
   householdId: "household-1",
   householdPlanUsage: null,
+  householdEntitlement: {
+    planKey: view === "free" || view === "expired" ? "free" : view.startsWith("monthly") ? "premium_monthly" : "premium_yearly",
+    isPremium: view !== "free" && view !== "expired",
+    status: view.includes("cancelled") ? "cancelled" : "active",
+    validUntil: view === "free" || view === "expired" ? null : "2026-11-01T00:00:00Z",
+    maxMembers: view === "free" || view === "expired" ? 1 : 3,
+    invitationsEnabled: view !== "free" && view !== "expired",
+    activeMemberCount: 1,
+    pendingInviteCount: 0,
+    suspendedMemberCount: 0,
+    role: "owner",
+    billingBoundHere: true,
+  },
   customerInfo: {
     activeEntitlements: ["premium"],
     activePlan: view.startsWith("monthly") ? "monthly" : "yearly",
@@ -47,19 +60,19 @@ test("Free, Monthly, Yearly, cancelled, expired, and unknown states render a dis
   assert.match(freeHtml, /do not have an active subscription/);
   assert.doesNotMatch(freeHtml, /Cancel subscription/);
 
-  for (const [view, plan] of [["monthly_active", "Monthly Plan"], ["yearly_active", "Yearly Plan"]] as const) {
+  for (const [view, plan] of [["monthly_active", "Monthly"], ["yearly_active", "Yearly"]] as const) {
     const html = renderSubscription(activeSubscription(view, true));
     assert.match(html, new RegExp(plan));
-    assert.match(html, /Renews on/);
+    assert.match(html, /Current period ends/);
     assert.match(html, /Billing period/);
     assert.match(html, /Cancel subscription/);
     assert.match(html, new RegExp(formatSubscriptionDate("2026-11-01T00:00:00Z", "en")!));
   }
 
   const cancelled = renderSubscription(activeSubscription("yearly_cancelled_active", false));
-  assert.match(cancelled, /Yearly Plan/);
+  assert.match(cancelled, /Household Premium/);
   assert.match(cancelled, /Cancelled/);
-  assert.match(cancelled, /Premium access until/);
+  assert.match(cancelled, /Active until/);
   assert.doesNotMatch(cancelled, /Renews on|Cancel subscription/);
 
   const expired = renderSubscription({ ...free, view: "expired", customerInfo: {

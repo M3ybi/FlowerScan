@@ -46,6 +46,7 @@ const ownPaidViews = new Set<SubscriptionSnapshot["view"]>([
 
 export const isOwnPaidSubscription = (subscription: SubscriptionSnapshot) =>
   subscription.status === "ready" &&
+  (!subscription.householdEntitlement || subscription.householdEntitlement.role === "owner") &&
   Boolean(subscription.userId) &&
   ownPaidViews.has(subscription.view) &&
   subscription.customerInfo?.hasRevenueCatPremium === true;

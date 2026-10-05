@@ -210,6 +210,36 @@ test("Android monthly to yearly passes the old product to the store and reads th
   });
 });
 
+test("Android yearly to monthly replaces the current product", async () => {
+  let changeOptions: unknown;
+  const yearlyInfo = {
+    ...customerInfo,
+    entitlements: { active: { premium: {
+      isActive: true, productIdentifier: revenueCatProductIds.premiumYearly,
+      productPlanIdentifier: "yearly", willRenew: true, expirationDate: "2027-11-01T00:00:00Z",
+    } } },
+  };
+  const { service } = createMockBilling({
+    getRuntime: () => "android",
+    purchases: {
+      configure: async () => undefined,
+      logIn: async () => ({ customerInfo: yearlyInfo } as never),
+      getCustomerInfo: async () => ({ customerInfo: yearlyInfo } as never),
+      getOfferings: async () => ({ current: { availablePackages: [monthlyPackage, yearlyPackage] } } as never),
+      purchasePackage: async (options) => {
+        changeOptions = options;
+        return { customerInfo } as never;
+      },
+      restorePurchases: async () => ({ customerInfo: yearlyInfo } as never),
+    },
+  });
+  const result = await service.changePlan("monthly");
+  assert.equal(result.activePlan, "monthly");
+  assert.deepEqual((changeOptions as { storeProductChangeInfo: unknown }).storeProductChangeInfo, {
+    oldProductIdentifier: "plantie_premium_yearly:yearly",
+  });
+});
+
 test("failed plan change preserves the RevenueCat monthly state", async () => {
   const { service } = createMockBilling({
     purchases: {

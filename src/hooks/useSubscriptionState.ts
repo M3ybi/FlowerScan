@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { getBillingService } from "../lib/billingService";
-import { getHouseholdPlanUsage } from "../lib/householdPlanService";
+import { getHouseholdEntitlement, getHouseholdPlanUsage } from "../lib/householdPlanService";
 import { createSubscriptionStateController, emptySubscriptionSnapshot } from "../lib/subscriptionState";
 
 export const useSubscriptionState = (userId: string | null, householdId: string | null) => {
@@ -12,6 +12,7 @@ export const useSubscriptionState = (userId: string | null, householdId: string 
     controllerRef.current = createSubscriptionStateController({
       getCustomerInfo: (forceProviderRefresh) => getBillingService().getCustomerInfo(forceProviderRefresh),
       getHouseholdPlanUsage,
+      getHouseholdEntitlement,
       onChange: (nextSnapshot) => {
         if (mountedRef.current) setSnapshot(nextSnapshot);
       },

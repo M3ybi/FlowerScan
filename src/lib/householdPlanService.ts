@@ -14,6 +14,60 @@ export type HouseholdPlanUsage = {
   plantsUsed: number;
 };
 
+export type HouseholdEntitlement = {
+  planKey: "free" | "premium" | "premium_monthly" | "premium_yearly";
+  isPremium: boolean;
+  status: string;
+  validUntil: string | null;
+  maxMembers: number;
+  invitationsEnabled: boolean;
+  activeMemberCount: number;
+  pendingInviteCount: number;
+  suspendedMemberCount: number;
+  role: "owner" | "viewer";
+  billingBoundHere: boolean;
+};
+
+export const getHouseholdEntitlement = async (householdId: string): Promise<HouseholdEntitlement> => {
+  const entitlementRequest = getClient().rpc("get_household_entitlement", {
+    target_household_id: householdId,
+  }).single<{
+    plan_key: HouseholdEntitlement["planKey"];
+    is_premium: boolean;
+    status: string;
+    valid_until: string | null;
+    max_members: number;
+    invitations_enabled: boolean;
+    active_member_count: number;
+    pending_invite_count: number;
+    suspended_member_count: number;
+    role: HouseholdEntitlement["role"];
+  }>();
+  const bindingRequest = getClient().rpc("is_household_billing_bound", { target_household_id: householdId });
+  const [{ data, error }, { data: billingBoundHere, error: bindingError }] = await Promise.all([entitlementRequest, bindingRequest]);
+  if (error) throw error;
+  if (bindingError) throw bindingError;
+  if (!data) throw new Error("Household entitlement could not be loaded.");
+  return {
+    planKey: data.plan_key,
+    isPremium: data.is_premium,
+    status: data.status,
+    validUntil: data.valid_until,
+    maxMembers: data.max_members,
+    invitationsEnabled: data.invitations_enabled,
+    activeMemberCount: data.active_member_count,
+    pendingInviteCount: data.pending_invite_count,
+    suspendedMemberCount: data.suspended_member_count,
+    role: data.role,
+    billingBoundHere: billingBoundHere === true,
+  };
+};
+
+export const beginHouseholdPurchase = async (householdId: string) => {
+  const { error } = await getClient().rpc("begin_household_purchase", { target_household_id: householdId });
+  if (error) throw error;
+};
+
 type DbHouseholdPlanUsage = {
   ai_analyzes_monthly_limit: number | null;
   ai_analyzes_remaining: number | null;
