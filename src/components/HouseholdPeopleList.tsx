@@ -7,6 +7,7 @@ import type { PlantieLanguage } from "../lib/onboarding";
 import type { HouseholdRole } from "../lib/plantieRepository";
 import type { createTranslator } from "../lib/i18n";
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
+import { resolveHouseholdPermissions } from "../lib/householdPermissions";
 
 type Props = {
   items: HouseholdPersonItem[];
@@ -33,7 +34,7 @@ export const HouseholdPeopleList = ({ items, loading, error, currentUserId, curr
     if (page !== requestedPage) setRequestedPage(page);
   }, [page, requestedPage]);
 
-  const canRemove = (item: HouseholdPersonItem) => currentRole === "owner" &&
+  const canRemove = (item: HouseholdPersonItem) => resolveHouseholdPermissions(currentRole).canRemoveMembers &&
     (item.status === "pending" || item.role === "viewer" && item.userId !== currentUserId);
   const onlyCurrentUser = currentUserId !== null && items.length === 1 && items[0].status === "active" && items[0].userId === currentUserId;
 

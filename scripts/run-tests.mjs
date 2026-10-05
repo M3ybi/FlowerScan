@@ -23,6 +23,7 @@ const testScripts = [
   "test:household-invites",
   "test:household-people",
   "test:household-membership",
+  "test:household-permissions",
   "test:mobile-ux",
   "test:menu-ux",
   "test:app-helpers",

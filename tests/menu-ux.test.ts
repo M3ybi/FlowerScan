@@ -109,7 +109,7 @@ test("household family section renders Supabase household members", () => {
 });
 
 test("household rename UI is owner-gated and localized", () => {
-  assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && isCurrentHouseholdOwner/);
+  assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && householdPermissions\.canEditHousehold/);
   assert.match(appSource, /className="household-name-edit-trigger"/);
   assert.match(appSource, /t\("household\.renameAction"\)/);
   assert.match(appSource, /t\("household\.renameRequired"\)/);

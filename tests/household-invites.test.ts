@@ -188,7 +188,7 @@ test("frontend uses one current-state list and owner-only member removal", () =>
   assert.match(appSource, /buildHouseholdPeople\(/);
   assert.match(appSource, /revokeHouseholdInvite\(item\.inviteId!\)/);
   assert.match(appSource, /removeHouseholdMember\(householdId, item\.userId!\)/);
-  assert.match(appSource, /currentRole !== "owner"/);
+  assert.match(appSource, /if \(!householdPermissions\.canRemoveMembers\) return/);
   assert.match(appSource, /item\.userId === auth\.user\?\.id/);
   assert.match(appSource, /Promise\.all\(\[/);
 });
@@ -211,7 +211,7 @@ test("current household migration keeps only actionable invites and enforces rem
 test("frontend exposes owner-only household rename in sheet and menu", () => {
   const appSource = read("src/App.tsx");
 
-  assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && isCurrentHouseholdOwner/);
+  assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && householdPermissions\.canEditHousehold/);
   assert.match(appSource, /renderHouseholdNameEditor\("sheet", "household-sheet-title"\)/);
   assert.match(appSource, /renderHouseholdNameEditor\("menu", undefined, false\)/);
   assert.match(appSource, /canRenameHousehold && householdNameEditSurface !== "menu" \?/);

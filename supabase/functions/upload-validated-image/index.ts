@@ -174,9 +174,9 @@ Deno.serve(async (request) => {
     return json(400, { error: rejectionMessage });
   }
 
-  const { data: canEdit, error: accessError } = await auth.client.rpc("can_edit_household", { target_household_id: householdId });
+  const { data: canEdit, error: accessError } = await auth.client.rpc("can_manage_household_content", { target_household_id: householdId });
   if (accessError || !canEdit) {
-    return json(403, { error: "Household owner access is required to upload images." });
+    return json(403, { error: "Active household membership is required to upload images." });
   }
 
   const validation = await validateImage(apiKey, imageDataUrl, auth.user.id, body.language);

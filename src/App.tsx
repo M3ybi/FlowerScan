@@ -5,12 +5,15 @@ import {
   Camera,
   Check,
   ChevronRight,
+  CircleHelp,
+  Crown,
   Droplets,
   FileDown,
   ImagePlus,
   Home,
   Mail,
   KeyRound,
+  Languages,
   Leaf,
   Pencil,
   Plus,
@@ -136,6 +139,7 @@ import {
 import { PLAN_LIMITS } from "./lib/householdPlanRules";
 import { canInviteHouseholdMember, usedHouseholdSlots as countUsedHouseholdSlots } from "./lib/householdMembershipRules";
 import { householdSubscriptionCopy } from "./lib/householdSubscriptionCopy";
+import { resolveHouseholdPermissions } from "./lib/householdPermissions";
 import {
   createCustomFlowerId,
   fetchGeneratedCare,
@@ -355,14 +359,6 @@ export const App = () => {
       ? "Premium: unlimited plants"
       : `${currentHouseholdPlanUsage.plantsRemaining ?? 0} / ${currentHouseholdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
     : "";
-  const accountSubscriptionLabel = subscription.status === "error"
-    ? t("pricing.statusUnavailable")
-    : subscription.status === "loading" ? t("account.subscriptionServer")
-    : currentHouseholdPlanUsage
-    ? currentHouseholdPlanUsage.isPremium
-      ? t("account.subscriptionPremium")
-      : t("account.subscriptionFree")
-    : t("account.subscriptionServer");
   const freeAiDiagnosisMonthlyLimit = PLAN_LIMITS.free.monthlyPlantUnwellAiAnalyzes ?? 10;
   const resolveCurrentAiDiagnosisAccess = () =>
     resolveAiDiagnosisAccess({
@@ -432,7 +428,10 @@ export const App = () => {
     supabaseReadState?.household.name ?? (!shouldUseSupabaseAccountData ? activeHousehold?.name : null) ?? t("household.defaultName");
   const currentUserEmail = auth.user?.email ?? t("account.noEmail");
   const currentHouseholdMember = householdMembers.find((member) => member.userId === auth.user?.id);
-  const isCurrentHouseholdOwner = currentHouseholdMember?.role === "owner";
+  const householdPermissions = resolveHouseholdPermissions(
+    currentHouseholdMember?.role ?? null,
+    currentHouseholdMember?.status ?? "active",
+  );
   const householdEntitlement = subscription.householdEntitlement;
   const usedHouseholdSlots = householdEntitlement ? countUsedHouseholdSlots(householdEntitlement) : 0;
   const canInviteToHousehold = subscription.status === "ready" && canInviteHouseholdMember(householdEntitlement);
@@ -441,7 +440,7 @@ export const App = () => {
     [activeSupabaseHouseholdId, householdMembers, householdInvites],
   );
   householdPeopleScopeRef.current = activeSupabaseHouseholdId ?? "";
-  const canRenameHousehold = auth.isAuthenticated && Boolean(activeSupabaseHouseholdId) && isCurrentHouseholdOwner;
+  const canRenameHousehold = auth.isAuthenticated && Boolean(activeSupabaseHouseholdId) && householdPermissions.canEditHousehold;
   const householdNameEditStatusClass = householdNameEditStatus
     ? `household-name-edit-status household-name-edit-status-${householdNameEditStatusTone}`
     : "";
@@ -1152,7 +1151,7 @@ export const App = () => {
       return;
     }
 
-    if (!activeSupabaseHouseholdId || !isCurrentHouseholdOwner) {
+    if (!activeSupabaseHouseholdId || !householdPermissions.canEditHousehold) {
       setHouseholdNameEditStatus(t("household.renamePermission"));
       setHouseholdNameEditStatusTone("error");
       return;
@@ -1620,9 +1619,9 @@ export const App = () => {
   const handleRemoveHouseholdPerson = async (item: HouseholdPersonItem) => {
     if (!activeSupabaseHouseholdId || removingPersonKeysRef.current.has(item.key)) return;
     const householdId = activeSupabaseHouseholdId;
-    const currentRole = currentHouseholdMember?.role;
-    if (item.status !== "pending" && (!item.userId || currentRole !== "owner" || item.role === "owner" || item.userId === auth.user?.id)) return;
-    if (item.status === "pending" && (!item.inviteId || currentRole !== "owner")) return;
+    if (!householdPermissions.canRemoveMembers) return;
+    if (item.status !== "pending" && (!item.userId || item.role === "owner" || item.userId === auth.user?.id)) return;
+    if (item.status === "pending" && !item.inviteId) return;
 
     removingPersonKeysRef.current.add(item.key);
     setRemovingPersonKeys(new Set(removingPersonKeysRef.current));
@@ -3555,18 +3554,19 @@ export const App = () => {
         <section className="menu-stack" aria-label="Plantie menu">
           <details className="menu-section" open={openMenuSection === "account"}>
             <summary>
-              <span>{t("menu.account")}</span>
+              <span className="menu-section-summary-icon" aria-hidden="true"><UserRound size={22} /></span>
+              <span className="menu-section-summary-copy"><strong>{t("menu.account")}</strong><small>{t("menu.accountDescription")}</small></span>
             </summary>
             {auth.isAuthenticated ? (
               <div className="menu-section-body">
                 <div className="account-summary-list">
                   <div>
-                    <span>{t("account.authProvider")}</span>
-                    <strong>{auth.user?.email ?? auth.user?.app_metadata?.provider ?? "Email"}</strong>
+                    <span>{t("account.emailAddress")}</span>
+                    <strong>{auth.user?.email ?? "—"}</strong>
                   </div>
                   <div>
-                    <span>{t("account.subscription")}</span>
-                    <strong>{accountSubscriptionLabel}</strong>
+                    <span>{t("account.authProvider")}</span>
+                    <strong>{String(auth.user?.app_metadata?.provider ?? "email").replace(/^./, (letter) => letter.toUpperCase())}</strong>
                   </div>
                 </div>
                 <div className="menu-action-row">
@@ -3579,10 +3579,8 @@ export const App = () => {
                   >
                     {t("account.signOut")}
                   </LoadingButton>
-                  <a className="danger-action" href="#/delete-account">
-                    {t("account.delete")}
-                  </a>
                 </div>
+                <div className="account-danger-zone"><a className="danger-action" href="#/delete-account"><Trash2 size={17} aria-hidden="true" />{t("account.delete")}</a></div>
                 {accountActionStatus ? <p className="report-status">{accountActionStatus}</p> : null}
               </div>
             ) : (
@@ -3597,8 +3595,8 @@ export const App = () => {
             if (event.currentTarget.open) void refreshHouseholdPeople();
           }}>
             <summary>
-              <span className="household-management-summary-icon" aria-hidden="true"><Home size={22} /></span>
-              <span className="household-management-summary-copy"><strong>{t("menu.household")}</strong><small>{t("household.managementSubtitle")}</small></span>
+              <span className="menu-section-summary-icon" aria-hidden="true"><Home size={22} /></span>
+              <span className="menu-section-summary-copy"><strong>{t("menu.household")}</strong><small>{t("household.managementSubtitle")}</small></span>
             </summary>
             <div className="menu-section-body">
               {activeHousehold || supabaseReadState ? <>
@@ -3720,7 +3718,8 @@ export const App = () => {
           </details>
           <details className="menu-section" onToggle={(event) => { if (event.currentTarget.open) void refreshSubscriptionState(); }}>
             <summary>
-              <span>{t("menu.subscription")}</span>
+              <span className="menu-section-summary-icon is-premium" aria-hidden="true"><Crown size={22} /></span>
+              <span className="menu-section-summary-copy"><strong>{t("menu.subscription")}</strong><small>{subscriptionCopy.subtitle}</small></span>
             </summary>
             <div className="menu-section-body">
               <PricingPage
@@ -3734,9 +3733,11 @@ export const App = () => {
 
           <details className="menu-section">
             <summary>
-              <span>{t("account.language")}</span>
+              <span className="menu-section-summary-icon" aria-hidden="true"><Languages size={22} /></span>
+              <span className="menu-section-summary-copy"><strong>{t("menu.settings")}</strong><small>{t("menu.settingsDescription")}</small></span>
             </summary>
             <div className="menu-section-body">
+              <h3>{t("account.language")}</h3>
               <div className="onboarding-language-grid compact-language-grid">
                 {supportedLanguages.map((language) => (
                   <button
@@ -3755,7 +3756,8 @@ export const App = () => {
 
           <details className="menu-section">
             <summary>
-              <span>{t("menu.supportLegal")}</span>
+              <span className="menu-section-summary-icon" aria-hidden="true"><CircleHelp size={22} /></span>
+              <span className="menu-section-summary-copy"><strong>{t("menu.supportLegal")}</strong><small>{t("menu.supportDescription")}</small></span>
             </summary>
             <div className="menu-section-body">
               <div className="menu-link-grid">

@@ -4,6 +4,10 @@ type Copy = {
   subtitle: string;
   currentPlan: string;
   householdPremium: string;
+  premiumBody: string;
+  ownerOnly: string;
+  planDetails: string;
+  collapseDetails: string;
   included: string;
   members: (used: number, max: number) => string;
   activeUntil: string;
@@ -33,6 +37,9 @@ const copy: Record<PlantieLanguage, Copy> = {
   en: {
     subtitle: "Manage your household plan, billing, and access.", currentPlan: "Current household plan",
     householdPremium: "Household Premium", included: "Included for all household members",
+    premiumBody: "All active household members can use Premium plant features and care tools.",
+    ownerOnly: "Only household owners can manage this subscription.",
+    planDetails: "View plan details", collapseDetails: "Hide plan details",
     members: (used, max) => `${used} of ${max} members`, activeUntil: "Active until", periodEnds: "Current period ends",
     cancelledNotice: "Premium stays active until the date above. Then your household switches to Free and Viewer access is suspended.",
     suspended: (count) => `${count} Viewer members are inactive until Premium is restored.`,
@@ -51,6 +58,9 @@ const copy: Record<PlantieLanguage, Copy> = {
   sk: {
     subtitle: "Spravujte plán, platby a prístup svojej domácnosti.", currentPlan: "Aktuálny plán domácnosti",
     householdPremium: "Premium pre domácnosť", included: "Pre všetkých členov domácnosti",
+    premiumBody: "Všetci aktívni členovia domácnosti môžu používať Premium funkcie pre rastliny a starostlivosť.",
+    ownerOnly: "Toto predplatné môžu spravovať iba vlastníci domácnosti.",
+    planDetails: "Zobraziť podrobnosti plánu", collapseDetails: "Skryť podrobnosti plánu",
     members: (used, max) => `${used} z ${max} členov`, activeUntil: "Aktívne do", periodEnds: "Aktuálne obdobie končí",
     cancelledNotice: "Premium zostane aktívne do uvedeného dátumu. Potom domácnosť prejde na bezplatný plán a prístup členov s rolou Divák sa pozastaví.",
     suspended: (count) => `${count} členovia s rolou Divák sú neaktívni, kým sa Premium neobnoví.`,
@@ -69,6 +79,9 @@ const copy: Record<PlantieLanguage, Copy> = {
   de: {
     subtitle: "Verwalte Tarif, Abrechnung und Zugriff deines Haushalts.", currentPlan: "Aktueller Haushaltstarif",
     householdPremium: "Haushalt Premium", included: "Für alle Haushaltsmitglieder enthalten",
+    premiumBody: "Alle aktiven Haushaltsmitglieder können Premium-Funktionen für Pflanzen und Pflege nutzen.",
+    ownerOnly: "Nur Haushaltsinhaber können dieses Abonnement verwalten.",
+    planDetails: "Tarifdetails anzeigen", collapseDetails: "Tarifdetails ausblenden",
     members: (used, max) => `${used} von ${max} Mitgliedern`, activeUntil: "Aktiv bis", periodEnds: "Aktueller Zeitraum endet",
     cancelledNotice: "Premium bleibt bis zum angegebenen Datum aktiv. Danach wechselt der Haushalt zu Free und der Zugriff der Betrachter wird ausgesetzt.",
     suspended: (count) => `${count} Betrachter sind inaktiv, bis Premium wiederhergestellt wird.`,
@@ -87,6 +100,9 @@ const copy: Record<PlantieLanguage, Copy> = {
   fr: {
     subtitle: "Gérez l'offre, la facturation et l'accès de votre foyer.", currentPlan: "Offre actuelle du foyer",
     householdPremium: "Premium familial", included: "Inclus pour tous les membres du foyer",
+    premiumBody: "Tous les membres actifs du foyer peuvent utiliser les fonctions Premium pour les plantes.",
+    ownerOnly: "Seuls les propriétaires du foyer peuvent gérer cet abonnement.",
+    planDetails: "Voir les détails de l’offre", collapseDetails: "Masquer les détails de l’offre",
     members: (used, max) => `${used} membres sur ${max}`, activeUntil: "Actif jusqu'au", periodEnds: "Fin de la période en cours",
     cancelledNotice: "Premium reste actif jusqu'à la date indiquée. Ensuite, le foyer passe à l'offre gratuite et l'accès des lecteurs est suspendu.",
     suspended: (count) => `${count} lecteurs sont inactifs jusqu'au rétablissement de Premium.`,
@@ -105,6 +121,9 @@ const copy: Record<PlantieLanguage, Copy> = {
   es: {
     subtitle: "Gestiona el plan, la facturación y el acceso de tu hogar.", currentPlan: "Plan actual del hogar",
     householdPremium: "Premium del hogar", included: "Incluido para todos los miembros del hogar",
+    premiumBody: "Todos los miembros activos del hogar pueden usar las funciones Premium para plantas.",
+    ownerOnly: "Solo los propietarios del hogar pueden gestionar esta suscripción.",
+    planDetails: "Ver detalles del plan", collapseDetails: "Ocultar detalles del plan",
     members: (used, max) => `${used} de ${max} miembros`, activeUntil: "Activo hasta", periodEnds: "Termina el período actual",
     cancelledNotice: "Premium sigue activo hasta la fecha indicada. Después, el hogar pasa a Gratis y se suspende el acceso de los lectores.",
     suspended: (count) => `${count} lectores están inactivos hasta que se restaure Premium.`,

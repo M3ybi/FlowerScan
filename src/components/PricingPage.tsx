@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
+import { ChevronDown, Crown, History, Leaf, Sprout } from "lucide-react";
 import { LoadingButton } from "./LoadingButton";
 import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
 import type { BillingProduct, BillingStatus } from "../lib/billingService";
@@ -10,6 +11,7 @@ import { listHouseholdSubscriptionHistory } from "../lib/householdSubscriptionHi
 import type { HouseholdSubscriptionEvent } from "../lib/householdSubscriptionHistory";
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { beginHouseholdPurchase } from "../lib/householdPlanService";
+import { resolveHouseholdPermissions } from "../lib/householdPermissions";
 import {
   canCancelSubscription,
   createCancellationHandoff,
@@ -78,6 +80,7 @@ export const PricingPage = ({
   const [cancelError, setCancelError] = useState("");
   const [history, setHistory] = useState<HouseholdSubscriptionEvent[]>([]);
   const [historyError, setHistoryError] = useState("");
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const actionInProgress = useRef(false);
   const pendingPlanRef = useRef<"monthly" | "yearly" | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -90,7 +93,7 @@ export const PricingPage = ({
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const presentation = getSubscriptionPresentation(subscription);
   const entitlement = subscription.householdEntitlement;
-  const isOwner = entitlement?.role === "owner";
+  const isOwner = resolveHouseholdPermissions(entitlement?.role ?? null).canManageSubscription;
   const isPremium = entitlement?.isPremium === true;
   const householdPeriod = entitlement?.planKey === "premium_monthly" ? "monthly"
     : entitlement?.planKey === "premium_yearly" ? "yearly" : null;
@@ -313,13 +316,15 @@ export const PricingPage = ({
       {subscription.status !== "loading" ? <>
       <section className={`pricing-subscription-summary status-${presentation.status}`} aria-label={t("pricing.currentSubscription")} role={hasSubscriptionError ? "alert" : "status"}>
         <div className="pricing-summary-heading">
-          <div>
+          <span className={`pricing-summary-icon ${isPremium ? "is-premium" : ""}`} aria-hidden="true">{isPremium ? <Crown size={26} /> : <Leaf size={26} />}</span>
+          <div className="pricing-summary-heading-copy">
             <span className="pricing-summary-eyebrow">{copy.currentPlan}</span>
             <h3>{isPremium ? copy.householdPremium : planName ?? statusName}</h3>
             {isPremium ? <span className="pricing-included-badge">{copy.included}</span> : null}
           </div>
           {planName ? <span className="pricing-status-badge">{statusName}</span> : null}
         </div>
+        {isPremium ? <p>{copy.premiumBody}</p> : null}
         {entitlement ? <div className="pricing-summary-detail"><span>{t("household.members")}</span><strong>{copy.members(entitlement.activeMemberCount || householdMemberCount, entitlement.maxMembers)}</strong></div> : null}
         {householdPeriod || presentation.period ? <div className="pricing-summary-detail"><span>{t("pricing.billingPeriod")}</span><strong>{householdPeriod === "monthly" || !householdPeriod && presentation.period === "monthly" ? t("pricing.periodMonthly") : t("pricing.periodYearly")}{householdPeriod ? ` · ${productsById.get(householdPeriod === "monthly" ? revenueCatProductIds.premiumMonthly : revenueCatProductIds.premiumYearly)?.price ?? ""}` : ""}</strong></div> : null}
         {presentation.previousPlan ? <div className="pricing-summary-detail"><span>{t("pricing.previousPlan")}</span><strong>{presentation.previousPlan === "monthly" ? t("pricing.monthlyPlan") : t("pricing.yearlyPlan")}</strong></div> : null}
@@ -330,6 +335,7 @@ export const PricingPage = ({
         {entitlement?.status === "cancelled" ? <p>{copy.cancelledNotice}</p> : null}
         {!isPremium && entitlement?.suspendedMemberCount ? <p>{copy.suspended(entitlement.suspendedMemberCount)}</p> : null}
         {presentation.status === "shared" ? <p>{t("pricing.householdAccessBody")}</p> : null}
+        {entitlement?.role === "viewer" ? <p className="pricing-action-note">{copy.ownerOnly}</p> : null}
         {hasSubscriptionError ? <p>{t("pricing.refreshFailed")}</p> : null}
         <div className="pricing-summary-actions">
           {isOwner && isOwnPaidSubscription(subscription) ? <a className="pricing-provider-action" href="#pricing-plans">{copy.changePlan}</a> : null}
@@ -349,13 +355,21 @@ export const PricingPage = ({
           const period = productId === revenueCatProductIds.premiumYearly ? "yearly" : "monthly";
           const isCurrentPlan = isPremiumPlan && isPremium && entitlement?.planKey === `premium_${period}`;
           const isChangingPlan = isOwnPaidSubscription(subscription) && !isCurrentPlan;
+          const isExpanded = expandedPlan === plan.name;
+          const detailsId = `pricing-plan-${productId ?? "free"}`;
           return (
-            <article className={`pricing-card ${isCurrentPlan ? "is-current" : ""}`} key={plan.name}>
-              <div>
-                <h3>{plan.name}</h3>
-                <strong>{product?.price ?? plan.price}</strong>
-                <p>{product?.description || plan.description}</p>
+            <article className={`pricing-card ${isCurrentPlan ? "is-current" : ""} ${isExpanded ? "is-expanded" : ""}`} key={plan.name}>
+              <div className="pricing-card-heading">
+                <span className={`pricing-plan-icon ${isPremiumPlan ? "is-premium" : ""}`} aria-hidden="true">{!isPremiumPlan ? <Leaf size={22} /> : period === "monthly" ? <Sprout size={22} /> : <Crown size={22} />}</span>
+                <div className="pricing-card-heading-copy">
+                  <h3>{plan.name}</h3>
+                  <strong>{product?.price ?? plan.price}</strong>
+                  <p>{product?.description || plan.description}</p>
+                </div>
+                {(isCurrentPlan || !isPremiumPlan && entitlement && !isPremium) ? <span className="pricing-plan-current-badge">{t("pricing.currentPlan")}</span> : null}
+                <button className="pricing-card-expand" type="button" aria-label={isExpanded ? copy.collapseDetails : copy.planDetails} aria-expanded={isExpanded} aria-controls={detailsId} onClick={() => setExpandedPlan(isExpanded ? null : plan.name)}><ChevronDown size={18} aria-hidden="true" /></button>
               </div>
+              <div className="pricing-plan-content" id={detailsId}>
               <ul>{plan.features.map((feature) => <li key={feature}>{feature}</li>)}<li>{isPremiumPlan ? copy.premiumMembers : copy.freeMembers}</li></ul>
               {isPremiumPlan ? (
                 isOwner && (canPurchasePlan || isChangingPlan) ? (
@@ -370,12 +384,13 @@ export const PricingPage = ({
                   </LoadingButton>
                 ) : isCurrentPlan ? <p className="pricing-current-status" role="status">{t("pricing.currentPlan")}</p> : null
               ) : entitlement && !isPremium ? <p className="pricing-current-status" role="status">{t("pricing.currentPlan")}</p> : null}
+              </div>
             </article>
           );
         })}
       </div>
       {isOwner ? <section className="pricing-history" aria-labelledby="pricing-history-title">
-        <div className="pricing-section-heading"><h3 id="pricing-history-title">{copy.history}</h3><p>{copy.historyBody}</p></div>
+        <div className="pricing-section-heading"><History size={20} aria-hidden="true" /><h3 id="pricing-history-title">{copy.history}</h3><p>{copy.historyBody}</p></div>
         {historyError ? <p role="alert">{historyError}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><time dateTime={entry.createdAt}>{formatSubscriptionDate(entry.createdAt, language)}</time><strong>{entry.eventType.replace(/_/g, " ")} · {entry.planKey.replace(/_/g, " ")}</strong></li>)}</ol> : <p>{copy.historyEmpty}</p>}
       </section> : null}
       {isCancelModalOpen ? (
