@@ -93,11 +93,22 @@ test("Free, Monthly, Yearly, cancelled, expired, and unknown states render a dis
 });
 
 test("household Premium is described once without claiming a personal billing period", () => {
-  const shared = renderSubscription({ ...activeSubscription("shared_premium", null), customerInfo: null });
+  const base = activeSubscription("shared_premium", null);
+  const shared = renderSubscription({ ...base, customerInfo: null,
+    householdEntitlement: { ...base.householdEntitlement!, role: "viewer" } });
   assert.match(shared, /Household Premium/);
   assert.match(shared, /no active personal subscription/);
   assert.equal((shared.match(/Included with household/g) ?? []).length, 1);
   assert.doesNotMatch(shared, /Renews on|Premium access until|Cancel subscription/);
+});
+
+test("verified Premium remains visible without personal billing details or billing actions", () => {
+  const snapshot = { ...activeSubscription("shared_premium", null), customerInfo: null };
+  const html = renderSubscription(snapshot);
+  assert.match(html, /Household Premium/);
+  assert.match(html, /Store billing details are unavailable/);
+  assert.match(html, /Retry/);
+  assert.doesNotMatch(html, /Cancel subscription|no active personal subscription/);
 });
 
 test("subscription presentation uses provider timestamps and the correct lifecycle labels", () => {

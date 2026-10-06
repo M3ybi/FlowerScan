@@ -99,6 +99,22 @@ export const createSubscriptionStateController = (deps: SubscriptionDependencies
             customerInfo: customerResult.value, householdEntitlement: entitlementResult.value, error: null });
         }
       }
+      // Household access is decided by the server, not by this member's billing
+      // SDK. Keep billing controls unavailable while its customer data is unknown.
+      if (customerResult.status === "rejected" && usageResult.status === "fulfilled" &&
+          entitlementResult.status === "fulfilled" && entitlementResult.value &&
+          entitlementResult.value.isPremium === usageResult.value.isPremium) {
+        return publish({
+          status: "ready",
+          view: usageResult.value.isPremium ? "shared_premium" : "free",
+          userId,
+          householdId,
+          householdPlanUsage: usageResult.value,
+          householdEntitlement: entitlementResult.value,
+          customerInfo: null,
+          error: null,
+        });
+      }
       return publish({
         status: "error",
         view: "error",

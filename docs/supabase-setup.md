@@ -253,6 +253,8 @@ The household subscription migration `20261005180000_household_subscription_memb
 
 `20261005200000_household_content_permissions_and_special_owner.sql` makes active Owner and Viewer memberships equal for plant, care, diagnosis, and image content while retaining Owner-only household and billing administration. The one exceptional household has a designated second Owner in `households.special_coowner_user_id`; the unique index prevents configuring a second such household. Both Owners remain active when that household becomes Free, and both count toward Premium's three-member capacity. `20261005203000_qualify_household_invite_capacity.sql` corrects an ambiguous capacity query in the invite RPC. Both migrations were applied to the linked project on 2026-10-05.
 
+`20261006100000_household_subscription_history_read_grant.sql` grants authenticated users SELECT on the two household subscription tables. Their existing RLS policies still restrict subscription rows to active members and history rows to Owners. The migration was applied to the linked project on 2026-10-06.
+
 Cancellation leaves Premium active through the paid period. At expiry, household access checks immediately reject Viewers, and the next entitlement read or provider event reconciles stored member status and pending invitations. The Owner can read billing history; Viewers can read the current household plan but cannot manage it.
 
 Manual SQL step:

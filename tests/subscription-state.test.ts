@@ -175,6 +175,33 @@ test("provider/server disagreement and lookup failures never display a false fre
   assert.equal(failed.householdPlanUsage?.isPremium, true);
 });
 
+test("a verified household plan remains usable when the personal billing SDK is unavailable", async () => {
+  const premium = createSubscriptionStateController({
+    getCustomerInfo: async () => { throw new Error("Provider unavailable"); },
+    getHouseholdPlanUsage: async () => usage(true),
+    getHouseholdEntitlement: async () => householdEntitlement(true),
+    onChange: () => undefined,
+  });
+  premium.bind("user-a", "household-a");
+  const premiumSnapshot = await premium.refresh();
+  assert.equal(premiumSnapshot.status, "ready");
+  assert.equal(premiumSnapshot.view, "shared_premium");
+  assert.equal(premiumSnapshot.householdEntitlement?.invitationsEnabled, true);
+  assert.equal(premiumSnapshot.customerInfo, null);
+
+  const free = createSubscriptionStateController({
+    getCustomerInfo: async () => { throw new Error("Provider unavailable"); },
+    getHouseholdPlanUsage: async () => usage(false),
+    getHouseholdEntitlement: async () => householdEntitlement(false),
+    onChange: () => undefined,
+  });
+  free.bind("user-b", "household-b");
+  const freeSnapshot = await free.refresh();
+  assert.equal(freeSnapshot.status, "ready");
+  assert.equal(freeSnapshot.view, "free");
+  assert.equal(freeSnapshot.householdEntitlement?.invitationsEnabled, false);
+});
+
 test("an old account response cannot overwrite a new account or survive logout", async () => {
   const first = deferred<BillingCustomerInfo>();
   let requestedUser = "user-a";

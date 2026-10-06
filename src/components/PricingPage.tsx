@@ -98,6 +98,7 @@ export const PricingPage = ({
   const householdPeriod = entitlement?.planKey === "premium_monthly" ? "monthly"
     : entitlement?.planKey === "premium_yearly" ? "yearly" : null;
   const hasSubscriptionError = presentation.status === "error";
+  const billingDetailsUnavailable = subscription.status === "ready" && isOwner && !subscription.customerInfo;
   const canPurchasePlan = isOwner && !subscription.customerInfo?.hasRevenueCatPremium &&
     (presentation.status === "free" || presentation.status === "expired");
   const billingDisabled = !billingStatus.configured;
@@ -298,7 +299,7 @@ export const PricingPage = ({
     try {
       const refreshed = await onSubscriptionChanged();
       if (refreshed.status === "error") throw new Error(t("pricing.refreshFailed"));
-      setBillingMessage(t("pricing.refreshComplete"));
+      setBillingMessage(refreshed.customerInfo ? t("pricing.refreshComplete") : copy.billingDetailsUnavailable);
     } catch {
       setBillingMessage(t("pricing.refreshFailed"));
     } finally {
@@ -334,7 +335,8 @@ export const PricingPage = ({
         {presentation.status === "expired" ? <p>{t("pricing.expiredNotice")}</p> : null}
         {entitlement?.status === "cancelled" ? <p>{copy.cancelledNotice}</p> : null}
         {!isPremium && entitlement?.suspendedMemberCount ? <p>{copy.suspended(entitlement.suspendedMemberCount)}</p> : null}
-        {presentation.status === "shared" ? <p>{t("pricing.householdAccessBody")}</p> : null}
+        {presentation.status === "shared" && !billingDetailsUnavailable ? <p>{t("pricing.householdAccessBody")}</p> : null}
+        {billingDetailsUnavailable ? <p>{copy.billingDetailsUnavailable}</p> : null}
         {entitlement?.role === "viewer" ? <p className="pricing-action-note">{copy.ownerOnly}</p> : null}
         {hasSubscriptionError ? <p>{t("pricing.refreshFailed")}</p> : null}
         <div className="pricing-summary-actions">
@@ -343,7 +345,7 @@ export const PricingPage = ({
             ? <a className="pricing-provider-action" href={managementUrl} rel="noopener noreferrer" target="_blank" aria-disabled={isBusy} onClick={(event) => { if (isBusy) event.preventDefault(); else setBillingMessage(t("pricing.manageHint")); }}>{presentation.status === "cancelled" ? copy.resumeSubscription : t("pricing.manage")}</a>
             : null}
           {isOwner && canCancelSubscription(subscription) ? <button ref={cancelButtonRef} className="pricing-cancel-action" type="button" disabled={isBusy} onClick={() => { if (cancellationHandoff.openDialog(subscription)) { setCancelError(""); setIsCancelModalOpen(true); } }}>{t("pricing.cancelSubscription")}</button> : null}
-          {hasSubscriptionError ? <LoadingButton className="pricing-secondary-action" type="button" disabled={isBusy || !subscription.userId} isLoading={isRefreshing} onClick={() => void retrySubscription()}>{t("pricing.retry")}</LoadingButton> : null}
+          {hasSubscriptionError || billingDetailsUnavailable ? <LoadingButton className="pricing-secondary-action" type="button" disabled={isBusy || !subscription.userId} isLoading={isRefreshing} onClick={() => void retrySubscription()}>{t("pricing.retry")}</LoadingButton> : null}
         </div>
       </section>
       <div className="pricing-section-heading"><h3>{copy.availablePlans}</h3><p>{copy.plansApply}</p></div>

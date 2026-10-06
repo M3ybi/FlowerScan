@@ -55,6 +55,8 @@ To test on web, sign in with a Free test household, open Subscription, choose mo
 
 For future live web payments, create a RevenueCat Web Billing configuration with a supported provider, products attached to the same `premium` entitlement and current offering, and set `VITE_REVENUECAT_API_KEY_WEB=rcb_...` in the Netlify **Production** environment. Keep product IDs aligned with `src/lib/revenueCatProducts.ts` and the webhook before enabling the key. RevenueCat's Web SDK requires this separate web configuration ([Web SDK setup](https://www.revenuecat.com/docs/web/web-billing/web-sdk)). Do not put private payment-provider or RevenueCat secret keys in `VITE_` variables.
 
+The server-confirmed household plan remains usable when the personal RevenueCat SDK cannot load customer details. In that case, the UI shows the verified household plan and member capacity, while purchaser-only billing controls stay unavailable until the SDK succeeds. Missing web products still require the Web Billing public key and matching products in the current offering; the household entitlement alone cannot supply store prices or checkout.
+
 ## Google Play rollout
 
 1. In Google Play Console, create the app with package `com.plantie.app` and upload a signed Android App Bundle to an internal testing track. Play requires an uploaded app before subscription products can be configured. Increment `versionCode` before each new Play upload. See [Android internal testing](android-internal-testing.md) for signing and build commands.
