@@ -1,86 +1,21 @@
-# Supabase household invites
+# Household invitations
 
-Plantie uses Supabase-native invite tokens for new authenticated household sharing. Legacy household links are still supported only as an explicit migration or fallback path and are not silently converted.
+Premium households have three occupied slots. Active members and actionable pending invitations each occupy one slot. Free households have one slot and cannot invite. Only Owners can create, resend, copy or revoke invitations; new members join as Viewers. `reconcile_household_access` revokes pending invitations when Premium ends. Accepting a valid invite creates the Viewer membership and marks the invite used in one database transaction.
 
-## Architecture
+The browser calls `create_household_invite` once per recipient, then passes only the invitation ID to `send-household-invite-email`. The Edge Function loads the active invitation through `get_household_invite_delivery`, which checks the signed-in Owner and Premium status. The database stores the token hash for validation and the new token encrypted in Supabase Vault so either Owner can resend the same link. The Edge Function constructs the URL and sends through Resend. It never trusts the recipient, household name, URL or token from the browser.
 
-Migration:
-
-```text
-supabase/migrations/20260603103000_household_invite_rpcs.sql
-```
-
-RPCs:
+Set these **Supabase Edge Function secrets** before deploying:
 
 ```text
-create_household_invite(household_id, role, expires_at)
-join_household_by_invite(token)
-revoke_household_invite(invite_id)
-list_household_invites(household_id)
+RESEND_API_KEY=<server-side Resend API key>
+RESEND_FROM_EMAIL=Plantie <invites@your-verified-domain.example>
+APP_PUBLIC_URL=https://your-production-site.example
 ```
 
-Frontend repository calls live in `src/lib/plantieRepository.ts`:
+The sender domain must be verified in Resend and permitted to send to arbitrary recipients. `onboarding@resend.dev` is intentionally rejected by the function because it is limited to test recipients. `APP_PUBLIC_URL` is the controlled site origin or base path; production requires HTTPS. Local development may use `http://localhost:5173`. The invite route is `#/join?invite=<token>`. Never put the provider key in `VITE_*` or browser code.
 
-```text
-createHouseholdInvite(householdId, role, expiresAt)
-listHouseholdInvites(householdId)
-revokeHouseholdInvite(inviteId)
-joinHouseholdByInvite(token)
-```
+The function returns `{ invitationCreated: true, emailSent: true }` when Resend accepts the message, or `{ invitationCreated: true, emailSent: false, errorCode }` for a provider/configuration failure. A failed email leaves the pending invite and occupied slot intact. Owners can retry and copy from the pending row even when capacity is full; retry does not create another invite. Backend logs include invitation ID, household ID, provider status/category, recipient domain and timestamp, never a token or API key.
 
-Menu has the Household / Family UI for creating email-style family invites, copying the one-time invite link, listing pending invites, and revoking active invites.
+Invites created **before** `20261006113000_recoverable_household_invites.sql` have only a token hash. Their raw token cannot be recovered mathematically. If the original link is unavailable, the Owner must revoke that old pending invite and create a new one. Revocation frees its slot and invalidates the old link.
 
-## Security model
-
-- Raw invite tokens are generated with 32 random bytes.
-- The database stores only `token_hash`, using SHA-256.
-- The raw token is returned only by `create_household_invite` and only once.
-- `list_household_invites` never returns raw tokens or token hashes.
-- Owners can create owner, editor, and viewer invites.
-- Editors can create editor and viewer invites.
-- Viewers cannot create or revoke invites.
-- Invites are one-time for new members.
-- If the authenticated user is already a member, joining with a still-valid invite is idempotent.
-- Expired, revoked, invalid, or already-used invites fail closed for non-members.
-- All RPCs require `auth.uid()` and run against Supabase Auth/RLS context. No service role key is used by the frontend.
-
-## Join URL
-
-Use this format:
-
-```text
-#/join?invite=<raw-token>
-```
-
-Full app URLs are also accepted, for example:
-
-```text
-https://example.com/#/join?invite=<raw-token>
-```
-
-If the user is signed out, Plantie stores the pending invite token locally and sends the user through authentication. After successful sign-in, the invite screen lets the user accept or decline the invite.
-
-Manual household joining is not exposed in the production menu. Users join through valid invite links only.
-
-## Manual Supabase SQL step
-
-Apply the migration before enabling Supabase invite sharing in production:
-
-```bash
-supabase db push
-```
-
-Or run the SQL from:
-
-```text
-supabase/migrations/20260603103000_household_invite_rpcs.sql
-```
-
-Verify that `household_invites.revoked_at` exists and the four RPCs are executable by `authenticated`.
-
-## Migration notes
-
-- Existing legacy household links remain available only through the legacy compatibility path.
-- New mobile users should use Supabase invite links instead of legacy household public tokens.
-- Do not copy raw invite tokens into logs, support tickets, analytics, or database rows.
-- Revoking an invite sets `revoked_at`; it does not delete historical invite metadata.
+Deploy the migration before the Edge Function and web build. For troubleshooting, inspect Supabase Edge Function logs for `send-household-invite-email` and Resend → Emails/Logs. HTTP 502 from the older function only indicated that Resend rejected a request; it did not include the provider reason in logs. Confirm the actual sender/domain and recipient restriction in Resend before treating delivery as fixed.

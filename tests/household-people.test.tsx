@@ -36,6 +36,26 @@ test("one to four people fit on one page; larger lists show exactly four and cla
   assert.match(renderList(five), /Next page/);
 });
 
+test("pending invitation actions remain available at full capacity only to Owners", () => {
+  const items = buildHouseholdPeople("home", [
+    member("owner", "owner@example.com", "owner"),
+    member("second", "second@example.com", "owner"),
+  ], [invite("pending", "guest@example.com")]);
+  const props = {
+    items, loading: false, error: "", currentUserId: "owner", removingKeys: new Set<string>(),
+    language: "en" as const, t: createTranslator("en"), canInvite: false,
+    capacityLabel: "3 / 3", onRemove: () => undefined, onRetry: () => undefined,
+    onRetryInvite: () => undefined, onCopyInvite: () => undefined,
+  };
+  const ownerHtml = renderToStaticMarkup(createElement(HouseholdPeopleList, { ...props, currentRole: "owner" }));
+  assert.match(ownerHtml, /3 \/ 3/);
+  assert.match(ownerHtml, /Retry email/);
+  assert.match(ownerHtml, /Copy invite/);
+  assert.doesNotMatch(ownerHtml, /Invite member/);
+  const viewerHtml = renderToStaticMarkup(createElement(HouseholdPeopleList, { ...props, currentRole: "viewer" }));
+  assert.doesNotMatch(viewerHtml, /Retry email|Copy invite/);
+});
+
 test("current members override all invitation variants for the same normalized email", () => {
   const items = buildHouseholdPeople("home", [member("owner", " Test@Email.com ", "owner")], [
     invite("pending", "test@email.com"),

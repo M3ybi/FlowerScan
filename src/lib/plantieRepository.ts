@@ -862,6 +862,15 @@ export const listHouseholdInvites = async (householdId: string) => {
   return ((data ?? []) as DbHouseholdInvite[]).map(mapHouseholdInvite);
 };
 
+export const getHouseholdInviteToken = async (inviteId: string) => {
+  const { data, error } = await getClient()
+    .rpc("get_household_invite_delivery", { target_invite_id: inviteId })
+    .single<{ token: string }>();
+  if (error) throw error;
+  if (!data?.token) throw new Error("Invite link cannot be recovered; revoke and invite again.");
+  return data.token;
+};
+
 export const listHouseholdMembers = async (householdId: string) => {
   const { data, error } = await getClient()
     .rpc("list_household_members", { target_household_id: householdId })
@@ -918,32 +927,22 @@ export const joinHouseholdByInvite = async (token: string) => {
   return mapHousehold(data);
 };
 
-export const sendHouseholdInviteEmail = async ({
-  householdId,
-  householdName,
-  inviteUrl,
-  recipientEmail,
-  role,
-}: {
-  householdId: string;
-  householdName: string;
-  inviteUrl: string;
-  recipientEmail: string;
-  role: HouseholdRole;
-}) => {
-  const { error } = await getClient().functions.invoke("send-household-invite-email", {
-    body: {
-      householdId,
-      householdName,
-      inviteUrl,
-      recipientEmail: normalizeInviteEmail(recipientEmail),
-      role,
-    },
-  });
+export type HouseholdInviteEmailResult = {
+  invitationCreated: boolean;
+  emailSent: boolean;
+  errorCode?: string;
+  providerMessageId?: string | null;
+};
 
-  if (error) {
-    throw error;
+export const sendHouseholdInviteEmail = async (inviteId: string): Promise<HouseholdInviteEmailResult> => {
+  const { data, error } = await getClient().functions.invoke<HouseholdInviteEmailResult>("send-household-invite-email", {
+    body: { inviteId },
+  });
+  if (error) throw error;
+  if (!data || typeof data.emailSent !== "boolean" || data.invitationCreated !== true) {
+    throw new Error("Invite email service returned an invalid response.");
   }
+  return data;
 };
 
 export const createHouseholdPlant = async (input: CreateHouseholdPlantInput) => {

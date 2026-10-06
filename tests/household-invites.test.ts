@@ -163,7 +163,7 @@ test("frontend repository exposes authenticated invite and viewer removal operat
   assert.match(repository, /export const removeHouseholdViewer/);
   assert.match(repository, /\.rpc\("remove_household_viewer"/);
   assert.match(repository, /export const sendHouseholdInviteEmail/);
-  assert.match(repository, /functions\.invoke\("send-household-invite-email"/);
+  assert.match(repository, /functions\.invoke<HouseholdInviteEmailResult>\("send-household-invite-email"/);
 });
 
 test("frontend invite flow creates invites without expiration UI state or payload", () => {

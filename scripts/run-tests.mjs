@@ -21,6 +21,7 @@ const testScripts = [
   "test:i18n",
   "test:backend-migration",
   "test:household-invites",
+  "test:household-invite-email",
   "test:household-people",
   "test:household-membership",
   "test:household-permissions",

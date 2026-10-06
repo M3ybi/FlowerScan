@@ -124,7 +124,6 @@ test("transient UI feedback is cleared on route, auth, and household changes", (
     "setAccessStatus",
     "setAccountActionStatus",
     "setCarePreviewStatus",
-    "setCreatedInviteLink",
     "setDeleteAccountStatus",
     "setDiagnosisStatus",
     "setHouseholdNameEditStatus",
@@ -136,6 +135,7 @@ test("transient UI feedback is cleared on route, auth, and household changes", (
   ]) {
     assert.match(appSource, new RegExp(`${setter}\\(""\\)`));
   }
+  assert.match(appSource, /setSendingInviteId\(null\)/);
 
   assert.match(appSource, /const routeLifecycleKey =[\s\S]*route\.page === "menu"[\s\S]*route\.section/);
   assert.match(appSource, /useEffect\(\(\) => \{\s*clearTransientMessages\(\);\s*\}, \[routeLifecycleKey\]\)/);

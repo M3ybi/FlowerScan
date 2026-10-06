@@ -248,6 +248,12 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
     "household.inviteStatusCreating": "Creating invite in Supabase...",
     "household.inviteStatusDuplicate": "An invite for this email already exists. Check pending invites or revoke the old invite.",
     "household.inviteStatusEmailFailed": "Invite link was created, but the email could not be sent to {email}. Copy the link below and send it manually.",
+    "household.retryInviteEmail": "Retry email",
+    "household.inviteEmailRetryFailed": "The invitation is still pending, but email delivery failed. Retry or copy its link.",
+    "household.inviteEmailConfigError": "Invitation email is not configured. The invitation remains pending; copy its link or contact support.",
+    "household.inviteEmailSenderError": "The email sender is not verified. The invitation remains pending; copy its link or ask support to verify the sending domain.",
+    "household.inviteEmailRateLimited": "Email sending is temporarily limited. The invitation remains pending; try again shortly.",
+    "household.inviteLinkUnavailable": "This older invite link cannot be recovered. Revoke the pending invitation, then invite this person again.",
     "household.inviteStatusGeneric": "The invite could not be created. Check the email and your household permission.",
     "household.invitePremiumRequired": "Household sharing requires Premium. Refresh your plan and try again.",
     "household.inviteLimitReached": "This household has reached its three-member limit.",
@@ -539,6 +545,12 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
     "sync.removeUnavailable": "Supabase plant is not available. Removal was not saved."
   },
   "sk": {
+    "household.retryInviteEmail": "Znova odoslať e-mail",
+    "household.inviteEmailRetryFailed": "Pozvánka zostáva čakajúca, ale e-mail sa nepodarilo doručiť. Skús to znova alebo skopíruj odkaz.",
+    "household.inviteEmailConfigError": "Odosielanie pozvánok nie je nastavené. Pozvánka zostáva čakajúca; skopíruj odkaz alebo kontaktuj podporu.",
+    "household.inviteEmailSenderError": "Odosielateľ e-mailu nie je overený. Pozvánka zostáva čakajúca; skopíruj odkaz alebo požiadaj o overenie domény.",
+    "household.inviteEmailRateLimited": "Odosielanie e-mailov je dočasne obmedzené. Pozvánka zostáva čakajúca; skús to neskôr.",
+    "household.inviteLinkUnavailable": "Odkaz staršej pozvánky sa nedá obnoviť. Zruš ju a vytvor novú pozvánku.",
     "account.authProvider": "Sp\u00f4sob prihl\u00e1senia",
     "account.emailAddress": "E-mailová adresa",
     "account.delete": "Odstr\u00e1nenie \u00fa\u010dtu",
@@ -1072,6 +1084,12 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
     "sync.removeUnavailable": "Supabase rastlina nie je dostupn\u00e1. Odstr\u00e1nenie nebolo ulo\u017een\u00e9."
   },
   "de": {
+      "household.retryInviteEmail": "E-Mail erneut senden",
+      "household.inviteEmailRetryFailed": "Die Einladung bleibt ausstehend, aber die E-Mail konnte nicht zugestellt werden. Versuchen Sie es erneut oder kopieren Sie den Link.",
+      "household.inviteEmailConfigError": "Der E-Mail-Versand ist nicht konfiguriert. Die Einladung bleibt ausstehend; kopieren Sie den Link oder kontaktieren Sie den Support.",
+      "household.inviteEmailSenderError": "Der Absender ist nicht verifiziert. Die Einladung bleibt ausstehend; kopieren Sie den Link oder lassen Sie die Domain verifizieren.",
+      "household.inviteEmailRateLimited": "Der E-Mail-Versand ist vorübergehend begrenzt. Die Einladung bleibt ausstehend; versuchen Sie es später erneut.",
+      "household.inviteLinkUnavailable": "Der Link dieser älteren Einladung kann nicht wiederhergestellt werden. Widerrufen Sie sie und laden Sie die Person erneut ein.",
       "account.authProvider": "Authentifizierungsanbieter",
       "account.emailAddress": "E-Mail-Adresse",
       "account.delete": "Konto löschen",
@@ -1605,6 +1623,12 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
       "sync.removeUnavailable": "Supabase-Anlage ist nicht verfügbar. Die Entfernung wurde nicht gespeichert."
   },
   "fr": {
+      "household.retryInviteEmail": "Renvoyer l’e-mail",
+      "household.inviteEmailRetryFailed": "L’invitation reste en attente, mais l’e-mail n’a pas pu être envoyé. Réessayez ou copiez le lien.",
+      "household.inviteEmailConfigError": "L’envoi d’e-mails n’est pas configuré. L’invitation reste en attente ; copiez le lien ou contactez l’assistance.",
+      "household.inviteEmailSenderError": "L’expéditeur n’est pas vérifié. L’invitation reste en attente ; copiez le lien ou faites vérifier le domaine.",
+      "household.inviteEmailRateLimited": "L’envoi d’e-mails est temporairement limité. L’invitation reste en attente ; réessayez plus tard.",
+      "household.inviteLinkUnavailable": "Le lien de cette ancienne invitation ne peut pas être récupéré. Révoquez-la puis invitez de nouveau cette personne.",
       "account.authProvider": "Fournisseur d'authentification",
       "account.emailAddress": "Adresse e-mail",
       "account.delete": "Supprimer le compte",
@@ -2138,6 +2162,12 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
       "sync.removeUnavailable": "L'installation Supabase n'est pas disponible. La suppression n'a pas été enregistrée."
   },
   "es": {
+      "household.retryInviteEmail": "Reenviar correo",
+      "household.inviteEmailRetryFailed": "La invitación sigue pendiente, pero no se pudo enviar el correo. Vuelve a intentarlo o copia el enlace.",
+      "household.inviteEmailConfigError": "El envío de correos no está configurado. La invitación sigue pendiente; copia el enlace o contacta con soporte.",
+      "household.inviteEmailSenderError": "El remitente no está verificado. La invitación sigue pendiente; copia el enlace o solicita verificar el dominio.",
+      "household.inviteEmailRateLimited": "El envío de correos está limitado temporalmente. La invitación sigue pendiente; inténtalo más tarde.",
+      "household.inviteLinkUnavailable": "No se puede recuperar el enlace de esta invitación anterior. Revócala y vuelve a invitar a esta persona.",
       "account.authProvider": "Proveedor de autenticación",
       "account.emailAddress": "Correo electrónico",
       "account.delete": "Eliminar cuenta",

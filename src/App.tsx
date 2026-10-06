@@ -114,6 +114,7 @@ import {
 import {
   createHousehold,
   createHouseholdInvite,
+  getHouseholdInviteToken,
   getHouseholdPlantById,
   getHouseholdPlantByLegacyId,
   getPlantImageSignedUrl,
@@ -266,8 +267,7 @@ export const App = () => {
   const [inviteStatus, setInviteStatus] = useState("");
   const [inviteStatusTone, setInviteStatusTone] = useState<"error" | "info" | "success">("info");
   const inviteStatusClass = inviteStatus ? `report-status invite-status invite-status-${inviteStatusTone}` : "";
-  const [createdInviteLink, setCreatedInviteLink] = useState("");
-  const [createdInviteId, setCreatedInviteId] = useState("");
+  const [sendingInviteId, setSendingInviteId] = useState<string | null>(null);
   const [householdInvites, setHouseholdInvites] = useState<HouseholdInvite[]>([]);
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [householdPeopleLoading, setHouseholdPeopleLoading] = useState(false);
@@ -473,8 +473,7 @@ export const App = () => {
     setAccessStatus("");
     setAccountActionStatus("");
     setCarePreviewStatus("");
-    setCreatedInviteLink("");
-    setCreatedInviteId("");
+    setSendingInviteId(null);
     setDeleteAccountStatus("");
     setDiagnosticHistoryStatus("");
     setDiagnosisStatus("");
@@ -712,13 +711,6 @@ export const App = () => {
       window.clearInterval(interval);
     };
   }, [auth.isAuthenticated, activeSupabaseHouseholdId, route.page]);
-
-  useEffect(() => {
-    if (createdInviteId && !householdInvites.some((invite) => invite.id === createdInviteId && isActiveInvite(invite))) {
-      setCreatedInviteLink("");
-      setCreatedInviteId("");
-    }
-  }, [createdInviteId, householdInvites]);
 
   useEffect(() => {
     if (route.page !== "health") {
@@ -1518,6 +1510,14 @@ export const App = () => {
     setInviteStatus(message);
   };
 
+  const inviteDeliveryErrorKey = (code?: string) => {
+    if (code === "INVITE_LINK_UNAVAILABLE") return "household.inviteLinkUnavailable";
+    if (code === "EMAIL_CONFIGURATION_ERROR" || code === "EMAIL_AUTH_ERROR") return "household.inviteEmailConfigError";
+    if (code === "EMAIL_SENDER_NOT_VERIFIED") return "household.inviteEmailSenderError";
+    if (code === "EMAIL_RATE_LIMITED") return "household.inviteEmailRateLimited";
+    return "household.inviteEmailRetryFailed";
+  };
+
   const handleCreateInvite = async () => {
     if (isCreatingInvite) {
       return;
@@ -1560,29 +1560,23 @@ export const App = () => {
       setIsCreatingInvite(true);
       setInviteStatus("");
       const invite = await createHouseholdInvite(activeSupabaseHouseholdId, normalizedEmail);
-      const link = createInviteUrl(invite.token);
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setCreatedInviteLink(link);
-        setCreatedInviteId(invite.id);
         setInviteEmail("");
+        setIsInvitePanelOpen(false);
         setHouseholdInvites((current) => [invite, ...current]);
         await refreshHouseholdPeople();
         void refreshSubscriptionState();
       }
       try {
-        await sendHouseholdInviteEmail({
-          householdId: activeSupabaseHouseholdId,
-          householdName: householdDisplayName,
-          inviteUrl: link,
-          recipientEmail: normalizedEmail,
-          role: "viewer",
-        });
+        const delivery = await sendHouseholdInviteEmail(invite.id);
         if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-          setInviteFeedback(t("household.invitationSent", { email: normalizedEmail }), "success");
+          setInviteFeedback(delivery.emailSent
+            ? t("household.invitationSent", { email: normalizedEmail })
+            : t(inviteDeliveryErrorKey(delivery.errorCode)), delivery.emailSent ? "success" : "error");
         }
       } catch {
         if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-          setInviteFeedback(t("household.inviteStatusEmailFailed", { email: normalizedEmail }), "error");
+          setInviteFeedback(t("household.inviteEmailRetryFailed"), "error");
         }
       }
     } catch (error) {
@@ -1597,22 +1591,41 @@ export const App = () => {
     }
   };
 
-  const handleCopyInviteLink = async () => {
-    if (!createdInviteLink) {
-      return;
-    }
-
+  const handleCopyInviteLink = async (item: HouseholdPersonItem) => {
+    if (!item.inviteId || item.status !== "pending" || !householdPermissions.canRemoveMembers) return;
     const feedbackGeneration = transientMessageGenerationRef.current;
-
     try {
-      await navigator.clipboard.writeText(createdInviteLink);
+      const token = await getHouseholdInviteToken(item.inviteId);
+      const link = createInviteUrl(token);
+      await navigator.clipboard.writeText(link);
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
         setInviteFeedback(t("household.inviteCopied"), "success");
       }
+    } catch (error) {
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        const oldInvite = error instanceof Error && error.message.includes("Invite link cannot be recovered");
+        setInviteFeedback(t(oldInvite ? "household.inviteLinkUnavailable" : "household.inviteEmailRetryFailed"), "error");
+      }
+    }
+  };
+
+  const handleRetryInviteEmail = async (item: HouseholdPersonItem) => {
+    if (!item.inviteId || item.status !== "pending" || !householdPermissions.canRemoveMembers || sendingInviteId) return;
+    const feedbackGeneration = transientMessageGenerationRef.current;
+    setSendingInviteId(item.inviteId);
+    try {
+      const delivery = await sendHouseholdInviteEmail(item.inviteId);
+      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
+        setInviteFeedback(delivery.emailSent
+          ? t("household.invitationSent", { email: item.email })
+          : t(inviteDeliveryErrorKey(delivery.errorCode)), delivery.emailSent ? "success" : "error");
+      }
     } catch {
       if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteFeedback(createdInviteLink, "info");
+        setInviteFeedback(t("household.inviteEmailRetryFailed"), "error");
       }
+    } finally {
+      setSendingInviteId(null);
     }
   };
 
@@ -3630,6 +3643,9 @@ export const App = () => {
                     onInvite={() => setIsInvitePanelOpen((open) => !open)}
                     onRemove={(item) => void handleRemoveHouseholdPerson(item)}
                     onRetry={() => void refreshHouseholdPeople(true)}
+                    onRetryInvite={(item) => void handleRetryInviteEmail(item)}
+                    onCopyInvite={(item) => void handleCopyInviteLink(item)}
+                    sendingInviteId={sendingInviteId}
                   />
                   {subscription.status === "ready" && !householdEntitlement?.isPremium ? <p className="household-sharing-note">{subscriptionCopy.sharingRequiresPremium}{householdEntitlement?.suspendedMemberCount ? ` ${subscriptionCopy.suspended(householdEntitlement.suspendedMemberCount)}` : ""}</p> : null}
                   {subscription.status === "ready" && householdEntitlement?.isPremium && usedHouseholdSlots >= householdEntitlement.maxMembers ? <p className="household-sharing-note">{subscriptionCopy.memberLimitReached}</p> : null}
@@ -3659,14 +3675,6 @@ export const App = () => {
                       {t("household.sendInvitation")}
                     </LoadingButton>
                   </form>
-                  {createdInviteLink ? (
-                    <div className="household-invite-link">
-                      <span title={createdInviteLink}>{createdInviteLink}</span>
-                      <button className="neutral-action" type="button" onClick={() => void handleCopyInviteLink()}>
-                        {t("household.copyInvite")}
-                      </button>
-                    </div>
-                  ) : null}
                   </section> : null}
                 </>
               ) : auth.isAuthenticated && isSupabaseBackend ? (

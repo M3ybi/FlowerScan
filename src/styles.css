@@ -5309,6 +5309,26 @@ textarea:focus-visible {
   font-size: 0.73rem;
 }
 
+.menu-invite-identity .menu-invite-delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.menu-invite-delivery-actions button {
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--brand);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.menu-invite-delivery-actions button:disabled { opacity: 0.55; }
+
 .menu-invite-avatar {
   display: grid;
   width: 40px;

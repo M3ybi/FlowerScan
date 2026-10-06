@@ -24,9 +24,12 @@ type Props = {
   onInvite?: () => void;
   onRemove: (item: HouseholdPersonItem) => void;
   onRetry: () => void;
+  onRetryInvite?: (item: HouseholdPersonItem) => void;
+  onCopyInvite?: (item: HouseholdPersonItem) => void;
+  sendingInviteId?: string | null;
 };
 
-export const HouseholdPeopleList = ({ items, loading, error, currentUserId, currentRole, removingKeys, language, t, canInvite, capacityLabel, inviteOpen, onInvite, onRemove, onRetry }: Props) => {
+export const HouseholdPeopleList = ({ items, loading, error, currentUserId, currentRole, removingKeys, language, t, canInvite, capacityLabel, inviteOpen, onInvite, onRemove, onRetry, onRetryInvite, onCopyInvite, sendingInviteId }: Props) => {
   const [requestedPage, setRequestedPage] = useState(0);
   const { items: pageItems, page, totalPages } = paginateHouseholdPeople(items, requestedPage);
 
@@ -69,6 +72,10 @@ export const HouseholdPeopleList = ({ items, loading, error, currentUserId, curr
             <div className="menu-invite-identity">
               <strong title={item.email}>{item.email}</strong>
               {isYou ? <span>{t("household.peopleYou")}</span> : null}
+              {item.status === "pending" && currentRole === "owner" && item.inviteId ? <span className="menu-invite-delivery-actions">
+                {onRetryInvite ? <button type="button" disabled={sendingInviteId === item.inviteId || removing} onClick={() => onRetryInvite(item)}>{sendingInviteId === item.inviteId ? t("household.inviteSending") : t("household.retryInviteEmail")}</button> : null}
+                {onCopyInvite ? <button type="button" disabled={removing} onClick={() => onCopyInvite(item)}>{t("household.copyInvite")}</button> : null}
+              </span> : null}
             </div>
             <span className={`menu-invite-status status-${item.status}`}>{item.status === "suspended_plan_limit" ? householdSubscriptionCopy(language).inactive : t(item.status === "active" ? "household.peopleActive" : "household.peoplePending")}</span>
             <span className={`menu-invite-role role-${item.role}`}><RoleIcon size={14} aria-hidden="true" />{roleLabel}</span>
