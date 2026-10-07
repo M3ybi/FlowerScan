@@ -48,6 +48,7 @@ import {
 import type { CarePreview } from "./app/carePresentation";
 import {
   createInviteUrl,
+  createSingleFlightInviteJoin,
   inviteErrorMessage,
   isActiveInvite,
   isLikelyInviteToken,
@@ -278,6 +279,7 @@ export const App = () => {
   const householdPeopleScopeRef = useRef("");
   const [joinInviteInput, setJoinInviteInput] = useState("");
   const [isJoiningInvite, setIsJoiningInvite] = useState(false);
+  const joinInviteOnceRef = useRef(createSingleFlightInviteJoin());
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const signingOutRef = useRef(false);
@@ -1700,7 +1702,7 @@ export const App = () => {
     }
   };
 
-  const handleJoinInvite = async (input = joinInviteInput) => {
+  const performJoinInvite = async (input: string) => {
     if (isJoiningInvite) {
       return false;
     }
@@ -1745,6 +1747,9 @@ export const App = () => {
       setIsJoiningInvite(false);
     }
   };
+
+  const handleJoinInvite = (input = joinInviteInput) =>
+    joinInviteOnceRef.current(() => performJoinInvite(input));
 
   const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

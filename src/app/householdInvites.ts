@@ -25,6 +25,19 @@ export const normalizeInviteTokenInput = (value: string) => {
 
 export const isLikelyInviteToken = (value: string) => value.length >= 32 && /^[A-Za-z0-9_-]+$/.test(value);
 
+export const createSingleFlightInviteJoin = () => {
+  let inFlight = false;
+  return async <T>(join: () => Promise<T>): Promise<T | undefined> => {
+    if (inFlight) return undefined;
+    inFlight = true;
+    try {
+      return await join();
+    } finally {
+      inFlight = false;
+    }
+  };
+};
+
 export const isActiveInvite = (invite: HouseholdInvite) => !invite.usedAt && !invite.revokedAt;
 
 const readableErrorMessage = (error: unknown) => {

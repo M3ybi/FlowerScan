@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createInviteUrl,
+  createSingleFlightInviteJoin,
   inviteErrorMessage,
   isLikelyInviteToken,
   joinInviteErrorMessage,
@@ -32,6 +33,33 @@ test("invite helper maps backend errors to safe localization keys", () => {
     safeInviteDebugMessage({ code: "PGRST202", message: "schema cache miss" }, false),
     "PGRST202 | schema cache miss",
   );
+});
+
+test("concurrent invite acceptance runs once and allows a later retry", async () => {
+  const joinOnce = createSingleFlightInviteJoin();
+  let attempts = 0;
+  let resolveFirst!: (value: boolean) => void;
+  const first = joinOnce(() => {
+    attempts += 1;
+    return new Promise<boolean>((resolve) => { resolveFirst = resolve; });
+  });
+  const duplicate = joinOnce(async () => {
+    attempts += 1;
+    return false;
+  });
+
+  assert.equal(await duplicate, undefined);
+  assert.equal(attempts, 1);
+  resolveFirst(true);
+  assert.equal(await first, true);
+  assert.equal(await joinOnce(async () => {
+    attempts += 1;
+    return false;
+  }), false);
+  assert.equal(attempts, 2);
+
+  await assert.rejects(joinOnce(async () => { throw new Error("network failure"); }), /network failure/);
+  assert.equal(await joinOnce(async () => true), true);
 });
 
 test("route helper parses public and protected app routes", () => {
