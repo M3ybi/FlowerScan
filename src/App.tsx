@@ -71,6 +71,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { HouseholdPeopleList } from "./components/HouseholdPeopleList";
 import { HouseholdInvitationInbox, InvitationInboxButton } from "./components/HouseholdInvitationInbox";
 import { HouseholdInvitationReview } from "./components/HouseholdInvitationReview";
+import { InvitationCenterOverlay } from "./components/InvitationCenterOverlay";
 import { HouseholdSwitcher } from "./components/HouseholdSwitcher";
 import { SettingsSectionHeader } from "./components/SettingsSectionHeader";
 import { LoadingButton } from "./components/LoadingButton";
@@ -215,6 +216,9 @@ export const App = () => {
   const auth = useAuth();
   const householdDirectory = useHouseholdDirectory(auth.user?.id ?? null);
   const invitationInbox = useHouseholdInvitations(auth.user);
+  const invitationMailboxRef = useRef<HTMLButtonElement>(null);
+  const [selectedInboxInvitationId, setSelectedInboxInvitationId] = useState<string | null>(null);
+  const inboxInvitationReview = useHouseholdInvitation({ invitationId: selectedInboxInvitationId ?? undefined, user: auth.user });
   const invitationReview = useHouseholdInvitation({
     token: route.page === "join" ? route.invite : undefined,
     invitationId: route.page === "join" ? route.invitationId : undefined,
@@ -262,7 +266,19 @@ export const App = () => {
   householdOperationScopeRef.current = householdOperationScope;
   const isHouseholdOperationCurrent = (started = householdOperationScope) =>
     isCurrentHouseholdOperationScope(started, householdOperationScopeRef.current, householdDataGenerationRef.current);
-  const invitationRouteKey = route.page === "join" ? `${route.invite}:${route.invitationId ?? ""}` : "";
+  const routeLifecycleKey =
+    route.page === "detail"
+      ? `detail:${route.flowerId}:${route.scan ? "scan" : "view"}:${route.panel}`
+      : route.page === "menu"
+        ? `menu:${route.section}`
+        : route.page === "join"
+          ? `join:${route.invite}:${route.invitationId ?? ""}`
+          : route.page === "legal"
+            ? `legal:${route.legalPageId}`
+            : route.page;
+  const invitationRouteKey = selectedInboxInvitationId
+    ? `inbox:${routeLifecycleKey}:${selectedInboxInvitationId}`
+    : route.page === "join" ? `route:${route.invite}:${route.invitationId ?? ""}` : "";
   const invitationRouteKeyRef = useRef(invitationRouteKey);
   invitationRouteKeyRef.current = invitationRouteKey;
   const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(window.localStorage));
@@ -314,6 +330,8 @@ export const App = () => {
   const [isInvitationInboxOpen, setIsInvitationInboxOpen] = useState(false);
   const [acceptedInvitationHousehold, setAcceptedInvitationHousehold] = useState<Household | null>(null);
   const [invitationActionError, setInvitationActionError] = useState("");
+  const [acceptedInboxInvitationHousehold, setAcceptedInboxInvitationHousehold] = useState<Household | null>(null);
+  const [inboxInvitationActionError, setInboxInvitationActionError] = useState("");
   const [isDecliningInvitation, setIsDecliningInvitation] = useState(false);
   const decliningInvitationRef = useRef(false);
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
@@ -494,16 +512,6 @@ export const App = () => {
     () => new Map(allFlowersIncludingRemoved.map((flower) => [flower.id, flower])),
     [allFlowersIncludingRemoved],
   );
-  const routeLifecycleKey =
-    route.page === "detail"
-      ? `detail:${route.flowerId}:${route.scan ? "scan" : "view"}:${route.panel}`
-      : route.page === "menu"
-        ? `menu:${route.section}`
-        : route.page === "join"
-          ? `join:${route.invite}`
-          : route.page === "legal"
-            ? `legal:${route.legalPageId}`
-            : route.page;
   const householdLifecycleKey = activeSupabaseHouseholdId || activeHousehold?.publicToken || "";
 
   const resetHouseholdOperations = () => {
@@ -665,6 +673,9 @@ export const App = () => {
     setAcceptedInvitationHousehold(null);
     setInvitationActionError("");
     setIsInvitationInboxOpen(false);
+    setSelectedInboxInvitationId(null);
+    setAcceptedInboxInvitationHousehold(null);
+    setInboxInvitationActionError("");
 
     if (isSupabaseBackend) {
       setHouseholdLookupStatus(nextUserId ? "checking" : "complete");
@@ -750,6 +761,17 @@ export const App = () => {
     setAcceptedInvitationHousehold(null);
     setInvitationActionError("");
   }, [route.page === "join" ? `${route.invite}:${route.invitationId ?? ""}` : ""]);
+
+  useEffect(() => {
+    setIsInvitationInboxOpen(false);
+    setSelectedInboxInvitationId(null);
+    setAcceptedInboxInvitationHousehold(null);
+    setInboxInvitationActionError("");
+  }, [routeLifecycleKey]);
+
+  useEffect(() => {
+    if (route.page === "menu" && auth.user?.email_confirmed_at) void invitationInbox.refresh();
+  }, [route.page, auth.user?.id, auth.user?.email_confirmed_at, invitationInbox.refresh]);
 
   useEffect(() => {
     if (!auth.isAuthenticated || !activeSupabaseHouseholdId) {
@@ -1386,6 +1408,7 @@ export const App = () => {
     setBaseUrl(currentHouseholdBaseUrl(selected.id));
     setIsHouseholdSheetOpen(false);
     setIsInvitationInboxOpen(false);
+    setSelectedInboxInvitationId(null);
     clearInvitationAuthContext(window.localStorage);
     window.history.replaceState(null, "", createHouseholdUrl(selected.id, "#/"));
     window.dispatchEvent(new HashChangeEvent("hashchange"));
@@ -1437,13 +1460,60 @@ export const App = () => {
     return () => window.clearTimeout(timer);
   }, [householdEntitlement?.isPremium, householdEntitlement?.validUntil, auth.user?.id, activeHousehold?.publicToken, householdDirectory.refresh]);
 
+  const closeInvitationCenter = () => {
+    if (isJoiningInvite || isDecliningInvitation) return;
+    setIsInvitationInboxOpen(false);
+    setSelectedInboxInvitationId(null);
+    setAcceptedInboxInvitationHousehold(null);
+    setInboxInvitationActionError("");
+  };
+
+  const openInboxInvitation = (invitation: HouseholdInvitation) => {
+    setAcceptedInboxInvitationHousehold(null);
+    setInboxInvitationActionError("");
+    setIsInvitationInboxOpen(false);
+    setSelectedInboxInvitationId(invitation.id);
+  };
+
+  const returnToInvitationInbox = () => {
+    if (isJoiningInvite || isDecliningInvitation) return;
+    setSelectedInboxInvitationId(null);
+    setAcceptedInboxInvitationHousehold(null);
+    setInboxInvitationActionError("");
+    setIsInvitationInboxOpen(true);
+    void invitationInbox.refresh();
+  };
+
   const renderHeroActions = () => (
     <div className="hero-actions">
       {auth.isAuthenticated ? <>
-        <InvitationInboxButton count={invitationInbox.invitations.length} loading={invitationInbox.loading} expanded={isInvitationInboxOpen} language={selectedLanguage} onClick={() => { setIsInvitationInboxOpen((value) => !value); void invitationInbox.refresh(); }} />
-        {isInvitationInboxOpen ? <HouseholdInvitationInbox invitations={invitationInbox.invitations} loading={invitationInbox.loading} error={invitationInbox.error} language={selectedLanguage} onClose={() => setIsInvitationInboxOpen(false)} onRetry={() => void invitationInbox.refresh()} onView={(invitation) => { setIsInvitationInboxOpen(false); window.location.hash = `#/join?invitation=${encodeURIComponent(invitation.id)}`; }} /> : null}
+        <InvitationInboxButton buttonRef={invitationMailboxRef} count={invitationInbox.invitations.length} loading={invitationInbox.loading} expanded={isInvitationInboxOpen || Boolean(selectedInboxInvitationId)} language={selectedLanguage} onClick={() => {
+          if (isJoiningInvite || isDecliningInvitation) return;
+          if (isInvitationInboxOpen || selectedInboxInvitationId) closeInvitationCenter();
+          else { setIsHouseholdSheetOpen(false); setIsInvitationInboxOpen(true); void invitationInbox.refresh(); }
+        }} />
+        {isInvitationInboxOpen || selectedInboxInvitationId ? <InvitationCenterOverlay
+          anchorRef={invitationMailboxRef} mode={selectedInboxInvitationId ? "details" : "inbox"}
+          title={acceptedInboxInvitationHousehold ? invitationCopy.acceptedTitle(acceptedInboxInvitationHousehold.name)
+            : selectedInboxInvitationId && inboxInvitationReview.invitation ? invitationCopy.title(inboxInvitationReview.invitation.householdName) : invitationCopy.inboxTitle}
+          onClose={closeInvitationCenter}
+          busy={isJoiningInvite || isDecliningInvitation} closeLabel={invitationCopy.close}
+          onBack={selectedInboxInvitationId && !acceptedInboxInvitationHousehold ? returnToInvitationInbox : undefined}
+          backLabel={invitationCopy.backToInbox}
+        >
+          {selectedInboxInvitationId ? <HouseholdInvitationReview
+            key={selectedInboxInvitationId} invitation={inboxInvitationReview.invitation} user={auth.user} language={selectedLanguage}
+            loading={inboxInvitationReview.loading} error={inboxInvitationReview.error}
+            accepting={isJoiningInvite} declining={isDecliningInvitation} acceptedHousehold={acceptedInboxInvitationHousehold}
+            actionError={inboxInvitationActionError} onAccept={(invitation) => void handleAcceptInvitation(invitation, "inbox")}
+            onDecline={(invitation) => void handleDeclineInvitation(invitation, "inbox")} onUseAnotherAccount={() => void handleInvitationAccountChange("inbox")}
+            onCancel={returnToInvitationInbox} onStay={closeInvitationCenter} onSwitch={selectHousehold} onRetry={inboxInvitationReview.refresh}
+          /> : <HouseholdInvitationInbox invitations={invitationInbox.invitations} loading={invitationInbox.loading}
+            error={invitationInbox.error} language={selectedLanguage} onClose={closeInvitationCenter}
+            onRetry={() => void invitationInbox.refresh(true)} onView={openInboxInvitation} />}
+        </InvitationCenterOverlay> : null}
       </> : null}
-      <button className="user-menu-trigger" type="button" onClick={() => setIsHouseholdSheetOpen(true)} aria-label={t("household.openMenu")}>
+      <button className="user-menu-trigger" type="button" onClick={() => { if (isJoiningInvite || isDecliningInvitation) return; closeInvitationCenter(); setIsHouseholdSheetOpen(true); }} aria-label={t("household.openMenu")}>
         <span className="user-menu-avatar" aria-hidden="true">
           <UserRound size={19} />
         </span>
@@ -1833,6 +1903,8 @@ export const App = () => {
       if (item.status === "pending") await revokeHouseholdInvite(item.inviteId!);
       else await removeHouseholdMember(householdId, item.userId!);
 
+      if (item.status === "pending") window.dispatchEvent(new Event(householdInvitationsChangedEvent));
+
       if (!isHouseholdOperationCurrent() || householdPeopleScopeRef.current !== householdId) return;
       setHouseholdPeopleError("");
       if (item.status === "pending") setHouseholdInvites((current) => current.filter((invite) => invite.id !== item.inviteId));
@@ -1907,24 +1979,29 @@ export const App = () => {
     return true;
   };
 
-  const handleAcceptInvitation = (invitation: HouseholdInvitation) => joinInviteOnceRef.current(async () => {
+  const handleAcceptInvitation = (invitation: HouseholdInvitation, source: "route" | "inbox" = "route") => joinInviteOnceRef.current(async () => {
     const userId = auth.user?.id;
     if (!userId || !auth.user?.email_confirmed_at || decliningInvitationRef.current) return false;
     const reviewKey = invitationRouteKey;
     const isCurrentAccount = () => householdOperationScopeRef.current.userId === userId;
     const isCurrent = () => isCurrentAccount() && invitationRouteKeyRef.current === reviewKey;
     const currentHousehold = activeHousehold;
+    const setActionError = source === "inbox" ? setInboxInvitationActionError : setInvitationActionError;
     try {
       setIsJoiningInvite(true);
-      setInvitationActionError("");
+      setActionError("");
       const household = await acceptHouseholdInvitation(invitation.id);
       if (!isCurrentAccount()) return false;
+      householdDirectory.includeConfirmedHousehold(household);
+      invitationInbox.removeInvitation(invitation.id);
+      invitationReview.refresh();
+      inboxInvitationReview.refresh();
       // Membership and inbox updates remain relevant when the review was closed.
       window.dispatchEvent(new Event(householdInvitationsChangedEvent));
-      const [households] = await Promise.all([householdDirectory.refresh(true), invitationInbox.refresh(true)]);
+      const [households] = await Promise.all([householdDirectory.refresh(true), invitationInbox.refresh()]);
       if (!isCurrent()) return false;
       // Joining adds a membership; it does not replace an existing household selection.
-      if (households && !currentHousehold && !getStoredHouseholdSession()) {
+      if (source === "route" && households && !currentHousehold && !getStoredHouseholdSession()) {
         const preferred = readSelectedHouseholdId(window.localStorage, userId);
         const existing = resolveHouseholdSelection(households.filter((item) => item.id !== household.id), preferred);
         const selected = householdAfterInviteAcceptance(existing, household);
@@ -1938,12 +2015,13 @@ export const App = () => {
       }
       window.localStorage.removeItem(pendingInviteStorageKey);
       clearInvitationAuthContext(window.localStorage);
-      setAcceptedInvitationHousehold(household);
+      if (source === "inbox") setAcceptedInboxInvitationHousehold(household);
+      else setAcceptedInvitationHousehold(household);
       return true;
     } catch (error) {
       if (isCurrent()) {
-        setInvitationActionError(t(joinInviteErrorMessage(error)));
-        invitationReview.refresh();
+        setActionError(t(joinInviteErrorMessage(error)));
+        (source === "inbox" ? inboxInvitationReview : invitationReview).refresh();
       }
       return false;
     } finally {
@@ -1951,32 +2029,35 @@ export const App = () => {
     }
   });
 
-  const handleDeclineInvitation = async (invitation: HouseholdInvitation) => {
+  const handleDeclineInvitation = async (invitation: HouseholdInvitation, source: "route" | "inbox" = "route") => {
     const userId = auth.user?.id;
     if (!userId || !auth.user?.email_confirmed_at || decliningInvitationRef.current || isJoiningInvite) return;
     const reviewKey = invitationRouteKey;
     const isCurrentAccount = () => householdOperationScopeRef.current.userId === userId;
     const isCurrent = () => isCurrentAccount() && invitationRouteKeyRef.current === reviewKey;
+    const setActionError = source === "inbox" ? setInboxInvitationActionError : setInvitationActionError;
     decliningInvitationRef.current = true;
     setIsDecliningInvitation(true);
-    setInvitationActionError("");
+    setActionError("");
     try {
       await declineHouseholdInvitation(invitation.id);
       if (!isCurrentAccount()) return;
+      invitationInbox.removeInvitation(invitation.id);
+      invitationReview.refresh();
+      inboxInvitationReview.refresh();
       window.dispatchEvent(new Event(householdInvitationsChangedEvent));
-      await invitationInbox.refresh(true);
+      await invitationInbox.refresh();
       if (!isCurrent()) return;
       clearInvitationAuthContext(window.localStorage);
-      invitationReview.refresh();
     } catch (error) {
-      if (isCurrent()) setInvitationActionError(t(joinInviteErrorMessage(error)));
+      if (isCurrent()) setActionError(t(joinInviteErrorMessage(error)));
     } finally {
       decliningInvitationRef.current = false;
       setIsDecliningInvitation(false);
     }
   };
 
-  const handleInvitationAccountChange = async () => {
+  const handleInvitationAccountChange = async (source: "route" | "inbox" = "route") => {
     if (signingOutRef.current) return;
     const userId = auth.user?.id ?? null;
     signingOutRef.current = true;
@@ -1988,7 +2069,7 @@ export const App = () => {
       setSupabaseReadState(null);
     } catch {
       if (householdOperationScopeRef.current.userId !== userId) return;
-      setInvitationActionError(t("account.signOutFailed"));
+      (source === "inbox" ? setInboxInvitationActionError : setInvitationActionError)(t("account.signOutFailed"));
     } finally {
       signingOutRef.current = false;
     }

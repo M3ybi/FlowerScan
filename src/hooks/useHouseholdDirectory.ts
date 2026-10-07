@@ -4,7 +4,7 @@ import type { Household } from "../lib/plantieRepository";
 
 type DirectoryState = { userId: string | null; households: Household[]; loading: boolean; error: boolean };
 
-export const useHouseholdDirectory = (userId: string | null) => {
+export const useHouseholdDirectory = (userId: string | null, lookup = getUserHouseholds) => {
   const [state, setState] = useState<DirectoryState>({ userId: null, households: [], loading: false, error: false });
   const identityRef = useRef(userId);
   identityRef.current = userId;
@@ -17,7 +17,7 @@ export const useHouseholdDirectory = (userId: string | null) => {
     if (force) generationRef.current += 1;
     const generation = generationRef.current;
     setState((current) => ({ userId, households: current.userId === userId ? current.households : [], loading: true, error: false }));
-    const request = getUserHouseholds().then((households) => {
+    const request = lookup().then((households) => {
       if (identityRef.current !== userId || generationRef.current !== generation) return null;
       setState({ userId, households, loading: false, error: false });
       return households;
@@ -31,6 +31,21 @@ export const useHouseholdDirectory = (userId: string | null) => {
     });
     pendingRef.current = request;
     return request;
+  }, [userId, lookup]);
+
+  const includeConfirmedHousehold = useCallback((household: Household) => {
+    if (!userId || identityRef.current !== userId) return;
+    // A confirmed membership supersedes directory reads started before the mutation.
+    generationRef.current += 1;
+    pendingRef.current = null;
+    setState((current) => {
+      if (identityRef.current !== userId) return current;
+      const households = current.userId === userId ? current.households : [];
+      const included = households.some((item) => item.id === household.id)
+        ? households.map((item) => item.id === household.id ? household : item)
+        : [...households, household];
+      return { userId, households: included, loading: false, error: false };
+    });
   }, [userId]);
 
   useEffect(() => {
@@ -52,5 +67,5 @@ export const useHouseholdDirectory = (userId: string | null) => {
     };
   }, [userId, refresh]);
 
-  return { ...(state.userId === userId ? state : { userId, households: [], loading: Boolean(userId), error: false }), refresh };
+  return { ...(state.userId === userId ? state : { userId, households: [], loading: Boolean(userId), error: false }), refresh, includeConfirmedHousehold };
 };

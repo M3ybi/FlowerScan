@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { CalendarDays, CheckCircle2, Home, Leaf, Mail, ShieldCheck, UsersRound } from "lucide-react";
 import { resolveInvitationReviewState } from "../lib/householdInvitationRules";
@@ -30,14 +30,17 @@ export type HouseholdInvitationReviewProps = {
 
 export const HouseholdInvitationReview = ({ invitation, user, language, loading, error, accepting, declining, acceptedHousehold, actionError, onAccept, onDecline, onUseAnotherAccount, onCancel, onStay, onSwitch, onRetry }: HouseholdInvitationReviewProps) => {
   const copy = householdInvitationCopy(language);
+  const reviewTitleId = useId();
+  const joinedTitleId = useId();
   const [confirmDecline, setConfirmDecline] = useState(false);
   const state = resolveInvitationReviewState(invitation, user);
   const busy = accepting || declining;
   const terminal = state === "invalid" || state === "expired" || state === "revoked" || state === "declined" || state === "unavailable" || state === "accepted";
 
-  if (acceptedHousehold) return <section className="household-invitation-review invitation-joined" aria-labelledby="invitation-joined-title">
+  if (acceptedHousehold) return <section className="household-invitation-review invitation-joined" aria-labelledby={joinedTitleId}>
     <span className="invitation-status-icon"><CheckCircle2 size={28} aria-hidden="true" /></span>
-    <h2 id="invitation-joined-title">{copy.accepted(acceptedHousehold.name)}</h2>
+    <h2 id={joinedTitleId}>{copy.acceptedTitle(acceptedHousehold.name)}</h2>
+    <p className="invitation-joined-notice" role="status">{copy.acceptedNotice}</p>
     <div className="invitation-actions">
       <button className="neutral-action" type="button" onClick={onStay}>{copy.stay}</button>
       <button className="primary-action" type="button" onClick={() => onSwitch(acceptedHousehold.id)}><Home size={18} aria-hidden="true" />{copy.switchTo(acceptedHousehold.name)}</button>
@@ -71,8 +74,8 @@ export const HouseholdInvitationReview = ({ invitation, user, language, loading,
     <div className="invitation-actions"><button className="neutral-action" type="button" onClick={onStay}>{copy.stay}</button><button className="primary-action" type="button" onClick={() => onSwitch(invitation.householdId)}>{copy.switchTo(invitation.householdName)}</button></div>
   </section>;
 
-  return <section className="household-invitation-review" aria-labelledby="invitation-review-title" aria-busy={busy}>
-    <header className="invitation-review-heading"><span className="invitation-status-icon"><Mail size={25} aria-hidden="true" /></span><div><h2 id="invitation-review-title">{copy.title(invitation.householdName)}</h2><p>{copy.details}</p></div></header>
+  return <section className="household-invitation-review" aria-labelledby={reviewTitleId} aria-busy={busy}>
+    <header className="invitation-review-heading"><span className="invitation-status-icon"><Mail size={25} aria-hidden="true" /></span><div><h2 id={reviewTitleId}>{copy.title(invitation.householdName)}</h2><p>{copy.details}</p></div></header>
     <div className="invitation-review-metadata">
       <span><UsersRound size={18} aria-hidden="true" /><span><small>{copy.members}</small><strong>{invitation.activeMemberCount} / {invitation.maxSlots}</strong></span></span>
       <span><CalendarDays size={18} aria-hidden="true" /><span><small>{copy.expires}</small><strong>{formatLocalizedTimestampDate(invitation.expiresAt, language)}</strong></span></span>

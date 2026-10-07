@@ -237,9 +237,45 @@ test("completed invitation mutations refresh account data even after leaving the
   const decline = appSource.slice(appSource.indexOf("const handleDeclineInvitation"), appSource.indexOf("const handleInvitationAccountChange"));
   for (const action of [accept, decline]) {
     const accountGuard = action.indexOf("if (!isCurrentAccount())");
-    const inboxRefresh = action.indexOf("invitationInbox.refresh(true)");
+    const inboxRefresh = action.indexOf("invitationInbox.refresh()");
     const routeGuard = action.indexOf("if (!isCurrent())");
     assert.ok(accountGuard >= 0 && inboxRefresh > accountGuard && routeGuard > inboxRefresh);
+    assert.match(action, /invitationReview\.refresh\(\)/);
+    assert.match(action, /inboxInvitationReview\.refresh\(\)/);
   }
   assert.match(accept, /householdDirectory\.refresh\(true\)/);
+  const accountGuard = accept.indexOf("if (!isCurrentAccount())");
+  const confirmedMembership = accept.indexOf("householdDirectory.includeConfirmedHousehold(household)");
+  assert.ok(confirmedMembership > accountGuard && confirmedMembership < accept.indexOf("householdDirectory.refresh(true)"));
+  assert.match(accept, /invitationInbox\.removeInvitation\(invitation.id\)/);
+  assert.match(decline, /invitationInbox\.removeInvitation\(invitation.id\)/);
+});
+
+test("mailbox opens a portal center and in-place review while retaining email invitation routes", () => {
+  const actions = appSource.slice(appSource.indexOf("const renderHeroActions"), appSource.indexOf("const renderHouseholdSheet"));
+  assert.match(actions, /buttonRef=\{invitationMailboxRef\}/);
+  assert.match(actions, /<InvitationCenterOverlay/);
+  assert.match(actions, /onView=\{openInboxInvitation\}/);
+  assert.doesNotMatch(actions, /window.location.hash.*join/);
+  assert.match(appSource, /useHouseholdInvitation\(\{ invitationId: selectedInboxInvitationId/);
+  assert.match(appSource, /token: route.page === "join" \? route.invite : undefined/);
+  assert.match(appSource, /route.page === "menu" && auth.user\?\.email_confirmed_at\) void invitationInbox.refresh\(\)/);
+});
+
+test("mailbox review results remain separate from the preserved email-route review", () => {
+  const centerActions = appSource.slice(appSource.indexOf("const closeInvitationCenter"), appSource.indexOf("const renderHouseholdSheet"));
+  assert.match(centerActions, /acceptedHousehold=\{acceptedInboxInvitationHousehold\}/);
+  assert.match(centerActions, /actionError=\{inboxInvitationActionError\}/);
+  assert.match(centerActions, /handleAcceptInvitation\(invitation, "inbox"\)/);
+  assert.match(centerActions, /handleDeclineInvitation\(invitation, "inbox"\)/);
+  assert.doesNotMatch(centerActions, /setAcceptedInvitationHousehold\(|setInvitationActionError\(/);
+  const route = appSource.slice(appSource.indexOf('if (route.page === "join") {\n    return') >= 0
+    ? appSource.indexOf('if (route.page === "join") {\n    return')
+    : appSource.indexOf('if (route.page === "join") {\r\n    return'));
+  assert.match(route, /acceptedHousehold=\{acceptedInvitationHousehold\}/);
+  assert.match(route, /actionError=\{invitationActionError\}/);
+  assert.match(appSource, /if \(source === "inbox"\) setAcceptedInboxInvitationHousehold\(household\)/);
+  assert.match(appSource, /`inbox:\$\{routeLifecycleKey\}:\$\{selectedInboxInvitationId\}`/);
+  assert.match(appSource, /`join:\$\{route.invite\}:\$\{route.invitationId \?\? ""\}`/);
+  assert.match(appSource, /setSelectedInboxInvitationId\(null\);\s*setAcceptedInboxInvitationHousehold\(null\);\s*setInboxInvitationActionError\(""\);\s*\}, \[routeLifecycleKey\]\)/);
 });

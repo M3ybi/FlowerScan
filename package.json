@@ -9,6 +9,7 @@
     "build": "npm run typecheck && vite build",
     "build:test-store": "npm run typecheck && vite build --mode test",
     "test": "node scripts/run-tests.mjs",
+    "test:invitation-center-browser": "node scripts/test-invitation-center-browser.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "mobile:android": "npx cap open android",
     "mobile:build": "npm run build && npx cap sync",

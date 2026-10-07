@@ -12,6 +12,8 @@ import { readWebAuthCallback, resolveAuthCallbackReturnLocation } from "../src/l
 import { parseHashRoute } from "../src/app/routes";
 import type { HouseholdInvitation, HouseholdInvite } from "../src/lib/plantieRepository";
 import { loadInvitationReview } from "../src/hooks/useHouseholdInvitations";
+import { householdInvitationCopy } from "../src/lib/householdInvitationCopy";
+import { installInvitationOverlayInteractions, invitationPopoverPosition } from "../src/lib/invitationOverlay";
 
 const invitationId = "11111111-1111-4111-8111-111111111111";
 const invitation = (changes: Partial<HouseholdInvitation> = {}): HouseholdInvitation => ({
@@ -55,6 +57,25 @@ test("review shows membership scope and requires an explicit accept control", ()
   assert.match(registering, /readonly=""[^>]*value="guest@example.com"/);
   assert.match(registering, /review and accept this invitation/);
   assert.doesNotMatch(registering, />Join household</);
+});
+
+test("concurrent route and mailbox reviews name their own headings without duplicate IDs", () => {
+  const reviewProps: Parameters<typeof HouseholdInvitationReview>[0] = {
+    invitation: invitation(), user: verifiedUser, language: "en", loading: false, error: false, accepting: false, declining: false,
+    onAccept: () => undefined, onDecline: () => undefined, onUseAnotherAccount: () => undefined, onCancel: () => undefined,
+    onStay: () => undefined, onSwitch: () => undefined, onRetry: () => undefined,
+  };
+  const html = renderToStaticMarkup(createElement("div", null,
+    createElement(HouseholdInvitationReview, { ...reviewProps, key: "route" }),
+    createElement(HouseholdInvitationReview, { ...reviewProps, key: "mailbox" }),
+    createElement(HouseholdInvitationReview, { ...reviewProps, key: "route-success", acceptedHousehold: { id: "route", name: "Route family" } }),
+    createElement(HouseholdInvitationReview, { ...reviewProps, key: "mailbox-success", acceptedHousehold: { id: "mailbox", name: "Mailbox family" } }),
+  ));
+  const labelIds = Array.from(html.matchAll(/aria-labelledby="([^"]+)"/g), (match) => match[1]);
+  const headingIds = Array.from(html.matchAll(/<h2 id="([^"]+)"/g), (match) => match[1]);
+  assert.equal(labelIds.length, 4);
+  assert.equal(new Set(labelIds).size, 4, "every rendered review has a unique accessible heading");
+  assert.deepEqual(labelIds, headingIds, "each review references its own heading");
 });
 
 test("recipient lookup failures allow safe account correction without revealing invitation details", () => {
@@ -145,6 +166,115 @@ test("inbox rows and mail badge display only actionable pending invitations", ()
   assert.doesNotMatch(html, /Expired family|Revoked family/);
   assert.match(renderToStaticMarkup(createElement(InvitationInboxButton, { count: 2, loading: false, expanded: false, language: "en", onClick: () => undefined })), /invitation-inbox-badge[^>]*>2</);
   assert.doesNotMatch(renderToStaticMarkup(createElement(InvitationInboxButton, { count: 0, loading: false, expanded: false, language: "en", onClick: () => undefined })), /invitation-inbox-badge/);
+});
+
+test("mailbox stays interactive when empty and caps only the visible badge at 9+", () => {
+  const renderButton = (count: number, language: "en" | "sk" = "en") => renderToStaticMarkup(createElement(InvitationInboxButton, { count, loading: false, expanded: true, language, onClick: () => undefined }));
+  assert.match(renderButton(0), /<button[^>]*type="button"[^>]*aria-label="Household invitations"/);
+  assert.match(renderButton(0), /aria-haspopup="dialog"[^>]*aria-controls="household-invitation-center"/);
+  assert.doesNotMatch(renderButton(0), /disabled|invitation-inbox-badge/);
+  assert.match(renderButton(1), /aria-label="Household invitations, 1 pending"/);
+  assert.match(renderButton(12), /aria-label="Household invitations, 12 pending"/);
+  assert.match(renderButton(12), /invitation-inbox-badge[^>]*>9\+</);
+  assert.match(renderButton(12, "sk"), /počet čakajúcich: 12/);
+  assert.doesNotMatch(renderButton(Number.NaN), /invitation-inbox-badge/);
+});
+
+test("inbox distinguishes skeleton, empty and retryable error without leaking stale cards", () => {
+  const renderInbox = (changes: Partial<Parameters<typeof HouseholdInvitationInbox>[0]> = {}) => renderToStaticMarkup(createElement(HouseholdInvitationInbox, {
+    invitations: [], language: "en", loading: false, error: false, onView: () => undefined, onClose: () => undefined, onRetry: () => undefined, ...changes,
+  }));
+  const loading = renderInbox({ loading: true });
+  assert.equal((loading.match(/class="invitation-inbox-skeleton"/g) ?? []).length, 2);
+  assert.match(loading, /role="status" aria-label="Loading invitation/);
+  assert.doesNotMatch(loading, /no pending household invitations/);
+  const empty = renderInbox();
+  assert.match(empty, /no pending household invitations/);
+  assert.match(empty, /When someone invites you to a household/);
+  const failed = renderInbox({ error: true, invitations: [invitation()] });
+  assert.match(failed, /role="alert"/);
+  assert.match(failed, />Retry</);
+  assert.doesNotMatch(failed, /no pending household invitations|owner@example.com|>View invitation</);
+  const card = renderInbox({ invitations: [invitation({ householdName: "<script>bad</script>" })] });
+  assert.match(card, /&lt;script&gt;bad&lt;\/script&gt;/);
+  assert.match(card, /invitation-inbox-pending[^>]*>Pending</);
+  assert.doesNotMatch(card, /11111111-1111-4111-8111-111111111111|<script>/);
+});
+
+test("all supported languages provide mailbox counts and dialog controls", () => {
+  for (const language of ["en", "sk", "de", "fr", "es"] as const) {
+    const copy = householdInvitationCopy(language);
+    assert.match(copy.pendingCount(24), /24/);
+    assert.ok(copy.close.length && copy.backToInbox.length && copy.inboxEmptyHint.length);
+    assert.doesNotMatch(copy.pendingCount(24), /9\+/);
+  }
+});
+
+test("desktop positioning remains anchored and clamps narrow or short viewports", () => {
+  assert.deepEqual(invitationPopoverPosition({ left: 850, right: 900, top: 80, bottom: 128 }, { width: 440, height: 300 }, { width: 1200, height: 900 }), { left: 460, top: 140, maxHeight: 868 });
+  const above = invitationPopoverPosition({ left: 850, right: 900, top: 700, bottom: 748 }, { width: 440, height: 300 }, { width: 1200, height: 800 });
+  assert.equal(above.top, 388);
+  const cramped = invitationPopoverPosition({ left: 1, right: 30, top: 10, bottom: 30 }, { width: 288, height: 700 }, { width: 320, height: 500 });
+  assert.deepEqual(cramped, { left: 16, top: 16, maxHeight: 468 });
+});
+
+test("overlay handles outside pointer, Escape, keyboard focus and pending dismissal at the DOM boundary", () => {
+  const documentBoundary = Object.assign(new EventTarget(), { activeElement: null as HTMLElement | null });
+  const makeElement = () => {
+    const contained = new Set<Node>();
+    const element = {
+      ownerDocument: documentBoundary, tabIndex: 0, isConnected: true,
+      contains: (target: Node) => target === element as unknown as Node || contained.has(target),
+      focus: () => { documentBoundary.activeElement = element as unknown as HTMLElement; },
+      querySelectorAll: () => [] as HTMLElement[], getClientRects: () => [{}], matches: () => false, closest: () => null,
+    };
+    return { element: element as unknown as HTMLElement, contained };
+  };
+  const anchor = makeElement().element;
+  const dialogBoundary = makeElement();
+  const first = makeElement().element;
+  const last = makeElement().element;
+  const outside = makeElement().element;
+  dialogBoundary.contained.add(first);
+  dialogBoundary.contained.add(last);
+  dialogBoundary.element.querySelectorAll = (() => [first, last]) as unknown as typeof dialogBoundary.element.querySelectorAll;
+  const dispatch = (type: string, target: HTMLElement, properties: Record<string, unknown> = {}) => {
+    const event = new Event(type, { cancelable: true });
+    Object.defineProperty(event, "target", { value: target });
+    Object.assign(event, properties);
+    documentBoundary.dispatchEvent(event);
+    return event;
+  };
+  let closes = 0;
+  let busy = false;
+  anchor.focus();
+  const dispose = installInvitationOverlayInteractions({ dialog: dialogBoundary.element, anchor, onClose: () => { closes += 1; }, isBusy: () => busy });
+  assert.equal(documentBoundary.activeElement, dialogBoundary.element);
+  dispatch("pointerdown", anchor);
+  dispatch("pointerdown", first);
+  assert.equal(closes, 0, "the opening anchor and dialog contents do not dismiss");
+  dispatch("pointerdown", outside);
+  assert.equal(closes, 1);
+  busy = true;
+  dispatch("pointerdown", outside);
+  assert.equal(dispatch("keydown", dialogBoundary.element, { key: "Escape" }).defaultPrevented, true);
+  assert.equal(closes, 1, "pending backend mutations cannot be dismissed");
+  busy = false;
+  dispatch("keydown", dialogBoundary.element, { key: "Escape" });
+  assert.equal(closes, 2);
+  first.focus();
+  dispatch("keydown", first, { key: "Tab", shiftKey: true });
+  assert.equal(documentBoundary.activeElement, last);
+  dispatch("keydown", last, { key: "Tab", shiftKey: false });
+  assert.equal(documentBoundary.activeElement, first);
+  outside.focus();
+  dispatch("focusin", outside);
+  assert.equal(documentBoundary.activeElement, dialogBoundary.element);
+  dispose();
+  assert.equal(documentBoundary.activeElement, anchor);
+  dispatch("pointerdown", outside);
+  dispatch("keydown", outside, { key: "Escape" });
+  assert.equal(closes, 2, "all document listeners are removed on close");
 });
 
 test("registration context survives tabs with an ID and expires without retaining raw tokens", () => {

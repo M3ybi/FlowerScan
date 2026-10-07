@@ -6067,20 +6067,55 @@ textarea:focus-visible {
 .household-switcher select { flex: 1; min-width: 120px; max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px; background: white; color: var(--ink); font: inherit; }
 .household-sheet > .household-switcher { margin: 16px 0; }
 .hero-actions { position: relative; align-items: center; }
-.invitation-inbox-trigger { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-strong); color: var(--brand); cursor: pointer; }
-.invitation-inbox-trigger:hover { background: #eaf6ef; }
-.invitation-inbox-badge { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 50%; background: var(--accent); color: white; font-size: 0.75rem; font-weight: 800; }
-.household-invitation-inbox { position: absolute; right: 0; top: calc(100% + 12px); z-index: calc(var(--z-nav) + 1); width: min(520px, calc(100vw - 48px)); max-height: min(70vh, 650px); overflow-y: auto; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-strong); box-shadow: var(--shadow); text-align: left; }
+.invitation-inbox-trigger { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; border: 1px solid rgba(47, 123, 91, 0.26); border-radius: var(--radius-md); background: var(--surface-strong); color: var(--brand); cursor: pointer; transition: background 150ms ease, border-color 150ms ease, transform 150ms ease; }
+.invitation-inbox-trigger.has-invitations { border-color: rgba(47, 123, 91, 0.48); background: #edf7f1; }
+.invitation-inbox-trigger:hover, .invitation-inbox-trigger[aria-expanded="true"] { background: #e0f1e7; border-color: var(--brand-2); }
+.invitation-inbox-trigger:active { transform: scale(0.95); }
+.invitation-inbox-trigger:focus-visible, .invitation-center-dialog button:focus-visible { outline: 3px solid rgba(47, 123, 91, 0.65); outline-offset: 3px; }
+.invitation-inbox-badge { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 23px; height: 23px; padding: 0 5px; border: 2px solid var(--surface-strong); border-radius: 999px; background: var(--brand); color: white; font-size: 0.7rem; font-weight: 800; line-height: 1; }
+.invitation-center-overlay { position: fixed; inset: 0; z-index: calc(var(--z-modal) + 60); display: grid; place-items: center; padding: 16px; background: rgba(18, 34, 27, 0.12); }
+.invitation-center-overlay[data-mode="details"] { background: rgba(18, 34, 27, 0.4); backdrop-filter: blur(6px); }
+.invitation-center-dialog { width: min(440px, calc(100vw - 32px)); max-height: min(720px, calc(100dvh - 32px), var(--invitation-max-height, 100dvh)); overflow-y: auto; overscroll-behavior: contain; border: 1px solid rgba(47, 123, 91, 0.2); border-radius: 26px; background: var(--surface-strong); color: var(--ink); box-shadow: 0 28px 80px rgba(18, 61, 49, 0.22), 0 4px 16px rgba(18, 61, 49, 0.08); text-align: left; }
+.invitation-center-dialog:focus { outline: none; }
+.invitation-center-overlay[data-mode="inbox"] .invitation-center-dialog { position: fixed; left: var(--invitation-left, 16px); top: var(--invitation-top, 80px); }
+.invitation-center-overlay[data-mode="details"] .invitation-center-dialog { width: min(640px, calc(100vw - 32px)); }
+.invitation-center-sheet-handle { display: none; }
+.invitation-center-chrome { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px 0; }
+.invitation-center-back { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; border: 0; border-radius: 12px; padding: 0 9px; background: transparent; color: var(--brand); font: inherit; font-size: 0.85rem; font-weight: 750; cursor: pointer; }
+.invitation-center-back:hover { background: #edf6ef; }
+.invitation-center-back:disabled, .invitation-inbox-close:disabled { opacity: 0.45; cursor: wait; }
+.household-invitation-inbox { min-width: 0; padding: 22px; text-align: left; }
 .household-invitation-inbox > header { display: flex; align-items: center; gap: 12px; }
-.household-invitation-inbox h2 { flex: 1; margin: 0; font-size: 1.12rem; }
-.invitation-inbox-close { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
-.invitation-inbox-rows { display: grid; gap: 12px; margin-top: 16px; }
-.invitation-inbox-row { display: flex; align-items: center; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: white; }
-.invitation-inbox-row > div { flex: 1; min-width: 0; }
-.invitation-inbox-row h3 { margin: 0 0 6px; font-size: 1rem; }
-.invitation-inbox-row p { margin: 0 0 6px; color: var(--muted); font-size: 0.84rem; overflow-wrap: anywhere; }
-.invitation-inbox-row small { color: var(--brand); font-weight: 700; }
-.invitation-inbox-expiry { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.8rem; color: var(--muted); }
+.invitation-inbox-heading { flex: 1; min-width: 0; }
+.household-invitation-inbox h2 { margin: 0; color: var(--brand); font-size: 1.1rem; line-height: 1.3; }
+.invitation-inbox-heading p { margin: 5px 0 0; color: var(--muted); font-size: 0.77rem; line-height: 1.5; }
+.invitation-inbox-close { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; }
+.invitation-inbox-close:hover { color: var(--brand); background: #edf6ef; }
+.invitation-inbox-rows, .invitation-inbox-loading { display: grid; gap: 12px; margin-top: 22px; }
+.invitation-inbox-row { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid rgba(47, 123, 91, 0.17); border-radius: 18px; background: linear-gradient(130deg, #fff, #f5faf6); }
+.invitation-inbox-card-heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.invitation-inbox-household-icon { display: grid; place-items: center; flex-shrink: 0; width: 33px; height: 33px; border-radius: 11px; background: #e9f4ec; color: var(--brand-2); }
+.invitation-inbox-row h3 { flex: 1; min-width: 0; margin: 0; color: var(--brand); font-size: 1rem; line-height: 1.35; overflow-wrap: anywhere; }
+.invitation-inbox-pending { flex-shrink: 0; border-radius: 999px; padding: 4px 8px; background: #e7f2ea; color: var(--brand-2); font-size: 0.67rem; font-weight: 750; }
+.invitation-inbox-inviter { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.5; overflow-wrap: anywhere; }
+.invitation-inbox-inviter strong { font-weight: 550; color: var(--ink); }
+.invitation-inbox-metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.invitation-inbox-role, .invitation-inbox-expiry { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.76rem; }
+.invitation-inbox-role { color: var(--brand); font-weight: 650; }
+.invitation-inbox-expiry svg { flex-shrink: 0; }
+.invitation-inbox-view { display: flex; justify-content: center; gap: 8px; width: 100%; min-height: 44px; margin-top: 2px; border-color: rgba(47, 123, 91, 0.23); background: rgba(255, 255, 255, 0.86); color: var(--brand); font-size: 0.85rem; }
+.invitation-inbox-empty, .invitation-inbox-error { display: grid; justify-items: center; gap: 13px; padding: 36px 16px 24px; text-align: center; }
+.invitation-inbox-state-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 22px; background: #edf5ef; color: var(--brand-2); }
+.invitation-inbox-empty h3 { margin: 2px 0 0; font-size: 1rem; line-height: 1.5; }
+.invitation-inbox-empty p, .invitation-inbox-error p { max-width: 32ch; margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.65; }
+.invitation-inbox-error .invitation-inbox-state-icon { background: var(--warn-bg); color: var(--warn-text); }
+.invitation-inbox-error button { margin-top: 5px; min-height: 44px; }
+.invitation-inbox-skeleton { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: white; }
+.invitation-inbox-skeleton span { height: 12px; border-radius: 8px; background: #e8eee9; }
+.invitation-inbox-skeleton span:first-child { width: 60%; height: 17px; }
+.invitation-inbox-skeleton span:nth-child(2) { width: 85%; }
+.invitation-inbox-skeleton span:last-child { width: 45%; }
+.invitation-inbox-footer { display: none; }
 .household-invitation-review { display: grid; gap: 20px; min-width: 0; padding: clamp(20px, 4vw, 36px); border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--glass-surface); box-shadow: var(--shadow-soft); }
 .household-invitation-review h2, .household-invitation-review p { margin: 0; }
 .household-invitation-review h2 { overflow-wrap: anywhere; }
@@ -6101,13 +6136,32 @@ textarea:focus-visible {
 .invitation-actions > button { flex: 1; min-width: 170px; min-height: 48px; }
 .invitation-auth { display: grid; gap: 16px; }
 .invitation-decline-confirmation { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-strong); }
+.invitation-center-dialog .household-invitation-review { padding: 20px 28px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.invitation-center-dialog .invitation-review-heading { align-items: start; }
+.invitation-center-dialog .invitation-review-heading h2 { font-size: clamp(1.35rem, 4vw, 1.7rem); line-height: 1.25; color: var(--brand); }
+.invitation-center-dialog .invitation-review-heading p { font-size: 0.9rem; line-height: 1.6; }
+.invitation-center-dialog .invitation-review-metadata { gap: 14px; background: #f5f8f3; }
+.invitation-center-dialog .invitation-review-metadata small { font-size: 0.73rem; }
+.invitation-center-dialog .invitation-review-metadata strong { font-size: 0.84rem; }
+.invitation-center-dialog .invitation-benefits { gap: 10px; font-size: 0.9rem; }
+.invitation-center-dialog .invitation-existing-household-note { font-size: 0.85rem; line-height: 1.65; }
+.invitation-joined { justify-items: center; text-align: center; }
+.invitation-joined > .invitation-status-icon { width: 72px; height: 72px; border-radius: 24px; background: #e0f3e8; }
+.invitation-joined h2 { max-width: 28ch; color: var(--brand); font-size: 1.6rem; line-height: 1.35; }
+.invitation-joined-notice { max-width: 44ch; color: var(--muted); line-height: 1.7; }
+.invitation-joined .invitation-actions { width: 100%; }
 .pricing-summary-detail > span { display: inline-flex; align-items: center; gap: 7px; }
 @media (max-width: 780px) {
   .hero-actions { display: flex; flex-wrap: nowrap; }
   .hero-actions .user-menu-trigger { flex: 1; min-width: 0; width: auto; }
-  .household-invitation-inbox { width: min(520px, calc(100vw - 32px)); }
-  .invitation-inbox-row { flex-direction: column; align-items: stretch; }
-  .invitation-inbox-row > button { width: 100%; }
+  .invitation-center-overlay { align-items: end; justify-items: center; padding: 12px 0 0; background: rgba(18, 34, 27, 0.4); backdrop-filter: blur(4px); }
+  .invitation-center-dialog, .invitation-center-overlay[data-mode="inbox"] .invitation-center-dialog, .invitation-center-overlay[data-mode="details"] .invitation-center-dialog { position: relative; left: auto; top: auto; width: 100%; max-width: 640px; max-height: calc(100dvh - 12px - var(--safe-area-top)); border-radius: 26px 26px 0 0; padding-bottom: var(--safe-area-bottom); }
+  .invitation-center-sheet-handle { display: block; width: 40px; height: 4px; margin: 10px auto 0; border-radius: 999px; background: #ceddd2; }
+  .household-invitation-inbox { padding: 18px 20px 20px; }
+  .invitation-inbox-heading p { font-size: 0.78rem; }
+  .invitation-inbox-footer { display: block; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .invitation-inbox-footer button { width: 100%; min-height: 46px; }
+  .invitation-center-dialog .household-invitation-review { padding: 18px 20px 24px; }
   .household-overview-name { grid-column: 1 / -1; }
   .household-overview-card { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .household-overview-metric + .household-overview-metric { padding-left: 8px; }
@@ -6119,4 +6173,8 @@ textarea:focus-visible {
   .invitation-review-metadata { flex-direction: column; gap: 14px; }
   .invitation-actions { flex-direction: column; }
   .invitation-actions > button { width: 100%; min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invitation-inbox-trigger { transition: none; }
 }

@@ -14,7 +14,7 @@ export const loadInvitationReview = async (
   return { invitation, error: !request.token && Boolean(request.invitationId) && !invitation };
 };
 
-export const useHouseholdInvitations = (user: User | null) => {
+export const useHouseholdInvitations = (user: User | null, lookup = listMyHouseholdInvitations) => {
   const identity = user?.id && user.email_confirmed_at && user.email ? `${user.id}:${user.email.trim().toLowerCase()}` : "";
   const [state, setState] = useState<{ identity: string; invitations: HouseholdInvitation[]; loading: boolean; error: boolean }>({
     identity: "", invitations: [], loading: false, error: false,
@@ -30,7 +30,7 @@ export const useHouseholdInvitations = (user: User | null) => {
     setState((previous) => ({
       identity, invitations: previous.identity === identity ? previous.invitations : [], loading: true, error: false,
     }));
-    const promise = listMyHouseholdInvitations().then((invitations) => {
+    const promise = lookup().then((invitations) => {
       if (generation.current !== requestGeneration) return;
       setNow(Date.now());
       setState({ identity, invitations, loading: false, error: false });
@@ -43,6 +43,15 @@ export const useHouseholdInvitations = (user: User | null) => {
     });
     activeRequest.current = { identity, promise };
     return promise;
+  }, [identity, lookup]);
+
+  const removeInvitation = useCallback((invitationId: string) => {
+    // A confirmed mutation supersedes any response started before it completed.
+    generation.current += 1;
+    activeRequest.current = null;
+    setState((previous) => previous.identity === identity ? {
+      ...previous, invitations: previous.invitations.filter((invitation) => invitation.id !== invitationId), loading: false,
+    } : previous);
   }, [identity]);
 
   useEffect(() => {
@@ -77,7 +86,7 @@ export const useHouseholdInvitations = (user: User | null) => {
     return () => window.clearTimeout(timer);
   }, [invitations]);
 
-  return { invitations, loading: Boolean(identity) && (state.identity !== identity || state.loading), error: Boolean(identity) && state.identity === identity && state.error, refresh };
+  return { invitations, loading: Boolean(identity) && (state.identity !== identity || state.loading), error: Boolean(identity) && state.identity === identity && state.error, refresh, removeInvitation };
 };
 
 export const useHouseholdInvitation = ({ token, invitationId, user }: {
