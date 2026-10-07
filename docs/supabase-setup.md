@@ -177,17 +177,18 @@ Google Play Data Safety notes:
 
 ### Hosted Supabase Auth settings
 
-In the linked project `hzigkjukqpxryziscvag`, open **Authentication > URL Configuration**. Set **Site URL** to `https://flowerscann.netlify.app`. Site URL is only the fallback; the app supplies an explicit callback for Google sign-in, email confirmation, magic links, and password reset. Add the following **Redirect URLs** for the environments you use. Keep any existing entries when adding new ones.
+In the linked project `hzigkjukqpxryziscvag`, open **Authentication > URL Configuration**. Set **Site URL** to `https://plantiecare.com`. Site URL is only the fallback; the app supplies an explicit callback for Google sign-in, email confirmation, magic links, and password reset. Add the following **Redirect URLs** for the environments you use. Keep any existing entries when adding new ones.
 
 | Environment | Google OAuth / email confirmation / magic link | Password reset |
 | --- | --- | --- |
 | Local web | `http://localhost:5173/auth/callback` | `http://localhost:5173/auth/recovery` |
-| Production web | `https://flowerscann.netlify.app/auth/callback` | `https://flowerscann.netlify.app/auth/recovery` |
+| Production web | `https://plantiecare.com/auth/callback` | `https://plantiecare.com/auth/recovery` |
+| Previous Netlify domain | `https://flowerscann.netlify.app/auth/callback` | `https://flowerscann.netlify.app/auth/recovery` |
 | Capacitor Android/iOS | `com.plantie.app://auth/callback` for Google OAuth and magic link; `com.plantie.app://auth/confirm` for email confirmation | `com.plantie.app://auth/recovery` |
 
 If local development uses `127.0.0.1` instead of `localhost`, add its two exact `http://127.0.0.1:5173/auth/...` URLs too. For web testing on another device, use a hostname or HTTPS tunnel reachable from that device and add its exact callback and recovery URLs to the allow-list. Numeric non-loopback IP addresses (such as `http://192.168.0.115:5173`) **cannot** be used for Supabase Auth redirects: GoTrue rejects them before checking the allow-list and falls back to the production Site URL. The app blocks Google sign-in and email-link requests on those addresses with a clear error; email/password sign-in remains available. For Netlify deploy previews, add each preview's exact callback and recovery URLs, or use Supabase's documented Netlify wildcard form scoped to this site: `https://**--flowerscann.netlify.app/auth/callback` and `https://**--flowerscann.netlify.app/auth/recovery`. Keep production callbacks exact. The web app extracts the current origin, routes the incoming callback through its dedicated pre-hash URL, then restores a validated internal `#/...` route and, when present, a validated `householdId` query. Netlify rewrites both callback paths to `index.html`.
 
-On 2026-10-02, the hosted project was updated additively with native `/confirm` and `/recovery` and both Netlify-preview patterns. The two previously added numeric LAN URLs remain in the hosted list but are ineffective because of GoTrue's IP check. A CLI readback confirmed the unchanged production Site URL and existing localhost and production entries.
+On 2026-10-02, the hosted project was updated additively with native `/confirm` and `/recovery` and both Netlify-preview patterns. The two previously added numeric LAN URLs remain in the hosted list but are ineffective because of GoTrue's IP check. On 2026-10-07, the hosted Site URL changed to `https://plantiecare.com` and the two exact production callbacks were added; existing Netlify, preview, localhost, and native entries were retained. A CLI readback confirmed the hosted settings.
 
 In **Authentication > Providers > Google**, enable the provider and configure its client ID and secret in Supabase. In the Google Cloud OAuth client's **Authorized redirect URIs**, use **only the Google-to-Supabase endpoint** `https://hzigkjukqpxryziscvag.supabase.co/auth/v1/callback` for this hosted project. The web URLs and `com.plantie.app://...` links above are Supabase-to-application destinations, not Google redirect URIs. If the Google client requires Authorized JavaScript origins, enter web origins there as a separate setting. See [native callback setup](native-google-auth.md) for Android and iOS intent/scheme registration and PKCE behavior.
 

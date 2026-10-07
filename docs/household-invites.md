@@ -14,6 +14,8 @@ APP_PUBLIC_URL=https://your-production-site.example
 
 The sender domain must be verified in Resend and permitted to send to arbitrary recipients. `onboarding@resend.dev` is intentionally rejected by the function because it is limited to test recipients. `APP_PUBLIC_URL` is the controlled site origin or base path; production requires HTTPS. Local development may use `http://localhost:5173`. The invite route is `#/join?invite=<token>`. Never put the provider key in `VITE_*` or browser code.
 
+The hosted Plantie project uses `APP_PUBLIC_URL=https://plantiecare.com`. Keep this Edge Function secret aligned with the production web domain when changing domains. The sender remains a separate setting: invitation emails will not work for arbitrary recipients until a sender domain is verified in Resend and `RESEND_FROM_EMAIL` uses it.
+
 The function returns `{ invitationCreated: true, emailSent: true }` when Resend accepts the message, or `{ invitationCreated: true, emailSent: false, errorCode }` for a provider/configuration failure. A failed email leaves the pending invite and occupied slot intact. Owners can retry and copy from the pending row even when capacity is full; retry does not create another invite. Backend logs include invitation ID, household ID, provider status/category, recipient domain and timestamp, never a token or API key.
 
 Invites created **before** `20261006113000_recoverable_household_invites.sql` have only a token hash. Their raw token cannot be recovered mathematically. If the original link is unavailable, the Owner must revoke that old pending invite and create a new one. Revocation frees its slot and invalidates the old link.
