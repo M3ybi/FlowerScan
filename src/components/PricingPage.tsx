@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { CalendarDays, ChevronDown, Clock, Crown, History, Leaf, Sprout, Users } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, Crown, Leaf, Sprout, Users } from "lucide-react";
 import { LoadingButton } from "./LoadingButton";
 import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
 import type { BillingProduct, BillingStatus } from "../lib/billingService";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
-import { listHouseholdSubscriptionHistory } from "../lib/householdSubscriptionHistory";
-import type { HouseholdSubscriptionEvent } from "../lib/householdSubscriptionHistory";
+import { useHouseholdSubscriptionHistory } from "../hooks/useHouseholdSubscriptionHistory";
+import { BillingHistoryTimeline } from "./BillingHistoryTimeline";
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { beginHouseholdPurchase } from "../lib/householdPlanService";
 import { resolveHouseholdPermissions } from "../lib/householdPermissions";
@@ -79,8 +79,6 @@ export const PricingPage = ({
   const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelError, setCancelError] = useState("");
-  const [history, setHistory] = useState<HouseholdSubscriptionEvent[]>([]);
-  const [historyError, setHistoryError] = useState("");
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const actionInProgress = useRef(false);
   const pendingPlanRef = useRef<"monthly" | "yearly" | null>(null);
@@ -96,6 +94,11 @@ export const PricingPage = ({
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const presentation = getSubscriptionPresentation(subscription);
   const entitlement = subscription.householdEntitlement;
+  const history = useHouseholdSubscriptionHistory({
+    userId: subscription.userId,
+    householdId: subscription.householdId,
+    revision: `${entitlement?.status ?? ""}:${entitlement?.planKey ?? ""}:${entitlement?.validUntil ?? ""}:${entitlement?.cancelAtPeriodEnd ?? false}`,
+  });
   const isOwner = resolveHouseholdPermissions(entitlement?.role ?? null).canManageSubscription;
   const isPremium = entitlement?.isPremium === true;
   const householdPeriod = entitlement?.planKey === "premium_monthly" ? "monthly"
@@ -121,19 +124,6 @@ export const PricingPage = ({
   const dateLabel = presentation.dateMeaning === "renews" ? t("pricing.nextRenewal")
     : presentation.dateMeaning === "accessUntil" ? t("pricing.validUntil")
     : presentation.dateMeaning === "ended" ? t("pricing.endedOn") : null;
-
-  useEffect(() => {
-    setHistory([]);
-    setHistoryError("");
-    if (!isOwner || !subscription.householdId) return;
-    let cancelled = false;
-    void listHouseholdSubscriptionHistory(subscription.householdId).then((events) => {
-      if (!cancelled) setHistory(events);
-    }).catch(() => {
-      if (!cancelled) setHistoryError(copy.historyUnavailable);
-    });
-    return () => { cancelled = true; };
-  }, [isOwner, subscription.householdId, subscription.householdEntitlement?.status, subscription.householdEntitlement?.validUntil, copy.historyUnavailable]);
 
   useEffect(() => () => { void managementListenerRef.current?.remove(); }, []);
 
@@ -398,10 +388,11 @@ export const PricingPage = ({
           );
         })}
       </div>
-      {isOwner ? <section className="pricing-history" aria-labelledby="pricing-history-title">
-        <div className="pricing-section-heading"><History size={20} aria-hidden="true" /><h3 id="pricing-history-title">{copy.history}</h3><p>{copy.historyBody}</p></div>
-        {historyError ? <p role="alert">{historyError}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><time dateTime={entry.createdAt}>{formatSubscriptionDate(entry.createdAt, language)}</time><strong>{copy.historyEvents[entry.eventType] ?? copy.historyUpdated} · {entry.planKey === "premium_monthly" ? t("pricing.monthlyPlan") : entry.planKey === "premium_yearly" ? t("pricing.yearlyPlan") : entry.planKey === "free" ? t("pricing.freePlan") : copy.householdPremium}</strong></li>)}</ol> : <p>{copy.historyEmpty}</p>}
-      </section> : null}
+      {subscription.userId && subscription.householdId ? <BillingHistoryTimeline
+        householdId={subscription.householdId} items={history.items} loading={history.loading} error={history.error}
+        hasMore={history.hasMore} loadingMore={history.loadingMore} loadMoreError={history.loadMoreError}
+        onRetry={() => void history.refresh()} onLoadMore={() => void history.loadMore()} language={language}
+      /> : null}
       {isCancelModalOpen ? (
         <div className="modal-backdrop" role="presentation">
           <section ref={cancelDialogRef} className="confirm-modal subscription-cancel-modal" role="dialog" aria-modal="true" aria-labelledby="subscription-cancel-title" aria-describedby="subscription-cancel-description" tabIndex={-1} onKeyDown={handleCancelDialogKeyDown}>

@@ -5,6 +5,8 @@ const testScripts = [
   "test:billing",
   "test:subscription-state",
   "test:subscription-ui",
+  "test:billing-history-ui",
+  "test:subscription-history",
   "test:diagnostics",
   "test:household",
   "test:legacy-backend-guard",

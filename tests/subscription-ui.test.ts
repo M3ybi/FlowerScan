@@ -106,6 +106,10 @@ test("Viewer sees household billing lifecycle and capacity without administrativ
   assert.match(shared, /Occupied household slots/);
   assert.match(shared, /3 \/ 3/);
   assert.match(shared, /Only household owners can manage/);
+  assert.match(shared, /billing-history-timeline/);
+  assert.match(shared, /Billing &amp; history/);
+  assert.match(shared, /billing-history-loading/);
+  assert.doesNotMatch(shared, /No billing history yet/);
   assert.doesNotMatch(shared, /Cancel subscription|Change plan|no active personal subscription/);
 });
 
