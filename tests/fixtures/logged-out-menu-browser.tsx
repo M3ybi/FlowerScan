@@ -5,7 +5,8 @@ import { createTranslator } from "../../src/lib/i18n";
 import { supportedLanguages, writeStoredLanguage, onboardingLanguageStorageKey } from "../../src/lib/onboarding";
 import type { PlantieLanguage } from "../../src/lib/onboarding";
 import { minimumAuthPasswordLength } from "../../src/lib/authRules";
-import { authPanelCopy } from "../../src/lib/authPanelCopy";
+import { authPanelCopy, authPanelNoticeContent } from "../../src/lib/authPanelCopy";
+import type { AuthNoticeKey } from "../../src/lib/authPanelCopy";
 import { loggedOutMenuCopy } from "../../src/lib/loggedOutMenuCopy";
 import packageMetadata from "../../package.json";
 
@@ -47,7 +48,7 @@ const panel = (name: Section) => document.querySelector<HTMLDivElement>(`[id$="-
 const header = (name: Section) => document.querySelector<HTMLButtonElement>(`button[aria-controls$="-${name}-panel"]`)!;
 const authPanel = () => document.querySelector<HTMLElement>(".auth-panel-menu")!;
 const authForm = () => authPanel().querySelector<HTMLFormElement>("form")!;
-const authStatus = () => authPanel().querySelector<HTMLElement>(".report-status")?.textContent ?? "";
+const authStatus = () => authPanel().querySelector<HTMLElement>(".auth-message-content > p")?.textContent ?? "";
 const tab = (mode: "register" | "login" | "reset") => authPanel().querySelector<HTMLButtonElement>(`[role=tab][id$="-${mode}"]`)!;
 const email = () => authPanel().querySelector<HTMLInputElement>('input[autocomplete="email"]')!;
 const password = () => authPanel().querySelector<HTMLInputElement>('input[id$="-password"]')!;
@@ -82,8 +83,10 @@ const setMode = async (mode: "register" | "login" | "reset") => {
   await waitFor(() => !tab(mode).disabled, `enabled ${mode} tab`);
   tab(mode).click(); await waitFor(() => tab(mode).getAttribute("aria-selected") === "true", `auth ${mode}`);
 };
-const assertStatus = async (key: Parameters<ReturnType<typeof createTranslator>>[0]) => {
-  const expected = createTranslator("en")(key); await waitFor(() => authStatus() === expected, `auth status ${key}`);
+const assertStatus = async (key: AuthNoticeKey) => {
+  const expected = authPanelNoticeContent(key, "en");
+  await waitFor(() => authStatus() === expected.body
+    && authPanel().querySelector(".auth-message-content > strong")?.textContent === expected.title, `auth notice ${key}`);
 };
 const assertFieldMessage = async (field: () => HTMLInputElement, expected: string) => {
   await waitFor(() => field().getAttribute("aria-invalid") === "true"
@@ -176,13 +179,13 @@ const run = async () => {
     await openSection("household"); await openSection("account");
     check("form values and pending auth survive other accordion interactions", () => assert(password().value === "Fixture-password-8"
       && confirmation().value === "Fixture-password-8" && tab("register").getAttribute("aria-selected") === "true", "Account state remounted"));
-    auth.hold = false; auth.release!(); await assertStatus("auth.accountCreated");
+    auth.hold = false; auth.release!(); await assertStatus("verification_requested");
     check("registration normalizes email and requests confirmation rather than claiming a session", () => assert(auth.calls[0].kind === "register"
       && auth.calls[0].email === "fixture@example.test" && callbacks.authSuccess === 0, "Registration callback contract changed"));
     check("successful registration clears password fields and retains email", () => assert(password().value === "" && confirmation().value === ""
       && email().value.toLowerCase().trim() === "fixture@example.test", "Sensitive fields not cleared correctly"));
     await openSection("household"); await openSection("account");
-    check("registration success state survives collapsing and reopening Account", () => assert(authStatus() === createTranslator("en")("auth.accountCreated"), "Auth status reset by accordion"));
+    check("registration success state survives collapsing and reopening Account", () => assert(authStatus() === authPanelNoticeContent("verification_requested", "en").body, "Auth status reset by accordion"));
     tab("register").focus(); tab("register").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })); await tick();
     check("auth tab arrow handler moves selection and focus", () => assert(tab("login").getAttribute("aria-selected") === "true"
       && document.activeElement === tab("login"), "Arrow tab behavior failed"));
@@ -195,23 +198,23 @@ const run = async () => {
     await setMode("login");
     check("login keeps email and uses current-password autofill", () => assert(email().value.toLowerCase().trim() === "fixture@example.test"
       && password().autocomplete === "current-password" && !confirmation(), "Login fields inaccurate"));
-    await setInput(password(), "Fixture-password-8"); auth.failNext = true; submit(); await assertStatus("auth.failed");
+    await setInput(password(), "Fixture-password-8"); auth.failNext = true; submit(); await assertStatus("unavailable");
     check("auth boundary failure remains visible without reporting success", () => assert(callbacks.authSuccess === 0 && password().value !== "", "Failure reported success or destroyed retry data"));
     check("auth request errors are directly after the form", () => assert(authForm().nextElementSibling?.classList.contains("report-status"), "Request error is separated from the form"));
     auth.hold = true; auth.release = null; submit();
     await waitFor(() => auth.release && tab("login").disabled, "held login");
     check("login uses a distinct loading action with disabled inputs", () => assertRequestDisabled("login"));
-    auth.hold = false; auth.release!(); await assertStatus("auth.signedIn");
+    auth.hold = false; auth.release!(); await assertStatus("signed_in");
     check("successful email login calls parent exactly once and clears password", () => assert(callbacks.authSuccess === 1 && password().value === "", "Login callback changed"));
     await setMode("reset");
     check("reset mode has only the email field", () => assert(authForm().querySelectorAll("input").length === 1, "Reset includes password fields"));
     auth.hold = true; auth.release = null; submit();
     await waitFor(() => auth.release && tab("reset").disabled, "held reset");
     check("reset uses a distinct loading action with disabled email input", () => assertRequestDisabled("reset"));
-    auth.hold = false; auth.release!(); await assertStatus("auth.resetSent");
+    auth.hold = false; auth.release!(); await assertStatus("reset_requested");
     check("reset submits the real boundary and does not report authenticated success", () => assert(auth.calls.at(-1)?.kind === "reset"
       && callbacks.authSuccess === 1, "Reset callback contract changed"));
-    auth.failNext = true; authPanel().querySelector<HTMLButtonElement>(".auth-google-button")!.click(); await assertStatus("auth.googleFailed");
+    auth.failNext = true; authPanel().querySelector<HTMLButtonElement>(".auth-google-button")!.click(); await assertStatus("oauth_failure");
     check("Google failure remains actionable without changing auth state", () => assert(auth.calls.at(-1)?.kind === "google" && callbacks.authSuccess === 1, "Google failure changed session"));
     auth.hold = true; auth.release = null;
     authPanel().querySelector<HTMLButtonElement>(".auth-google-button")!.click();
@@ -314,6 +317,17 @@ const run = async () => {
   const originalHeight = frame.style.height;
   frame.style.height = "420px"; await tick();
   for (const input of authForm().querySelectorAll<HTMLInputElement>("input")) {
+    if (unavailable) {
+      input.scrollIntoView({ block: "nearest", behavior: "auto" });
+      input.focus(); await tick();
+      check(`${input.autocomplete} unavailable input remains disabled and scrollable in the reduced viewport`, () => {
+        const bounds = input.getBoundingClientRect();
+        assert(input.disabled && document.activeElement !== input, "Unconfigured auth field became editable or focusable");
+        assert(bounds.top >= -1 && bounds.bottom <= innerHeight + 1, "Disabled auth field is not scrollable into view");
+        assert(!document.querySelector(".app-tab-nav,.mobile-bottom-nav"), "Authenticated sticky controls reappeared");
+      });
+      continue;
+    }
     input.focus(); await tick();
     await waitFor(() => {
       const bounds = input.getBoundingClientRect();

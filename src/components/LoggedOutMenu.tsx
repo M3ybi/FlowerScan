@@ -8,6 +8,8 @@ import { loggedOutMenuCopy } from "../lib/loggedOutMenuCopy";
 import { menuProductInfo } from "../lib/menuProductInfo";
 import { useAppVersion } from "../hooks/useAppVersion";
 import { AuthPanel } from "./AuthPanel";
+import type { AuthNotice } from "./AuthPanel";
+import type { AuthMode } from "../lib/authRules";
 import { LoadingButton } from "./LoadingButton";
 
 type MenuSection = "account" | "household" | "subscription" | "language" | "support" | "about";
@@ -22,6 +24,10 @@ export type LoggedOutMenuProps = {
   inviteStatusClass: string;
   onAuthSuccess: () => void;
   initialSection?: "account" | "household";
+  initialAuthMode?: AuthMode;
+  initialAuthEmail?: string;
+  initialAuthNotice?: AuthNotice;
+  onAuthNoticeConsumed?: () => void;
 };
 
 // Decorative, code-native foliage keeps the hero light without adding image requests.
@@ -37,7 +43,7 @@ const MenuFoliage = () => <svg className="menu-hub-foliage" viewBox="0 0 250 220
   <path d="M127 181C151 152 194 157 205 179C186 210 150 211 127 181Z" fill="#5e905b" />
 </svg>;
 
-export const LoggedOutMenu = ({ language, onLanguageChange, inviteInput, onInviteInputChange, onContinueInvite, isJoiningInvite, inviteStatus, inviteStatusClass, onAuthSuccess, initialSection = "account" }: LoggedOutMenuProps) => {
+export const LoggedOutMenu = ({ language, onLanguageChange, inviteInput, onInviteInputChange, onContinueInvite, isJoiningInvite, inviteStatus, inviteStatusClass, onAuthSuccess, initialSection = "account", initialAuthMode, initialAuthEmail, initialAuthNotice, onAuthNoticeConsumed }: LoggedOutMenuProps) => {
   const t = useMemo(() => createTranslator(language), [language]);
   const copy = loggedOutMenuCopy(language ?? "en");
   const version = useAppVersion();
@@ -91,7 +97,7 @@ export const LoggedOutMenu = ({ language, onLanguageChange, inviteInput, onInvit
     <div className="menu-hub-layout">
       <section className="menu-hub-section menu-hub-account" data-section="account" data-expanded={expandedSection === "account"}>
         {header("account", UserRound, t("menu.account"), copy.accountDescription)}
-        <div className="menu-hub-section-body" {...panel("account")}><AuthPanel compact appearance="menu" language={language} onSuccess={onAuthSuccess} /></div>
+        <div className="menu-hub-section-body" {...panel("account")}><AuthPanel compact appearance="menu" language={language} onSuccess={onAuthSuccess} initialMode={initialAuthMode} initialEmail={initialAuthEmail} initialNotice={initialAuthNotice} onNoticeConsumed={onAuthNoticeConsumed} /></div>
       </section>
       <div className="menu-hub-information">
         <section className="menu-hub-section" data-section="household">

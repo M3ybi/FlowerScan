@@ -47,17 +47,29 @@ await mkdir(artifacts, { recursive: true });
 // Replace the actual network/auth boundary, not the component, its validation,
 // state, translations, version hook, or production stylesheet.
 const authBoundary = `
-const state = globalThis.__loggedOutMenuFixtureAuth = {calls: [], hold: false, release: null, failNext: false};
+const state = globalThis.__loggedOutMenuFixtureAuth = {calls: [], hold: false, release: null, failNext: false, resetRetryAt: 0};
 async function request(kind, email, password) {
   state.calls.push({kind, email: email ?? null, passwordLength: password?.length ?? 0});
   if (state.hold) await new Promise(resolve => { state.release = resolve; });
   if (state.failNext) { state.failNext = false; throw new Error("Synthetic auth boundary unavailable"); }
 }
-export const registerWithEmailPassword = (email, password) => request("register", email, password);
+export const registerWithEmailPassword = async (email, password) => {
+  await request("register", email, password);
+  return {status: "verification_required", email};
+};
 export const signInWithEmailPassword = (email, password) => request("login", email, password);
-export const requestPasswordReset = email => request("reset", email);
+export const getPasswordResetRetryAt = () => state.resetRetryAt;
+export const requestPasswordReset = async email => {
+  await request("reset", email);
+  state.resetRetryAt = Date.now() + 60000;
+  return {status: "reset_requested", email, retryAt: state.resetRetryAt};
+};
 export const signInWithGoogle = () => request("google");
-export const updatePassword = (password) => request("update", undefined, password);
+export const updatePassword = async password => {
+  await request("update", undefined, password);
+  return {status: "password_updated", email: null};
+};
+export const finishPasswordRecovery = () => request("finishRecovery");
 `;
 await build({ absWorkingDir: workspace, entryPoints: ["tests/fixtures/logged-out-menu-browser.tsx"],
   outfile: path.join(artifacts, "fixture.js"), bundle: true, platform: "browser", format: "iife", jsx: "automatic",

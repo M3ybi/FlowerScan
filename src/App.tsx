@@ -67,7 +67,11 @@ import {
 import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
 import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
-import { AuthPanel } from "./components/AuthPanel";
+import { AuthMessage, AuthPanel } from "./components/AuthPanel";
+import type { AuthNotice } from "./components/AuthPanel";
+import type { AuthMode } from "./lib/authRules";
+import { authPanelCopy, authPanelNoticeContent } from "./lib/authPanelCopy";
+import { invitationReturnLocation, readInvitationAuthContext } from "./lib/invitationAuthContext";
 import { LoggedOutMenu } from "./components/LoggedOutMenu";
 import { HouseholdPeopleList } from "./components/HouseholdPeopleList";
 import { HouseholdInvitationInbox, InvitationInboxButton } from "./components/HouseholdInvitationInbox";
@@ -102,7 +106,7 @@ import {
   writeStoredLanguage,
 } from "./lib/onboarding";
 import type { OnboardingStep, PlantieLanguage } from "./lib/onboarding";
-import { signOut } from "./lib/authService";
+import { finishPasswordRecovery, signOut } from "./lib/authService";
 import { isSupabaseConfigured } from "./lib/supabase";
 import {
   detectDataSourceMode,
@@ -215,6 +219,10 @@ type HouseholdLookupStatus = "idle" | "checking" | "complete";
 export const App = () => {
   const route = useHashRoute();
   const auth = useAuth();
+  const [authEntry, setAuthEntry] = useState<{ id: number; mode: AuthMode; email: string; notice?: AuthNotice } | null>(null);
+  const [isLeavingRecovery, setIsLeavingRecovery] = useState(false);
+  const [recoveryExitFailed, setRecoveryExitFailed] = useState(false);
+  useEffect(() => setRecoveryExitFailed(false), [auth.recoveryFlowId]);
   const householdDirectory = useHouseholdDirectory(auth.user?.id ?? null);
   const invitationInbox = useHouseholdInvitations(auth.user);
   const invitationMailboxRef = useRef<HTMLButtonElement>(null);
@@ -2826,7 +2834,32 @@ export const App = () => {
     window.location.hash = fallbackHash;
   };
 
-  if (isSupabaseAuthIdentityTransition ||
+  const completeRecovery = async (email: string | null) => {
+    const flowId = auth.beginPasswordRecoveryCompletion(auth.recoveryFlowId);
+    if (flowId === null) return;
+    await finishPasswordRecovery();
+    if (!auth.completePasswordRecovery(flowId)) return;
+    setAuthEntry({ id: Date.now(), mode: "login", email: email ?? "", notice: { key: "password_changed", severity: "success" } });
+    window.location.hash = "#/menu?section=account";
+  };
+  const requestNewRecoveryLink = async (email = auth.user?.email ?? "") => {
+    if (isLeavingRecovery) return;
+    const flowId = auth.recoveryFlowId;
+    setIsLeavingRecovery(true);
+    setRecoveryExitFailed(false);
+    try {
+      await finishPasswordRecovery();
+      if (!auth.completePasswordRecovery(flowId)) return;
+      setAuthEntry({ id: Date.now(), mode: "reset", email: email || auth.user?.email || "" });
+      window.location.hash = "#/menu?section=account";
+    } catch {
+      if (auth.isPasswordRecoveryFlowCurrent(flowId)) setRecoveryExitFailed(true);
+    } finally {
+      setIsLeavingRecovery(false);
+    }
+  };
+
+  if ((isSupabaseAuthIdentityTransition && !auth.isPasswordRecovery && !auth.invalidRecoveryLink) ||
     (auth.loading && isSupabaseConfigured && route.page !== "legal" && route.page !== "health" && route.page !== "release-readiness")) {
     return (
       <main className="app-shell access-shell onboarding-shell">
@@ -2836,6 +2869,19 @@ export const App = () => {
         </section>
       </main>
     );
+  }
+
+  if (auth.invalidRecoveryLink) {
+    const message = authPanelNoticeContent("invalid_link", selectedLanguage);
+    const cleanupMessage = authPanelNoticeContent("unavailable", selectedLanguage);
+    return <main className="app-shell access-shell onboarding-shell">
+      <section className="access-card onboarding-card auth-recovery-card" aria-labelledby="invalid-recovery-title">
+        <div className="section-title"><KeyRound size={22} aria-hidden="true" /><h1 id="invalid-recovery-title">{message.title}</h1></div>
+        <AuthMessage severity="warning">{message.body}</AuthMessage>
+        {recoveryExitFailed ? <AuthMessage severity="error" title={cleanupMessage.title}>{cleanupMessage.body}</AuthMessage> : null}
+        <LoadingButton className="primary-action" type="button" isLoading={isLeavingRecovery} loadingLabel={t("auth.loading")} onClick={() => { void requestNewRecoveryLink(); }}>{authPanelCopy(selectedLanguage).requestNewReset}</LoadingButton>
+      </section>
+    </main>;
   }
 
   if (auth.callbackError) {
@@ -2852,7 +2898,7 @@ export const App = () => {
           <button className="neutral-action" type="button" onClick={auth.dismissCallbackError}>
             {t("auth.invalidCallbackAction")}
           </button>
-          <AuthPanel compact initialMode="login" language={selectedLanguage} onSuccess={auth.dismissCallbackError} />
+          <AuthPanel compact initialMode="login" language={selectedLanguage} onSuccess={() => { auth.dismissCallbackError(); auth.dismissRecoveryError(); }} />
         </section>
       </main>
     );
@@ -2861,15 +2907,14 @@ export const App = () => {
   if (auth.isPasswordRecovery) {
     return (
       <main className="app-shell access-shell onboarding-shell">
-        {renderHeroActions()}
-        {renderHouseholdSheet()}
-        <section className="access-card onboarding-card" aria-labelledby="password-recovery-title">
+        <section className="access-card onboarding-card auth-recovery-card" aria-labelledby="password-recovery-title">
           <div className="section-title">
             <KeyRound size={22} aria-hidden="true" />
             <h1 id="password-recovery-title">{t("auth.newPasswordTitle")}</h1>
           </div>
           <p>{t("auth.newPasswordBody")}</p>
-          <AuthPanel compact initialMode="updatePassword" language={selectedLanguage} />
+          {recoveryExitFailed ? <AuthMessage severity="error">{authPanelNoticeContent("unavailable", selectedLanguage).body}</AuthMessage> : null}
+          <AuthPanel key={auth.recoveryFlowId} compact initialMode="updatePassword" language={selectedLanguage} onPasswordUpdated={completeRecovery} onRequestPasswordReset={requestNewRecoveryLink} />
         </section>
       </main>
     );
@@ -3845,6 +3890,7 @@ export const App = () => {
 
     if (!auth.isAuthenticated) {
       return <LoggedOutMenu
+        key={authEntry?.id ?? "default-auth-entry"}
         language={selectedLanguage}
         onLanguageChange={selectOnboardingLanguage}
         inviteInput={joinInviteInput}
@@ -3854,9 +3900,20 @@ export const App = () => {
         inviteStatus={inviteStatus}
         inviteStatusClass={inviteStatusClass}
         onAuthSuccess={() => {
+          setAuthEntry(null);
           if (normalizeInviteTokenInput(joinInviteInput)) void handleJoinInvite(joinInviteInput);
+          else {
+            try {
+              const invitationId = readInvitationAuthContext(window.localStorage);
+              if (invitationId) window.location.hash = invitationReturnLocation(invitationId).slice(1);
+            } catch { /* Invitations remain available from the authenticated inbox. */ }
+          }
         }}
         initialSection={route.section === "household" ? "household" : "account"}
+        initialAuthMode={authEntry?.mode}
+        initialAuthEmail={authEntry?.email}
+        initialAuthNotice={authEntry?.notice}
+        onAuthNoticeConsumed={() => setAuthEntry((current) => current ? { ...current, notice: undefined } : current)}
       />;
     }
 

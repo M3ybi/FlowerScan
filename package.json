@@ -61,7 +61,9 @@
     "test:care-presentation": "tsc --outDir .tmp-tests --module ESNext --moduleResolution Bundler --target ES2022 --jsx react-jsx --skipLibCheck --types node src/vite-env.d.ts tests/care-presentation.test.tsx && node --test .tmp-tests/tests/care-presentation.test.js",
     "test:auth-panel-ui": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --jsx react-jsx --skipLibCheck --types node tests/auth-panel-ui.test.tsx && esbuild tests/auth-panel-ui.test.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outfile=.tmp-tests/auth-panel-ui.bundle.mjs && node --test .tmp-tests/auth-panel-ui.bundle.mjs",
     "test:logged-out-menu-facts": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --jsx react-jsx --resolveJsonModule --allowSyntheticDefaultImports --skipLibCheck --types node tests/logged-out-menu-facts.test.ts && esbuild tests/logged-out-menu-facts.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/logged-out-menu-facts.bundle.mjs && node --test .tmp-tests/logged-out-menu-facts.bundle.mjs",
-    "test:logged-out-menu-browser": "node scripts/test-logged-out-menu-browser.mjs"
+    "test:logged-out-menu-browser": "node scripts/test-logged-out-menu-browser.mjs",
+    "test:auth-service-flow": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node tests/auth-service-flow.test.ts && esbuild tests/auth-service-flow.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/auth-service-flow.bundle.mjs && node --test .tmp-tests/auth-service-flow.bundle.mjs",
+    "test:auth-flow-browser": "node scripts/test-auth-flow-browser.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

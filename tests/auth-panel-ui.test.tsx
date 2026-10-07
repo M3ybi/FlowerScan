@@ -2,13 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AuthPanel } from "../src/components/AuthPanel";
-import { authPanelCopy, authPanelFieldErrors, authPanelKeyboardMode, authPanelProviders, authPanelVisibleFieldErrors } from "../src/lib/authPanelCopy";
+import { AuthMessage, AuthPanel } from "../src/components/AuthPanel";
+import { authPanelCopy, authPanelFieldErrors, authPanelKeyboardMode, authPanelNoticeContent, authPanelProviders, authPanelVisibleFieldErrors } from "../src/lib/authPanelCopy";
 import { minimumAuthPasswordLength } from "../src/lib/authRules";
 
 const renderPanel = (changes: Partial<Parameters<typeof AuthPanel>[0]> = {}) => renderToStaticMarkup(createElement(AuthPanel, {
   language: "en", ...changes,
 }));
+
+test("recovery has the same accessible lock fields and reveal controls as account auth", () => {
+  const html = renderPanel({ initialMode: "updatePassword" });
+  assert.equal((html.match(/class="auth-password-toggle"/g) ?? []).length, 2);
+  assert.equal((html.match(/lucide-lock-keyhole auth-input-icon/g) ?? []).length, 2);
+  assert.equal((html.match(/autoComplete="new-password"/gi) ?? []).length, 2);
+  assert.equal((html.match(/<label class="auth-menu-field-label" for=/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /type="email"|auth-provider-list|auth-mode-tabs/);
+});
 
 test("compact menu email uses an email keyboard and leaves validation to associated inline errors", () => {
   const html = renderPanel({ appearance: "menu" });
@@ -29,12 +38,15 @@ test("compact menu keeps Google separate and removes unavailable planned provide
   assert.equal((existing.match(/>Coming soon<\/span>/g) ?? []).length, 2);
 });
 
-test("menu appearance is opt-in and the existing invitation/default form presentation is preserved", () => {
+test("invitation/default forms share the accessible fields while menu density remains opt-in", () => {
   const html = renderPanel();
-  assert.doesNotMatch(html, /auth-panel-menu|auth-input-wrap|auth-password-toggle|auth-provider-divider|auth-field-hint|auth-unavailable-note/);
-  assert.equal((html.match(/<label class="field">/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /auth-panel-menu/);
+  assert.equal((html.match(/<label class="auth-menu-field-label" for=/g) ?? []).length, 3);
   assert.equal((html.match(/type="password"/g) ?? []).length, 2);
-  assert.match(html, /class="neutral-action auth-google-button" type="button">/);
+  assert.equal((html.match(/auth-password-toggle/g) ?? []).length, 2);
+  assert.match(html, /role="tab"/);
+  assert.match(html, /auth-provider-divider/);
+  assert.match(html, /auth-google-button auth-provider-option/);
 });
 
 test("menu registration has explicit associated field labels and accessible password visibility controls", () => {
@@ -77,7 +89,76 @@ test("sign-in, reset and password-update modes expose only their existing requir
   assert.match(update, />New password</);
   assert.match(update, />Update password</);
   assert.match(update, /autoComplete="new-password"/i);
-  assert.equal(renderPanel({ appearance: "menu", initialMode: "updatePassword" }), update, "recovery always retains its existing confirmation flow");
+  assert.equal(renderPanel({ appearance: "menu", initialMode: "updatePassword" }).replace("auth-panel auth-panel-menu", "auth-panel"), update, "menu density does not alter recovery fields or semantics");
+});
+
+test("unusable recovery never renders a password form and offers a new reset link", () => {
+  for (const key of ["invalid_link", "session_expired", "reauthentication_required"] as const) {
+    const html = renderPanel({ initialMode: "updatePassword", initialNotice: { key, severity: "warning" } });
+    assert.doesNotMatch(html, /<form|<input|Update password|auth-mode-tabs|auth-provider-list/);
+    assert.match(html, /auth-message-warning/);
+    assert.match(html, /Request a new reset link/);
+    assert.ok(html.includes(authPanelNoticeContent(key, "en").body));
+  }
+});
+
+test("normal sign-in failure keeps sign-in fields and presents safe reset/create actions", () => {
+  const html = renderPanel({ initialMode: "login", initialEmail: " USER@EXAMPLE.TEST ", initialNotice: {
+    key: "invalid_credentials", severity: "error", actionModes: ["reset", "register"],
+  } });
+  assert.match(html, /aria-selected="true"[^>]*>Sign in</);
+  assert.equal((html.match(/<input /g) ?? []).length, 2);
+  assert.match(html, /value="user@example\.test"/);
+  assert.match(html, /auth-message-error[^>]*role="alert"/);
+  assert.match(html, /auth-message-actions/);
+  assert.doesNotMatch(html, /No account|wrong password|does not exist|Supabase error/);
+  assert.match(html, />Reset password</);
+  assert.match(html, />Create account</);
+});
+
+test("success notices remain conditional and recovery handoff requests normal sign-in", () => {
+  const verification = renderPanel({ initialNotice: { key: "verification_requested", severity: "success" } });
+  assert.match(verification, /If registration can proceed/);
+  assert.doesNotMatch(verification, /Account created|email was sent|already exists/);
+  const reset = renderPanel({ initialMode: "reset", initialNotice: { key: "reset_requested", severity: "success" } });
+  assert.match(reset, /If an account uses this email/);
+  assert.doesNotMatch(reset, /does not exist|email was sent/);
+  const changed = renderPanel({ initialMode: "login", initialNotice: { key: "password_changed", severity: "success" } });
+  assert.match(changed, /Password changed/);
+  assert.match(changed, /Sign in with your new password/);
+  assert.match(changed, /autoComplete="current-password"/i);
+  assert.doesNotMatch(changed, /autoComplete="new-password"/i);
+});
+
+test("shared auth messages announce severity and escape dynamic content", () => {
+  for (const severity of ["success", "info", "warning", "error"] as const) {
+    const html = renderToStaticMarkup(createElement(AuthMessage, { severity, title: "<script>unsafe</script>", children: "<img src=x onerror=alert(1)>" }));
+    assert.match(html, new RegExp(`auth-message-${severity}`));
+    assert.match(html, new RegExp(`role="${severity === "error" ? "alert" : "status"}"`));
+    assert.match(html, /tabindex="-1"/i);
+    assert.match(html, /aria-hidden="true"/);
+    assert.doesNotMatch(html, /<script>|<img/);
+    assert.match(html, /&lt;script&gt;/);
+  }
+});
+
+test("recovery and result copy is localized for all supported languages", () => {
+  const keys = ["password_changed", "verification_requested", "reset_requested", "signed_in", "existing_account", "user_not_found",
+    "invalid_link", "session_expired", "reauthentication_required", "same_password", "reset_cooldown", "recovery_cleanup_failed"] as const;
+  for (const language of ["en", "sk", "de", "fr", "es"] as const) {
+    const copy = authPanelCopy(language);
+    assert.ok(copy.confirmNewPassword && copy.newPasswordPlaceholder && copy.requestNewReset && copy.finishRecovery && copy.finishingRecovery);
+    assert.ok(copy.resendCountdown(27).includes("27"));
+    for (const key of keys) {
+      const content = authPanelNoticeContent(key, language);
+      assert.ok(content.title && content.body);
+      assert.doesNotMatch(content.body, /auth\.error\./);
+      if (language !== "en") assert.notEqual(content.body, authPanelNoticeContent(key, "en").body);
+    }
+    const recovery = renderPanel({ initialMode: "updatePassword", language });
+    assert.ok(recovery.includes(copy.confirmNewPassword));
+    assert.ok(recovery.includes(copy.newPasswordPlaceholder));
+  }
 });
 
 test("menu auth tabs expose selection, unique panel association and a single tab stop", () => {

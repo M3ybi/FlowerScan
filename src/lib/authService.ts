@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { getUserHouseholds } from "./plantieRepository";
 import { supabase } from "./supabase";
 import { createAuthActions, mapSupabaseAuthError, requireWebAuthRedirectUrl } from "./authRules";
+import { createPasswordRecoveryCleanup } from "./authRecovery";
 import { authReturnInvitationStorageKey, authReturnPathStorageKey, createAuthReturnLocation, createSingleFlightAuthCodeExchange, safeAuthReturnLocation } from "./authRedirects";
 import type { AuthRedirectPurpose } from "./authRedirects";
 import { invitationReturnLocation, readInvitationAuthContext } from "./invitationAuthContext";
@@ -13,13 +14,18 @@ import {
   nativeOAuthRedirectUrl,
   nativeOAuthSuccessEvent,
   nativeRecoveryRedirectUrl,
+  parseNativeAuthCallback,
 } from "./nativeOAuth";
+import type { NativeAuthCallbackKind, NativeAuthCallbackResult } from "./nativeOAuth";
 import type { AuthActionsClient, AuthMode } from "./authRules";
 
 export type { AuthMode };
 export {
   createAuthActions,
   minimumAuthPasswordLength,
+  normalizeAuthEmail,
+  passwordResetRemainingSeconds,
+  resolveAuthFailure,
   validateAuthEmail,
   validateAuthPassword,
   validateLoginInput,
@@ -95,6 +101,10 @@ let nativeListenerGeneration = 0;
 let nativeOAuthInProgress = false;
 let nativeBrowserFinishedListener: { remove(): Promise<void> } | null = null;
 export const nativeAuthLinkErrorEvent = "planti-native-auth-link-error";
+export const nativeAuthLinkSuccessEvent = "planti-native-auth-link-success";
+
+export const createNativeAuthLinkSuccessEvent = (result: NativeAuthCallbackResult | null) =>
+  result?.status === "completed" ? new CustomEvent(nativeAuthLinkSuccessEvent, { detail: { kind: result.kind } }) : null;
 
 const clearNativeBrowserFinishedListener = async () => {
   const listener = nativeBrowserFinishedListener;
@@ -108,8 +118,24 @@ const nativeCallbackHandler = createNativeAuthCallbackHandler(async (code) => {
 });
 
 const emitNativeOAuthError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : "Google sign-in could not be completed.";
+  const message = mapSupabaseAuthError(error, "oauth_failure").message;
   window.dispatchEvent(new CustomEvent(nativeOAuthErrorEvent, { detail: message }));
+};
+
+/** Identify an error screen's purpose without retaining codes, tokens, or provider error descriptions. */
+export const nativeAuthLinkPurpose = (url: string): NativeAuthCallbackKind | null => {
+  try {
+    const purpose = new URL(url);
+    const types = [...purpose.searchParams.getAll("type"), ...new URLSearchParams(purpose.hash.slice(1)).getAll("type")];
+    purpose.search = "";
+    purpose.hash = "";
+    // Reuse the strict registered-route parser. This marker is never exchanged for a session.
+    purpose.searchParams.set("code", "purpose-only");
+    if (types.length === 1) purpose.searchParams.set("type", types[0]);
+    return parseNativeAuthCallback(purpose.href)?.kind ?? null;
+  } catch {
+    return null;
+  }
 };
 
 const restorePostAuthRoute = () => {
@@ -131,16 +157,18 @@ const handleIncomingNativeAuthUrl = async (url: string) => {
   try {
     const result = await nativeCallbackHandler(url);
     if (!result || result.status === "duplicate") return;
+    const completionEvent = createNativeAuthLinkSuccessEvent(result);
+    if (completionEvent) window.dispatchEvent(completionEvent);
     if (result.kind !== "recovery") restorePostAuthRoute();
     if (result.kind === "oauth") {
       nativeOAuthInProgress = false;
       await clearNativeBrowserFinishedListener();
       window.dispatchEvent(new Event(nativeOAuthSuccessEvent));
     }
-    const { Browser } = await import("@capacitor/browser");
-    await Browser.close().catch(() => undefined);
+    // Browser cleanup is optional after verified authentication, including module-load failures.
+    await import("@capacitor/browser").then(({ Browser }) => Browser.close()).catch(() => undefined);
   } catch (error) {
-    window.dispatchEvent(new Event(nativeAuthLinkErrorEvent));
+    window.dispatchEvent(new CustomEvent(nativeAuthLinkErrorEvent, { detail: { kind: nativeAuthLinkPurpose(url) } }));
     if (nativeOAuthInProgress) emitNativeOAuthError(error);
     nativeOAuthInProgress = false;
     await clearNativeBrowserFinishedListener();
@@ -236,9 +264,12 @@ export const signInWithEmailPassword = async (email: string, password: string) =
   authActions.signInWithEmailPassword(email, password);
 
 export const requestPasswordReset = async (email: string) => authActions.requestPasswordReset(email);
+export const getPasswordResetRetryAt = () => authActions.getPasswordResetRetryAt();
 
 export const updatePassword = async (password: string, confirmPassword: string) =>
   authActions.updatePassword(password, confirmPassword);
+
+export const finishPasswordRecovery = createPasswordRecoveryCleanup(getClient);
 
 export const signInWithGoogle = async () => {
   rememberPostAuthRoute();

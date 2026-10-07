@@ -2704,6 +2704,40 @@ textarea:focus-visible {
   padding-top: 2px;
 }
 
+.auth-panel .auth-menu-field { display: grid; gap: 6px; min-width: 0; }
+.auth-panel .auth-menu-field-label { color: var(--ink); font-size: 0.9rem; font-weight: 750; }
+.auth-panel .auth-input-wrap { position: relative; min-width: 0; }
+.auth-panel .auth-input-wrap input { width: 100%; min-height: 46px; padding: 10px 46px 10px 38px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 1rem; scroll-margin: 16px; }
+.auth-panel .auth-input-wrap input[aria-invalid="true"] { border-color: #b44637; }
+.auth-panel .auth-input-wrap input:disabled { background: #f4f5f0; color: var(--muted); }
+.auth-panel .auth-input-icon { position: absolute; top: 14px; left: 12px; color: var(--muted); pointer-events: none; }
+.auth-panel .auth-password-toggle { position: absolute; display: grid; place-items: center; right: 1px; top: 1px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; }
+.auth-panel .auth-field-hint, .auth-panel .auth-verification-note, .auth-panel .auth-unavailable-note { margin: 0; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.auth-panel .auth-field-error { margin: 0; color: #9f3528; font-size: 0.8rem; line-height: 1.4; }
+.report-status.auth-form-status { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; margin: 0; padding: 12px 14px; border: 1px solid #c4ded0; border-radius: 12px; background: #edf5ef; color: #175f43; font-size: 0.86rem; line-height: 1.5; overflow-wrap: anywhere; }
+.auth-form-status > svg { margin-top: 2px; }
+.auth-message-content { display: grid; gap: 4px; min-width: 0; }
+.auth-message-content > p { margin: 0; }
+.auth-form-status > p { margin: 0; }
+.auth-form-status.auth-message-info { background: #eef5fb; border-color: #cbddea; color: #285d7b; }
+.auth-form-status.auth-message-warning { background: #fff8e9; border-color: #ead6af; color: #805214; }
+.auth-message-error, .auth-form-status.is-error { background: #fff0ed; border-color: #edc9c0; color: #9f3528; }
+.auth-message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 3px; }
+.auth-message-actions button { min-height: 44px; padding: 8px 12px; border-radius: 10px; font: inherit; }
+.auth-resend-status { margin: 0; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.auth-panel .auth-security-note { display: flex; align-items: start; gap: 8px; font-size: 0.8rem; line-height: 1.5; }
+.auth-panel .auth-security-note > svg { flex: 0 0 16px; margin-top: 2px; color: var(--brand); }
+.auth-panel :is(button, input):focus-visible { outline: 3px solid rgba(26, 115, 82, 0.55); outline-offset: 3px; }
+.auth-panel .auth-mode-tabs button { min-height: 44px; }
+.auth-recovery-card { width: min(100%, 600px); margin-inline: auto; }
+.auth-recovery-card h1 { overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+  .auth-recovery-card { padding: 20px; }
+  .auth-panel .auth-mode-tabs button { font-size: 0.8rem; padding-inline: 4px; }
+  .auth-message-actions { flex-direction: column; }
+}
+
 .auth-mode-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6324,6 +6358,9 @@ textarea:focus-visible {
 .menu-hub .auth-field-error { margin: 0; color: #9f3528; font-size: 0.77rem; line-height: 1.4; }
 .menu-hub .auth-form-status { margin: 0; padding: 10px 12px; border-radius: 11px; background: #edf5ef; color: var(--brand); font-size: 0.8rem; line-height: 1.45; }
 .menu-hub .auth-form-status.is-error { background: #fff0ed; color: #9f3528; }
+.menu-hub .auth-form-status.auth-message-info { background: #eef5fb; border-color: #cbddea; color: #285d7b; }
+.menu-hub .auth-form-status.auth-message-warning { background: #fff8e9; border-color: #ead6af; color: #805214; }
+.menu-hub .auth-form-status.auth-message-error { background: #fff0ed; border-color: #edc9c0; color: #9f3528; }
 .menu-hub .auth-panel-menu .primary-action { min-height: 48px; border-radius: 12px; font-size: 0.9rem; }
 .menu-hub .auth-provider-divider { display: flex; align-items: center; gap: 13px; color: var(--muted); font-size: 0.7rem; font-weight: 650; text-transform: uppercase; }
 .menu-hub .auth-provider-divider::before, .menu-hub .auth-provider-divider::after { flex: 1; height: 1px; background: var(--line); content: ""; }

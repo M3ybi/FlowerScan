@@ -13,6 +13,7 @@ import {
   validateRegistrationInput,
 } from "../src/lib/authRules.js";
 import { createAuthReturnLocation, createSingleFlightAuthCodeExchange, readWebAuthCallback, safeAuthReturnLocation, safeAuthReturnPath } from "../src/lib/authRedirects.js";
+import { createPasswordRecoveryMarker, isPasswordRecoverySessionValid, passwordRecoveryStorageKey, readPasswordRecoveryMarker, writePasswordRecoveryMarker } from "../src/lib/passwordRecoverySession.js";
 
 const createMockAuthClient = () => {
   const calls: Array<{ method: string; input: unknown }> = [];
@@ -42,7 +43,7 @@ const createMockAuthClient = () => {
         },
         updateUser: async (input: unknown) => {
           calls.push({ input, method: "updateUser" });
-          return { error: null };
+          return { data: { user: { id: "11111111-1111-4111-8111-111111111111", email: "user@example.com" } }, error: null };
         },
       },
     },
@@ -365,4 +366,41 @@ test("password recovery route renders a dedicated password update mode", () => {
   assert.match(appSource, /auth\.isPasswordRecovery/);
   assert.match(appSource, /initialMode="updatePassword"/);
   assert.match(authPanelSource, /updatePassword\(password, confirmPassword\)/);
+  assert.match(appSource, /onPasswordUpdated=\{completeRecovery\}/);
+  assert.match(appSource, /await finishPasswordRecovery\(\)/);
+  assert.match(appSource, /key: "password_changed", severity: "success"/);
+  assert.match(appSource, /initialAuthMode=\{authEntry\?\.mode\}/);
+  assert.ok(appSource.indexOf("if (auth.invalidRecoveryLink)") < appSource.indexOf("if (auth.isPasswordRecovery)"));
+});
+
+test("recovery marker resumes only the same verified unexpired session", () => {
+  const now = 1_000_000;
+  const session = { user: { id: "verified-user" }, expires_at: 1100 };
+  const marker = createPasswordRecoveryMarker(session, now);
+  assert.deepEqual(marker, { userId: "verified-user", expiresAt: 1_100_000 });
+  assert.equal(isPasswordRecoverySessionValid(marker, session, now), true);
+  assert.equal(isPasswordRecoverySessionValid(marker, { ...session, user: { id: "different-user" } }, now), false);
+  assert.equal(isPasswordRecoverySessionValid(marker, null, now), false);
+  assert.equal(isPasswordRecoverySessionValid(marker, session, 1_100_000), false);
+  assert.equal(isPasswordRecoverySessionValid(marker, { ...session, expires_at: 990 }, now), false);
+  assert.equal(createPasswordRecoveryMarker({ user: { id: "user" } }, now), null);
+  assert.equal(createPasswordRecoveryMarker({ ...session, expires_at: NaN }, now), null);
+});
+
+test("recovery persistence contains no credentials and tolerates blocked or malformed storage", () => {
+  const values = new Map<string, string>();
+  const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+  const marker = { userId: "verified-user", expiresAt: 1_100_000 };
+  writePasswordRecoveryMarker(storage, marker);
+  assert.deepEqual(readPasswordRecoveryMarker(storage), marker);
+  assert.deepEqual(Object.keys(JSON.parse(values.get(passwordRecoveryStorageKey)!)).sort(), ["expiresAt", "userId"]);
+  for (const value of ["{", "null", "[]", '{"userId":3,"expiresAt":12}', '{"userId":"user","expiresAt":"12"}']) {
+    values.set(passwordRecoveryStorageKey, value);
+    assert.equal(readPasswordRecoveryMarker(storage), null);
+  }
+  writePasswordRecoveryMarker(storage, null);
+  assert.equal(values.has(passwordRecoveryStorageKey), false);
+  assert.equal(readPasswordRecoveryMarker(null), null);
+  assert.doesNotThrow(() => writePasswordRecoveryMarker(null, marker));
+  assert.equal(readPasswordRecoveryMarker({ ...storage, getItem: () => { throw new Error("blocked"); } }), null);
 });

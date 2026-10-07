@@ -20,6 +20,7 @@ const testScripts = [
   "test:release-readiness",
   "test:onboarding",
   "test:auth-ux",
+  "test:auth-service-flow",
   "test:auth-panel-ui",
   "test:native-auth",
   "test:i18n",
