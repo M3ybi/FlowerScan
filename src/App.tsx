@@ -3856,7 +3856,6 @@ export const App = () => {
         onAuthSuccess={() => {
           if (normalizeInviteTokenInput(joinInviteInput)) void handleJoinInvite(joinInviteInput);
         }}
-        onAddPlant={openAddPlantFromMobileNav}
         initialSection={route.section === "household" ? "household" : "account"}
       />;
     }

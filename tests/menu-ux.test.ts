@@ -4,6 +4,7 @@ import test from "node:test";
 
 const appSource = readFileSync("src/App.tsx", "utf8");
 const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
+const loggedOutMenuSource = readFileSync("src/components/LoggedOutMenu.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
 const i18nSource = readFileSync("src/lib/i18n.ts", "utf8");
 const repositorySource = readFileSync("src/lib/plantieRepository.ts", "utf8");
@@ -30,6 +31,22 @@ test("desktop tab navigation is available across primary app pages", () => {
   assert.match(navigationSource, /href="#\/qr"[\s\S]*t\("nav\.qr"\)/);
   assert.match(styleSource, /\.app-tab-nav\s*\{/);
   assert.match(styleSource, /@media \(max-width: 780px\)[\s\S]*\.app-tab-nav\s*\{[\s\S]*display: none;/);
+});
+
+test("signed-out Menu hides application navigation while the authenticated branch retains it", () => {
+  const menuStart = appSource.lastIndexOf('if (route.page === "menu")');
+  assert.ok(menuStart >= 0);
+  const menuRoute = appSource.slice(menuStart, appSource.indexOf('if (route.page === "diagnose")', menuStart));
+  const signedOutStart = menuRoute.indexOf("if (!auth.isAuthenticated)");
+  const signedInStart = menuRoute.indexOf("return (", signedOutStart);
+  assert.ok(signedOutStart >= 0 && signedInStart > signedOutStart);
+  const signedOutBranch = menuRoute.slice(signedOutStart, signedInStart);
+  assert.match(signedOutBranch, /return <LoggedOutMenu/);
+  assert.doesNotMatch(signedOutBranch, /AppTabNav|MobileBottomNav|onAddPlant|renderHeroActions/);
+  assert.doesNotMatch(loggedOutMenuSource, /AppTabNav|MobileBottomNav|HouseholdInvitationInbox|InvitationInboxButton|user-menu-trigger|household-switcher/);
+  const signedInBranch = menuRoute.slice(signedInStart);
+  assert.match(signedInBranch, /<AppTabNav currentPage="menu"/);
+  assert.match(signedInBranch, /<MobileBottomNav currentPage="menu"/);
 });
 
 test("dashboard account access opens the household sheet with account actions", () => {

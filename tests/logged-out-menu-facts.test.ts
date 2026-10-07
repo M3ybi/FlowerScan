@@ -47,7 +47,7 @@ test("all supported languages provide the same complete translated copy contract
   for (const { code } of supportedLanguages) {
     const translated = loggedOutMenuCopy(code);
     assert.deepEqual(Object.keys(translated).sort(), Object.keys(english).sort());
-    assert.equal(translated.householdFeatures.length, 4);
+    assert.equal(translated.householdFeatures.length, 3);
     assert.equal(translated.supportTips.length, 3);
     assert.equal(translated.aboutFeatures.length, 5);
     for (const [key, value] of Object.entries(translated)) {
@@ -74,24 +74,24 @@ test("public role descriptions reflect full Viewer care access and Owner adminis
   assert.equal(viewer.canUseDiagnostics && viewer.canUseQrFeatures, true);
   assert.equal(viewer.canEditHousehold || viewer.canInviteMembers || viewer.canRemoveMembers || viewer.canManageSubscription, false);
   assert.equal(owner.canEditHousehold && owner.canInviteMembers && owner.canRemoveMembers && owner.canManageSubscription, true);
-  assert.match(copy.viewerBody, /Active Viewers can add, edit, and delete plants/);
-  assert.match(copy.viewerBody, /cannot edit the household, manage members, or change billing/);
-  assert.match(copy.historyBody, /active Owners and Viewers can read/);
+  const roles = copy.householdFeatures[1].body;
+  assert.match(roles, /Owners manage members, settings, and billing/);
+  assert.match(roles, /Active Viewers manage plants and care, without those controls/);
+  assert.match(copy.householdFeatures[0].body, /Active members can fully manage/);
   assert.equal(resolveHouseholdPermissions("viewer", "suspended_plan_limit").canViewPlants, false);
 });
 
-test("invitation and subscription guidance preserves recipient, capacity, and household boundaries", () => {
+test("compact household guidance preserves recipient, capacity, and household boundaries", () => {
   const copy = loggedOutMenuCopy("en");
   assert.equal(invitationValidityMs, 7 * 24 * 60 * 60 * 1000);
-  assert.match(copy.inviteExplanation, /invited email address/);
-  assert.match(copy.inviteExplanation, /Verify that email/);
-  assert.match(copy.inviteExplanation, /accept or decline/);
-  assert.match(copy.inviteExplanation, /seven days/);
-  assert.match(copy.occupiedSlotsBody, /Active members and valid pending invitations/);
-  assert.match(copy.multiHouseholdBody, /keeps your existing households/);
-  assert.match(copy.multiHouseholdBody, /does not upgrade your other households/);
-  assert.match(copy.cancellationBody, /until the paid period ends/);
-  assert.match(copy.cancellationBody, /Viewer access is suspended; shared plant data is retained/);
+  assert.match(copy.inviteExplanation, /invited email/);
+  assert.match(copy.supportTips[1].body, /Verify the invited email/);
+  assert.match(copy.occupiedSlotsBody, /Active members and valid pending invites count/);
+  assert.match(copy.householdFeatures[2].body, /without losing your current one/);
+  assert.match(copy.householdFeatures[2].body, /Plants and plans stay separate/);
+  assert.match(copy.freeSharing(menuProductInfo.limits.free.slots), /1 occupied slot, no sharing/);
+  assert.match(copy.premiumSharing(menuProductInfo.limits.premium.slots), /Premium: sharing with up to 3 occupied slots/);
+  assert.match(copy.subscriptionIntro, /One plan covers the household/);
 });
 
 test("language preference storage works without account or network access", () => {
@@ -101,8 +101,7 @@ test("language preference storage works without account or network access", () =
     writeStoredLanguage(storage, code);
     assert.equal(readStoredLanguage(storage), code);
   }
-  assert.match(loggedOutMenuCopy("en").languageBody, /saved on this device/);
-  assert.match(loggedOutMenuCopy("en").languageBody, /previously saved plant text stays as written/);
+  assert.match(loggedOutMenuCopy("en").languageAiBody, /New AI responses use your selected app language/);
 });
 
 test("logged-out product copy does not invent prices, contacts, notification delivery, or exclusive backup", () => {
@@ -114,11 +113,60 @@ test("logged-out product copy does not invent prices, contacts, notification del
     assert.ok(copy.pricesAfterSignIn);
     assert.ok(copy.supportContactPending);
   }
-  assert.match(loggedOutMenuCopy("en").pricesAfterSignIn, /Sign in to load current prices/);
+  assert.match(loggedOutMenuCopy("en").pricesAfterSignIn, /Sign in to check current prices and availability/);
   assert.match(loggedOutMenuCopy("en").supportContactPending, /not configured/);
   for (const path of ["src/lib/menuProductInfo.ts", "src/lib/loggedOutMenuCopy.ts", "src/hooks/useAppVersion.ts"]) {
     assert.doesNotMatch(readFileSync(path, "utf8"), /billingService|getAvailableProducts|fetch\(/);
   }
+});
+
+test("every language keeps section descriptions and expanded information compact", () => {
+  const descriptionKeys = ["accountDescription", "householdDescription", "subscriptionDescription", "languageDescription", "supportDescription", "aboutDescription"] as const;
+  const wordCount = (text: string) => text.trim().split(/\s+/u).length;
+  for (const { code } of supportedLanguages) {
+    const copy = loggedOutMenuCopy(code);
+    for (const key of descriptionKeys) {
+      const text = copy[key];
+      assert.ok(wordCount(text) <= 12, `${code}.${key} must be a short description`);
+      assert.equal(text.match(/[.!?](?=\s|$)/gu)?.length, 1, `${code}.${key} must be one sentence`);
+    }
+    assert.ok(wordCount(copy.heroBody) <= 12);
+    for (const item of [...copy.householdFeatures, ...copy.supportTips]) {
+      assert.ok(wordCount(item.title) <= 4, `${code}: compact card heading`);
+      assert.ok(wordCount(item.body) <= 22, `${code}: compact card body`);
+      assert.ok(item.body.length <= 170, `${code}: compact translated card body`);
+    }
+    for (const key of ["inviteExplanation", "occupiedSlotsBody", "pricesAfterSignIn", "privacySummary", "languageAiBody"] as const) {
+      assert.ok(wordCount(copy[key]) <= 14, `${code}.${key} must stay compact`);
+    }
+    for (const removed of ["ownerBody", "viewerBody", "cancellationBody", "ownerBillingBody", "historyBody", "multiHouseholdBody", "languageBody", "supportBody"]) {
+      assert.equal(removed in copy, false, `${code}: deep or duplicate prose must not remain in the Menu contract`);
+    }
+    assert.match(copy.freeSharing(menuProductInfo.limits.free.slots), /^Free/);
+    assert.match(copy.premiumSharing(menuProductInfo.limits.premium.slots), /^Premium/);
+  }
+});
+
+test("Premium has one shared benefit set instead of duplicate Monthly and Yearly lists", () => {
+  for (const { code } of supportedLanguages) {
+    const copy = loggedOutMenuCopy(code);
+    const benefits = [copy.premiumPlants, copy.premiumScans, copy.premiumCare, copy.premiumQr, copy.premiumSharing(menuProductInfo.limits.premium.slots)];
+    assert.equal(benefits.length, 5);
+    assert.equal(new Set(benefits).size, benefits.length);
+    assert.notEqual(copy.monthlyPlanBody, copy.yearlyPlanBody);
+    for (const benefit of benefits) {
+      assert.equal(copy.monthlyPlanBody.includes(benefit), false);
+      assert.equal(copy.yearlyPlanBody.includes(benefit), false);
+    }
+    assert.equal(new Set(copy.aboutFeatures).size, copy.aboutFeatures.length);
+  }
+  const copy = loggedOutMenuCopy("en");
+  assert.match(copy.monthlyPlanBody, /billed monthly/);
+  assert.match(copy.yearlyPlanBody, /Same Premium features, billed yearly/);
+  assert.match(copy.freeQr(menuProductInfo.limits.free.qr), /per PDF export/);
+  assert.match(copy.freeScans(menuProductInfo.limits.free.scans), /per month/);
+  assert.match(copy.freeCareRefresh(menuProductInfo.limits.free.careRefreshes), /per plant per day/);
+  assert.match(copy.privacySummary, /Authentication is handled by Supabase Auth/);
 });
 
 test("web version is package metadata and never calls native APIs", async () => {

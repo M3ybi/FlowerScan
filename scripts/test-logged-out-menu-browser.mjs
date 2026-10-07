@@ -5,10 +5,38 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import ts from "typescript";
 
 const runFile = promisify(execFile);
 const workspace = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const artifacts = path.join(workspace, ".tmp-tests", "logged-out-menu-browser");
+// A source wiring assertion complements the isolated component fixture. It does
+// not claim to exercise a live session transition or the complete App router.
+const appPath = path.join(workspace, "src", "App.tsx");
+const app = ts.createSourceFile(appPath, await readFile(appPath, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const descendants = (node, predicate) => {
+  const matches = [];
+  const visit = current => { if (predicate(current)) matches.push(current); ts.forEachChild(current, visit); };
+  visit(node); return matches;
+};
+const menuBranch = descendants(app, node => ts.isIfStatement(node) && ts.isBinaryExpression(node.expression)
+  && node.expression.left.getText(app) === "route.page" && ts.isStringLiteral(node.expression.right)
+  && node.expression.right.text === "menu").find(node => descendants(node.thenStatement, candidate =>
+    ts.isJsxSelfClosingElement(candidate) && candidate.tagName.getText(app) === "LoggedOutMenu").length > 0);
+assert.ok(menuBranch && ts.isBlock(menuBranch.thenStatement), "Production Menu branch is missing.");
+const statements = menuBranch.thenStatement.statements;
+const signedOutIndex = statements.findIndex(node => ts.isIfStatement(node)
+  && node.expression.getText(app).replace(/\s/g, "") === "!auth.isAuthenticated");
+assert.ok(signedOutIndex >= 0, "Production Menu must use its existing authentication guard.");
+const jsxTags = node => descendants(node, candidate => ts.isJsxOpeningElement(candidate) || ts.isJsxSelfClosingElement(candidate))
+  .map(candidate => candidate.tagName.getText(app));
+const signedOutTags = jsxTags(statements[signedOutIndex]);
+assert.ok(signedOutTags.includes("LoggedOutMenu") && !signedOutTags.includes("AppTabNav") && !signedOutTags.includes("MobileBottomNav"),
+  "Production signed-out Menu must return the self-contained component.");
+const authenticatedTags = statements.slice(signedOutIndex + 1).flatMap(jsxTags);
+assert.ok(authenticatedTags.includes("AppTabNav") && authenticatedTags.includes("MobileBottomNav"),
+  "Both existing navigation variants must remain wired in the authenticated Menu branch.");
+console.log("Production Menu source wiring retains authenticated navigation after the signed-out early return (structural check only).");
 const candidates = process.env.PLANTIE_TEST_BROWSER ? [process.env.PLANTIE_TEST_BROWSER]
   : ["C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"];
 let browser;
@@ -17,7 +45,7 @@ assert.ok(browser, "No isolated Chromium executable found. Set PLANTIE_TEST_BROW
 await mkdir(artifacts, { recursive: true });
 
 // Replace the actual network/auth boundary, not the component, its validation,
-// state, translations, version hook, navigation, or production stylesheet.
+// state, translations, version hook, or production stylesheet.
 const authBoundary = `
 const state = globalThis.__loggedOutMenuFixtureAuth = {calls: [], hold: false, release: null, failNext: false};
 async function request(kind, email, password) {
@@ -83,4 +111,4 @@ for (const { width, scene } of scenarios) {
   }
 }
 console.log(`Logged-out Menu fixture passed. Screenshots/results: ${path.relative(workspace, artifacts)}.`);
-console.log("Real Menu/AuthPanel validation, component state, translations, web version, navigation and stylesheet; only auth/config boundaries substituted. Programmatic DOM events and exact-width local iframes, not live signup/email/OAuth, physical keyboard, native plugins, hardware safe areas, or complete App route verification.");
+console.log("Real self-contained Menu/AuthPanel validation, component state, translations, web version and stylesheet; only auth/config boundaries substituted. Authenticated App navigation is checked structurally, not through a live login. Programmatic DOM events and exact-width/reduced-height local iframes, not live signup/email/OAuth, physical keyboard, native plugins, software keyboard emulation, hardware safe areas, or complete App route verification.");
