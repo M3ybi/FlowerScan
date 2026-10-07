@@ -6218,9 +6218,16 @@ textarea:focus-visible {
 .billing-history-skeleton-card span:first-child { width: 60%; height: 15px; }
 .billing-history-skeleton-card span:nth-child(2) { width: 90%; }
 .billing-history-skeleton-card span:last-child { width: 45%; }
-.billing-history-pagination { display: flex; justify-content: center; padding-top: 2px; }
-.billing-history-pagination button { width: min(100%, 320px); min-height: 46px; font-size: 0.86rem; }
-.billing-history-older-error { margin: 0; color: var(--danger-text); font-size: 0.85rem; text-align: center; }
+.billing-history-page { min-width: 0; }
+.billing-history-heading { scroll-margin-top: 16px; }
+.billing-history-pagination { padding-top: 2px; }
+.billing-history-pagination button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid rgba(18, 61, 49, 0.13); border-radius: 13px; background: #fff; color: var(--brand); }
+.billing-history-page-indicator { min-width: 66px; text-align: center; }
+
+@keyframes billing-history-page-enter { from { opacity: 0.75; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .billing-history-page > .billing-history-groups { animation: billing-history-page-enter 180ms ease-out; }
+}
 
 @media (max-width: 780px) {
   .billing-history-timeline { gap: 16px; padding-bottom: calc(112px + var(--safe-area-bottom)); }
@@ -6237,4 +6244,5 @@ textarea:focus-visible {
   .billing-history-card p { font-size: 0.81rem; }
   .billing-history-card time { font-size: 0.7rem; }
   .billing-history-badge { padding: 3px 8px; font-size: 0.64rem; }
+  .billing-history-pagination { flex-direction: column; justify-content: center; gap: 8px; }
 }

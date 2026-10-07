@@ -3,6 +3,8 @@ import type { SubscriptionHistoryCategory, SubscriptionHistoryItem, Subscription
 
 type Copy = {
   title: string; subtitle: string; filterLabel: string; filters: Record<"all" | SubscriptionHistoryCategory, string>;
+  paginationLabel: string; previousPage: string; nextPage: string;
+  pageLabel: (page: number, pages: number) => string; eventsShown: (shown: number, total: number) => string;
   loading: string; emptyTitle: string; emptyBody: string; filteredEmptyTitle: string; filteredEmptyBody: string;
   error: string; retry: string; showOlder: string; loadingOlder: string; olderError: string;
   titles: Record<SubscriptionHistoryType, string>; descriptions: Record<SubscriptionHistoryType, string>;
@@ -16,6 +18,8 @@ const copy: Record<PlantieLanguage, Copy> = {
   en: {
     title: "Billing & history", subtitle: "Subscription changes for this household.", filterLabel: "Filter billing history",
     filters: { all: "All", billing: "Billing", plan_change: "Plan changes", renewal: "Renewal" },
+    paginationLabel: "Billing history pages", previousPage: "Previous billing history page", nextPage: "Next billing history page",
+    pageLabel: (page, pages) => `Page ${page} of ${pages}`, eventsShown: (shown, total) => `${shown} of ${total} events`,
     loading: "Loading billing history…", emptyTitle: "No billing history yet", emptyBody: "Subscription changes and billing events for this household will appear here.",
     filteredEmptyTitle: "No activity in this category", filteredEmptyBody: "Choose another filter to see more household activity.",
     error: "Couldn't load billing history.", retry: "Try again", showOlder: "Show older activity", loadingOlder: "Loading older activity…", olderError: "Couldn't load older activity.",
@@ -29,6 +33,8 @@ const copy: Record<PlantieLanguage, Copy> = {
   sk: {
     title: "Platby a história", subtitle: "Zmeny predplatného tejto domácnosti.", filterLabel: "Filtrovať históriu platieb",
     filters: { all: "Všetko", billing: "Platby", plan_change: "Zmeny plánu", renewal: "Obnovenie" },
+    paginationLabel: "Stránky histórie platieb", previousPage: "Predchádzajúca stránka histórie platieb", nextPage: "Ďalšia stránka histórie platieb",
+    pageLabel: (page, pages) => `Stránka ${page} z ${pages}`, eventsShown: (shown, total) => `${shown} z ${total} udalostí`,
     loading: "Načítavam históriu platieb…", emptyTitle: "Zatiaľ bez histórie platieb", emptyBody: "Tu sa zobrazia zmeny predplatného a platby tejto domácnosti.",
     filteredEmptyTitle: "V tejto kategórii zatiaľ nie je aktivita", filteredEmptyBody: "Vyberte iný filter a pozrite si ďalšiu aktivitu domácnosti.",
     error: "Históriu platieb sa nepodarilo načítať.", retry: "Skúsiť znova", showOlder: "Zobraziť staršiu aktivitu", loadingOlder: "Načítavam staršiu aktivitu…", olderError: "Staršiu aktivitu sa nepodarilo načítať.",
@@ -42,6 +48,8 @@ const copy: Record<PlantieLanguage, Copy> = {
   de: {
     title: "Abrechnung & Verlauf", subtitle: "Aboänderungen dieses Haushalts.", filterLabel: "Abrechnungsverlauf filtern",
     filters: { all: "Alle", billing: "Abrechnung", plan_change: "Tarifänderungen", renewal: "Verlängerung" },
+    paginationLabel: "Seiten des Abrechnungsverlaufs", previousPage: "Vorherige Seite des Abrechnungsverlaufs", nextPage: "Nächste Seite des Abrechnungsverlaufs",
+    pageLabel: (page, pages) => `Seite ${page} von ${pages}`, eventsShown: (shown, total) => `${shown} von ${total} Ereignissen`,
     loading: "Abrechnungsverlauf wird geladen…", emptyTitle: "Noch kein Abrechnungsverlauf", emptyBody: "Hier erscheinen Aboänderungen und Abrechnungsereignisse dieses Haushalts.",
     filteredEmptyTitle: "Keine Aktivität in dieser Kategorie", filteredEmptyBody: "Wähle einen anderen Filter für weitere Haushaltsaktivitäten.",
     error: "Der Abrechnungsverlauf konnte nicht geladen werden.", retry: "Erneut versuchen", showOlder: "Ältere Aktivitäten anzeigen", loadingOlder: "Ältere Aktivitäten werden geladen…", olderError: "Ältere Aktivitäten konnten nicht geladen werden.",
@@ -55,6 +63,8 @@ const copy: Record<PlantieLanguage, Copy> = {
   fr: {
     title: "Facturation et historique", subtitle: "Changements d'abonnement de ce foyer.", filterLabel: "Filtrer l'historique de facturation",
     filters: { all: "Tout", billing: "Facturation", plan_change: "Changements d'offre", renewal: "Renouvellement" },
+    paginationLabel: "Pages de l'historique de facturation", previousPage: "Page précédente de l'historique de facturation", nextPage: "Page suivante de l'historique de facturation",
+    pageLabel: (page, pages) => `Page ${page} sur ${pages}`, eventsShown: (shown, total) => `${shown} événements sur ${total}`,
     loading: "Chargement de l'historique de facturation…", emptyTitle: "Aucun historique de facturation", emptyBody: "Les changements d'abonnement et les paiements de ce foyer apparaîtront ici.",
     filteredEmptyTitle: "Aucune activité dans cette catégorie", filteredEmptyBody: "Choisissez un autre filtre pour voir les autres activités du foyer.",
     error: "Impossible de charger l'historique de facturation.", retry: "Réessayer", showOlder: "Afficher les activités plus anciennes", loadingOlder: "Chargement des activités plus anciennes…", olderError: "Impossible de charger les activités plus anciennes.",
@@ -68,6 +78,8 @@ const copy: Record<PlantieLanguage, Copy> = {
   es: {
     title: "Facturación e historial", subtitle: "Cambios de suscripción de este hogar.", filterLabel: "Filtrar el historial de facturación",
     filters: { all: "Todo", billing: "Facturación", plan_change: "Cambios de plan", renewal: "Renovación" },
+    paginationLabel: "Páginas del historial de facturación", previousPage: "Página anterior del historial de facturación", nextPage: "Página siguiente del historial de facturación",
+    pageLabel: (page, pages) => `Página ${page} de ${pages}`, eventsShown: (shown, total) => `${shown} de ${total} eventos`,
     loading: "Cargando el historial de facturación…", emptyTitle: "Aún no hay historial de facturación", emptyBody: "Aquí aparecerán los cambios de suscripción y los pagos de este hogar.",
     filteredEmptyTitle: "No hay actividad en esta categoría", filteredEmptyBody: "Elige otro filtro para ver más actividad del hogar.",
     error: "No se pudo cargar el historial de facturación.", retry: "Reintentar", showOlder: "Mostrar actividad anterior", loadingOlder: "Cargando actividad anterior…", olderError: "No se pudo cargar la actividad anterior.",

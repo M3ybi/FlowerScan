@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BillingHistoryTimeline, groupBillingHistoryByMonth, selectBillingHistory, shouldLoadOlderBillingHistory } from "../src/components/BillingHistoryTimeline";
+import { BillingHistoryTimeline, billingHistorySwipeDirection, groupBillingHistoryByMonth, selectBillingHistory } from "../src/components/BillingHistoryTimeline";
 import { billingHistoryCopy, billingHistoryEventCopy } from "../src/lib/billingHistoryCopy";
 import type { SubscriptionHistoryItem } from "../src/lib/subscriptionHistoryModel";
 import { formatSubscriptionDate } from "../src/lib/subscriptionUiRules";
@@ -14,6 +14,12 @@ const event = (changes: Partial<SubscriptionHistoryItem> = {}): SubscriptionHist
 const renderHistory = (changes: Partial<Parameters<typeof BillingHistoryTimeline>[0]> = {}) => renderToStaticMarkup(createElement(BillingHistoryTimeline, {
   householdId: "home", items: [event()], loading: false, error: false, language: "en", onRetry: () => undefined, ...changes,
 }));
+
+test("billing history navigation renders at most four events instead of an expanding list", () => {
+  const items = Array.from({ length: 11 }, (_, index) => event({ id: String(index) }));
+  const html = renderHistory({ items });
+  assert.equal((html.match(/class="billing-history-card"/g) ?? []).length, 4);
+});
 
 test("history cards render newest first and group each month only once", () => {
   const items = [
@@ -61,29 +67,80 @@ test("empty, loading, and error states remain distinct and loading never flashes
   assert.doesNotMatch(failed, /No billing history yet|Subscription renewed/);
 });
 
-test("initial timeline is bounded to fifteen entries and older loaded activity expands in batches", () => {
-  const items = Array.from({ length: 28 }, (_, index) => event({ id: String(index).padStart(2, "0") }));
-  const html = renderHistory({ items });
-  assert.equal((html.match(/class="billing-history-card"/g) ?? []).length, 15);
-  assert.match(html, />Show older activity<\/button>/);
-  assert.equal(selectBillingHistory(items, "home", "all", 30).items.length, 28);
-  assert.equal(selectBillingHistory(items, "home", "all", 30).totalCount, 28);
+test("five and eleven matching events create two and three four-event pages", () => {
+  for (const [count, pages] of [[5, 2], [11, 3]] as const) {
+    const items = Array.from({ length: count }, (_, index) => event({ id: String(index).padStart(2, "0") }));
+    const selection = selectBillingHistory(items, "home");
+    assert.equal(selection.totalPages, pages);
+    assert.equal(selection.items.length, 4);
+    assert.equal(selection.totalCount, count);
+    const html = renderHistory({ items });
+    assert.match(html, new RegExp(`Page 1 of ${pages}`));
+    assert.match(html, new RegExp(`4 of ${count} events`));
+    assert.doesNotMatch(html, /Show older activity/);
+  }
 });
 
-test("older-page failures retain loaded cards and offer a separate retry", () => {
-  const html = renderHistory({ hasMore: true, onLoadMore: () => undefined, loadMoreError: true });
-  assert.match(html, /Subscription renewed/);
-  assert.match(html, /Couldn't load older activity\.|Couldn&#x27;t load older activity\./);
+test("complete totals are required before cards or pagination appear and remaining-read failures stay retryable", () => {
+  const items = Array.from({ length: 50 }, (_, index) => event({ id: String(index) }));
+  const pending = renderHistory({ items, hasMore: true, onLoadMore: () => undefined });
+  assert.equal((pending.match(/class="billing-history-skeleton-row"/g) ?? []).length, 3);
+  assert.doesNotMatch(pending, /billing-history-card"|billing-history-pagination|Page 1|of 50 events/);
+  const html = renderHistory({ items, hasMore: true, onLoadMore: () => undefined, loadMoreError: true });
+  assert.match(html, /Couldn't load billing history\.|Couldn&#x27;t load billing history\./);
   assert.match(html, />Try again<\/button>/);
-  const loading = renderHistory({ hasMore: true, onLoadMore: () => undefined, loadingMore: true });
-  assert.match(loading, /disabled=""[^>]*>Loading older activity/);
+  assert.doesNotMatch(html, /billing-history-card"|billing-history-pagination|Page 1/);
+  const loading = renderHistory({ items, hasMore: true, onLoadMore: () => undefined, loadingMore: true });
+  assert.match(loading, /aria-busy="true"/);
+  assert.doesNotMatch(loading, /billing-history-pagination|Page 1/);
 });
 
-test("older-page retry fetches even after a filter reveals locally hidden rows", () => {
-  assert.equal(shouldLoadOlderBillingHistory(50, 15, true, false), false, "normal Show older expands already loaded rows first");
-  assert.equal(shouldLoadOlderBillingHistory(15, 15, true, false), true, "exhausted loaded history fetches the next page");
-  assert.equal(shouldLoadOlderBillingHistory(50, 15, true, true), true, "Try again must retry the failed page rather than only expand locally");
-  assert.equal(shouldLoadOlderBillingHistory(50, 15, false, true), false, "an exhausted backend is never queried");
+test("filtered pagination preserves chronology and each page groups only its visible months", () => {
+  const items = Array.from({ length: 11 }, (_, index) => event({ id: String(index), occurredAt: new Date(Date.UTC(2026, 9, 6 - index)).toISOString() }));
+  const first = selectBillingHistory(items, "home", "all", 1);
+  const second = selectBillingHistory(items, "home", "all", 2);
+  const last = selectBillingHistory(items, "home", "all", 3);
+  assert.deepEqual(first.items.map((item) => item.id), ["0", "1", "2", "3"]);
+  assert.deepEqual(second.items.map((item) => item.id), ["4", "5", "6", "7"]);
+  assert.deepEqual(last.items.map((item) => item.id), ["8", "9", "10"]);
+  assert.deepEqual(groupBillingHistoryByMonth(second.items, "en").map((group) => group.label), ["October 2026", "September 2026"]);
+  assert.deepEqual(groupBillingHistoryByMonth(last.items, "en").map((group) => group.label), ["September 2026"]);
+  const billing = items.map((item, index) => index % 2 === 0 ? { ...item, category: "billing" as const, type: "payment_failed" as const } : item);
+  const filtered = selectBillingHistory(billing, "home", "billing", 2);
+  assert.equal(filtered.totalCount, 6);
+  assert.equal(filtered.totalPages, 2);
+  assert.deepEqual(filtered.items.map((item) => item.id), ["8", "10"]);
+  assert.deepEqual(selectBillingHistory(billing, "home", "billing").items.map((item) => item.id), ["0", "2", "4", "6"]);
+});
+
+test("page selection safely clamps empty, shrinking and malformed page requests", () => {
+  const items = Array.from({ length: 5 }, (_, index) => event({ id: String(index) }));
+  for (const requested of [3, 50, 2.9]) assert.equal(selectBillingHistory(items, "home", "all", requested).page, 2);
+  for (const requested of [-1, 0, NaN, Infinity]) assert.equal(selectBillingHistory(items, "home", "all", requested).page, 1);
+  assert.equal(selectBillingHistory([], "home", "all", 3).page, 1);
+  assert.equal(selectBillingHistory(items.slice(0, 4), "home", "all", 3).page, 1);
+});
+
+test("semantic pager controls have clear accessible labels and disable the first previous button", () => {
+  const html = renderHistory({ items: Array.from({ length: 11 }, (_, index) => event({ id: String(index) })) });
+  assert.match(html, /<nav class="billing-history-pagination menu-invite-pagination" aria-label="Billing history pages"/);
+  assert.match(html, /<button type="button" aria-label="Previous billing history page" disabled=""/);
+  assert.match(html, /<button type="button" aria-label="Next billing history page">/);
+  assert.match(html, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(html, /<span class="sr-only">Page 1 of 3<\/span>/);
+});
+
+test("single-page, empty, loading and error history omit unnecessary pagination", () => {
+  for (const count of [0, 1, 4]) assert.doesNotMatch(renderHistory({ items: Array.from({ length: count }, (_, index) => event({ id: String(index) })) }), /billing-history-pagination/);
+  const items = Array.from({ length: 11 }, (_, index) => event({ id: String(index) }));
+  assert.doesNotMatch(renderHistory({ items, loading: true }), /billing-history-pagination|Page 1/);
+  assert.doesNotMatch(renderHistory({ items, error: true }), /billing-history-pagination|Page 1/);
+});
+
+test("touch navigation requires intentional horizontal movement and rejects vertical, small or malformed gestures", () => {
+  assert.equal(billingHistorySwipeDirection(-100, 8), 1);
+  assert.equal(billingHistorySwipeDirection(100, -8), -1);
+  for (const [x, y] of [[-63, 0], [0, 100], [45, 60], [64, 50], [NaN, 0], [100, Infinity]]) assert.equal(billingHistorySwipeDirection(x, y), 0);
 });
 
 test("history is household scoped, including during a switch with old rows still in memory", () => {
@@ -115,7 +172,7 @@ test("renewal descriptions only claim a month or year when recorded period facts
 
 test("cards show readable semantic badges and contain no fake detail actions or sensitive identifiers", () => {
   const items = [event(), event({ id: "plan", type: "plan_changed", category: "plan_change", status: "info" }), event({ id: "failed", type: "payment_failed", category: "billing", status: "failed" }), event({ id: "cancelled", type: "cancelled", status: "warning" }), event({ id: "expired", type: "expired", status: "expired" })];
-  const html = renderHistory({ items: items.map((item) => ({ ...item, providerEventId: "sensitive-provider-event", providerCustomerId: "sensitive-customer", rawPayload: "raw-secret" })) });
+  const html = items.map((item) => renderHistory({ items: [{ ...item, providerEventId: "sensitive-provider-event", providerCustomerId: "sensitive-customer", rawPayload: "raw-secret" } as SubscriptionHistoryItem] })).join("");
   for (const badge of ["Successful", "Plan change", "Failed", "Cancelled", "Expired"]) assert.match(html, new RegExp(`>${badge}<`));
   assert.doesNotMatch(html, /sensitive-provider-event|sensitive-customer|raw-secret|providerEventId|RENEWAL|PRODUCT_CHANGE|payment_failed/);
   assert.doesNotMatch(html, /role="button"|lucide-chevron|<article[^>]*tabindex/);

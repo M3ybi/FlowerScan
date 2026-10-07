@@ -1,12 +1,13 @@
-import { useId, useMemo, useState } from "react";
-import { AlertCircle, ArrowRightLeft, Clock, CreditCard, History, Leaf, PauseCircle, PlayCircle, ReceiptText, RotateCw, Undo2 } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { TouchEvent } from "react";
+import { AlertCircle, ArrowRightLeft, ChevronLeft, ChevronRight, Clock, CreditCard, History, Leaf, PauseCircle, PlayCircle, ReceiptText, RotateCw, Undo2 } from "lucide-react";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionHistoryCategory, SubscriptionHistoryItem, SubscriptionHistoryType } from "../lib/subscriptionHistoryModel";
 import { billingHistoryCopy, billingHistoryEventCopy } from "../lib/billingHistoryCopy";
 import { formatSubscriptionDate } from "../lib/subscriptionUiRules";
 
 export type BillingHistoryFilter = "all" | SubscriptionHistoryCategory;
-const historyBatchSize = 15;
+export const billingHistoryPageSize = 4;
 const filters: readonly BillingHistoryFilter[] = ["all", "billing", "plan_change", "renewal"];
 const filterIcons = { billing: CreditCard, plan_change: ArrowRightLeft, renewal: RotateCw };
 
@@ -23,13 +24,18 @@ export type BillingHistoryTimelineProps = {
   onLoadMore?: () => void;
 };
 
-export const shouldLoadOlderBillingHistory = (totalCount: number, visibleCount: number, hasMore: boolean, retryPending: boolean) =>
-  hasMore && (retryPending || totalCount <= visibleCount);
-
-export const selectBillingHistory = (items: readonly SubscriptionHistoryItem[], householdId: string | null, filter: BillingHistoryFilter = "all", limit = historyBatchSize) => {
+export const selectBillingHistory = (items: readonly SubscriptionHistoryItem[], householdId: string | null, filter: BillingHistoryFilter = "all", requestedPage = 1) => {
   const matching = items.filter((item) => item.householdId === householdId && Number.isFinite(Date.parse(item.occurredAt)) && (filter === "all" || item.category === filter))
     .sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || right.occurredAt.localeCompare(left.occurredAt) || right.id.localeCompare(left.id));
-  return { items: matching.slice(0, Math.max(0, limit)), totalCount: matching.length };
+  const totalPages = Math.max(1, Math.ceil(matching.length / billingHistoryPageSize));
+  const page = Math.min(totalPages, Math.max(1, Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1));
+  const startIndex = (page - 1) * billingHistoryPageSize;
+  return { items: matching.slice(startIndex, startIndex + billingHistoryPageSize), totalCount: matching.length, totalPages, page };
+};
+
+export const billingHistorySwipeDirection = (horizontal: number, vertical: number): -1 | 0 | 1 => {
+  if (!Number.isFinite(horizontal) || !Number.isFinite(vertical) || Math.abs(horizontal) < 64 || Math.abs(horizontal) <= Math.abs(vertical) * 1.75) return 0;
+  return horizontal < 0 ? 1 : -1;
 };
 
 export const groupBillingHistoryByMonth = (items: readonly SubscriptionHistoryItem[], language: PlantieLanguage | null | undefined) => {
@@ -59,28 +65,89 @@ const BillingHistoryContent = ({ householdId, items, loading, error, language = 
   const text = billingHistoryCopy(language);
   const titleId = useId();
   const [filter, setFilter] = useState<BillingHistoryFilter>("all");
-  const [visibleCount, setVisibleCount] = useState(historyBatchSize);
-  const selection = useMemo(() => selectBillingHistory(items, householdId, filter, visibleCount), [items, householdId, filter, visibleCount]);
+  const [requestedPage, setRequestedPage] = useState(1);
+  const [pageHeight, setPageHeight] = useState(0);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLElement>(null);
+  const shouldAlignPage = useRef(false);
+  const gesture = useRef<{ identifier: number; x: number; y: number } | null>(null);
+  const historyError = error || loadMoreError || (hasMore && !onLoadMore);
+  const historyLoading = !historyError && (loading || loadingMore || hasMore);
+  const selection = useMemo(() => selectBillingHistory(items, householdId, filter, requestedPage), [items, householdId, filter, requestedPage]);
   const groups = useMemo(() => groupBillingHistoryByMonth(selection.items, language), [selection.items, language]);
-  const canShowOlder = selection.totalCount > visibleCount || (hasMore && Boolean(onLoadMore));
-  const showOlder = () => {
-    if (loadingMore) return;
-    setVisibleCount((count) => count + historyBatchSize);
-    if (shouldLoadOlderBillingHistory(selection.totalCount, visibleCount, hasMore, loadMoreError)) onLoadMore?.();
+  // Exact filtered totals require completing the existing bounded reads. Neither
+  // the history reader nor normalization/ingestion changes for UI pagination.
+  useEffect(() => {
+    if (hasMore && !loading && !error && !loadingMore && !loadMoreError) onLoadMore?.();
+  }, [hasMore, loading, error, loadingMore, loadMoreError, onLoadMore]);
+  useEffect(() => {
+    if (!historyLoading && !historyError && requestedPage !== selection.page) setRequestedPage(selection.page);
+  }, [historyLoading, historyError, requestedPage, selection.page]);
+  useEffect(() => {
+    let measuredWidth = window.innerWidth;
+    const resetHeight = () => {
+      if (window.innerWidth === measuredWidth) return;
+      measuredWidth = window.innerWidth;
+      setPageHeight(0);
+    };
+    window.addEventListener("resize", resetHeight);
+    return () => window.removeEventListener("resize", resetHeight);
+  }, []);
+  useEffect(() => {
+    if (!shouldAlignPage.current || historyLoading || historyError) return;
+    shouldAlignPage.current = false;
+    const frame = requestAnimationFrame(() => {
+      const heading = headingRef.current;
+      if (heading && heading.getBoundingClientRect().top < 0) {
+        heading.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selection.page, historyLoading, historyError]);
+  const changePage = (page: number) => {
+    const nextPage = Math.min(selection.totalPages, Math.max(1, page));
+    if (historyLoading || historyError || nextPage === selection.page) return;
+    const measuredHeight = pageRef.current?.getBoundingClientRect().height ?? 0;
+    setPageHeight((height) => Math.max(height, measuredHeight));
+    shouldAlignPage.current = true;
+    setRequestedPage(nextPage);
+  };
+  const touchStart = (event: TouchEvent<HTMLDivElement>) => {
+    gesture.current = null;
+    if (!window.matchMedia("(max-width: 780px)").matches || event.touches.length !== 1 || (event.target instanceof Element && event.target.closest("button, a, input, textarea, select, [contenteditable]"))) return;
+    const touch = event.touches[0];
+    // Leave browser edge navigation gestures entirely native.
+    if (touch.clientX <= 24 || touch.clientX >= window.innerWidth - 24) return;
+    gesture.current = { identifier: touch.identifier, x: touch.clientX, y: touch.clientY };
+  };
+  const touchMove = (event: TouchEvent<HTMLDivElement>) => {
+    const start = gesture.current;
+    if (!start) return;
+    const touch = event.touches[0];
+    if (event.touches.length !== 1 || touch.identifier !== start.identifier || (Math.abs(touch.clientY - start.y) > 20 && Math.abs(touch.clientY - start.y) > Math.abs(touch.clientX - start.x))) gesture.current = null;
+  };
+  const touchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const start = gesture.current;
+    gesture.current = null;
+    if (!start || event.touches.length || event.changedTouches.length !== 1) return;
+    const touch = event.changedTouches[0];
+    if (touch.identifier !== start.identifier) return;
+    const direction = billingHistorySwipeDirection(touch.clientX - start.x, touch.clientY - start.y);
+    if (direction) changePage(selection.page + direction);
   };
 
-  return <section className="billing-history-timeline" aria-labelledby={titleId} aria-busy={loading}>
-    <header className="billing-history-heading"><span className="billing-history-heading-icon"><History size={21} aria-hidden="true" /></span><div><h3 id={titleId}>{text.title}</h3><p>{text.subtitle}</p></div></header>
+  return <section className="billing-history-timeline" aria-labelledby={titleId} aria-busy={historyLoading}>
+    <header ref={headingRef} className="billing-history-heading"><span className="billing-history-heading-icon"><History size={21} aria-hidden="true" /></span><div><h3 id={titleId}>{text.title}</h3><p>{text.subtitle}</p></div></header>
     <div className="billing-history-filters" role="group" aria-label={text.filterLabel}>
       {filters.map((value) => {
         const Icon = value === "all" ? null : filterIcons[value];
-        return <button key={value} className="billing-history-filter" type="button" aria-pressed={filter === value} disabled={loading} onClick={() => { setFilter(value); setVisibleCount(historyBatchSize); }}>{Icon ? <Icon size={14} aria-hidden="true" /> : null}{text.filters[value]}</button>;
+        return <button key={value} className="billing-history-filter" type="button" aria-pressed={filter === value} disabled={historyLoading} onClick={() => { setFilter(value); setRequestedPage(1); setPageHeight(0); }}>{Icon ? <Icon size={14} aria-hidden="true" /> : null}{text.filters[value]}</button>;
       })}
     </div>
-    {loading ? <div className="billing-history-loading" role="status" aria-label={text.loading}>
+    {historyLoading ? <div className="billing-history-loading" role="status" aria-label={text.loading}>
       {[0, 1, 2].map((index) => <div className="billing-history-skeleton-row" key={index} aria-hidden="true"><span className="billing-history-skeleton-icon" /><div className="billing-history-skeleton-card"><span /><span /><span /></div></div>)}
-    </div> : error ? <div className="billing-history-state billing-history-error" role="alert"><span><AlertCircle size={28} aria-hidden="true" /></span><p>{text.error}</p><button className="neutral-action" type="button" onClick={onRetry}>{text.retry}</button></div> : <>
-      {!selection.items.length ? <div className="billing-history-state" role="status"><span><ReceiptText size={29} aria-hidden="true" /></span><h4>{filter === "all" ? text.emptyTitle : text.filteredEmptyTitle}</h4><p>{filter === "all" ? text.emptyBody : text.filteredEmptyBody}</p></div> : <div className="billing-history-groups">{groups.map((group) => <section className="billing-history-month" aria-labelledby={`${titleId}-${group.key}`} key={group.key}>
+    </div> : historyError ? <div className="billing-history-state billing-history-error" role="alert"><span><AlertCircle size={28} aria-hidden="true" /></span><p>{text.error}</p><button className="neutral-action" type="button" onClick={loadMoreError && onLoadMore ? onLoadMore : onRetry}>{text.retry}</button></div> : <>
+      {!selection.items.length ? <div className="billing-history-state" role="status"><span><ReceiptText size={29} aria-hidden="true" /></span><h4>{filter === "all" ? text.emptyTitle : text.filteredEmptyTitle}</h4><p>{filter === "all" ? text.emptyBody : text.filteredEmptyBody}</p></div> : <div className="billing-history-page" ref={pageRef} style={{ minHeight: pageHeight || undefined }} onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={touchEnd} onTouchCancel={() => { gesture.current = null; }}><div className="billing-history-groups" key={`${filter}:${selection.page}`}>{groups.map((group) => <section className="billing-history-month" aria-labelledby={`${titleId}-${group.key}`} key={group.key}>
         <h4 id={`${titleId}-${group.key}`}>{group.label}</h4>
         <ol className="billing-history-events">{group.items.map((item) => {
           const event = billingHistoryEventCopy(item, language);
@@ -90,9 +157,15 @@ const BillingHistoryContent = ({ householdId, items, loading, error, language = 
             <article className="billing-history-card"><div className="billing-history-card-heading"><h5>{event.title}</h5><span className="billing-history-badge" data-tone={item.status}>{event.badge}</span></div><p>{event.description}</p><time dateTime={item.occurredAt}>{formatSubscriptionDate(item.occurredAt, language ?? "en")}</time></article>
           </li>;
         })}</ol>
-      </section>)}</div>}
-      {loadMoreError ? <p className="billing-history-older-error" role="alert">{text.olderError}</p> : null}
-      {canShowOlder ? <div className="billing-history-pagination" aria-busy={loadingMore}><button className="neutral-action" type="button" disabled={loadingMore} onClick={showOlder}>{loadingMore ? text.loadingOlder : loadMoreError ? text.retry : text.showOlder}</button></div> : null}
+      </section>)}</div></div>}
+      {selection.totalPages > 1 ? <nav className="billing-history-pagination menu-invite-pagination" aria-label={text.paginationLabel}>
+        <div>
+          <button type="button" aria-label={text.previousPage} disabled={selection.page === 1} onClick={() => changePage(selection.page - 1)}><ChevronLeft size={18} aria-hidden="true" /></button>
+          <span className="billing-history-page-indicator" role="status" aria-live="polite" aria-atomic="true"><span className="sr-only">{text.pageLabel(selection.page, selection.totalPages)}</span><span aria-hidden="true">{selection.page} / {selection.totalPages}</span></span>
+          <button type="button" aria-label={text.nextPage} disabled={selection.page === selection.totalPages} onClick={() => changePage(selection.page + 1)}><ChevronRight size={18} aria-hidden="true" /></button>
+        </div>
+        <span>{text.eventsShown(selection.items.length, selection.totalCount)}</span>
+      </nav> : null}
     </>}
   </section>;
 };
