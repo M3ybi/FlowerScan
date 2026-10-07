@@ -3,8 +3,9 @@ import { Capacitor } from "@capacitor/core";
 import { getUserHouseholds } from "./plantieRepository";
 import { supabase } from "./supabase";
 import { createAuthActions, mapSupabaseAuthError, requireWebAuthRedirectUrl } from "./authRules";
-import { authReturnPathStorageKey, createAuthReturnLocation, createSingleFlightAuthCodeExchange, safeAuthReturnLocation } from "./authRedirects";
+import { authReturnInvitationStorageKey, authReturnPathStorageKey, createAuthReturnLocation, createSingleFlightAuthCodeExchange, safeAuthReturnLocation } from "./authRedirects";
 import type { AuthRedirectPurpose } from "./authRedirects";
+import { invitationReturnLocation, readInvitationAuthContext } from "./invitationAuthContext";
 import {
   createNativeAuthCallbackHandler,
   nativeConfirmationRedirectUrl,
@@ -47,13 +48,27 @@ const getRedirectUrl = (purpose: AuthRedirectPurpose = "callback") => {
     return undefined;
   }
 
-  return requireWebAuthRedirectUrl(window.location.href, purpose);
+  const redirect = requireWebAuthRedirectUrl(window.location.href, purpose);
+  if (purpose === "recovery") return redirect;
+  try {
+    const invitationId = readInvitationAuthContext(window.localStorage);
+    if (invitationId) {
+      const url = new URL(redirect);
+      // An ID can only be resolved by its verified recipient; raw invite tokens stay out of auth redirects.
+      url.searchParams.set("invitation", invitationId);
+      return url.href;
+    }
+  } catch { /* Authentication still works when storage is unavailable. */ }
+  return redirect;
 };
 
 const rememberPostAuthRoute = () => {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(authReturnPathStorageKey, createAuthReturnLocation(window.location.href));
+    const invitationId = readInvitationAuthContext(window.localStorage);
+    if (invitationId) window.sessionStorage.setItem(authReturnInvitationStorageKey, invitationId);
+    else window.sessionStorage.removeItem(authReturnInvitationStorageKey);
   } catch {
     // Authentication still works when the browser denies sessionStorage.
   }
@@ -101,8 +116,10 @@ const restorePostAuthRoute = () => {
   try {
     const savedPath = window.sessionStorage.getItem(authReturnPathStorageKey);
     window.sessionStorage.removeItem(authReturnPathStorageKey);
-    if (savedPath) {
-      window.history.replaceState(window.history.state, "", safeAuthReturnLocation(savedPath));
+    window.sessionStorage.removeItem(authReturnInvitationStorageKey);
+    const invitationId = readInvitationAuthContext(window.localStorage);
+    if (savedPath || invitationId) {
+      window.history.replaceState(window.history.state, "", savedPath ? safeAuthReturnLocation(savedPath) : invitationReturnLocation(invitationId!));
       window.dispatchEvent(new Event("hashchange"));
     }
   } catch {

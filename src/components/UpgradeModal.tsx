@@ -5,7 +5,8 @@ import type { BillingProduct } from "../lib/billingService";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
-import { canSwitchToYearly, isOwnPaidSubscription, safeBillingManagementUrl } from "../lib/subscriptionUiRules";
+import { canPurchaseHouseholdPlan, canSwitchToYearly, isOwnPaidSubscription, safeBillingManagementUrl } from "../lib/subscriptionUiRules";
+import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { LoadingButton } from "./LoadingButton";
 import { beginHouseholdPurchase } from "../lib/householdPlanService";
 
@@ -27,16 +28,16 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
   const [products, setProducts] = useState<BillingProduct[]>([]);
   const purchaseInProgress = useRef(false);
   const pendingPlanRef = useRef<"monthly" | "yearly" | null>(null);
+  const subscriptionScopeRef = useRef("");
+  subscriptionScopeRef.current = `${subscription.userId ?? ""}:${subscription.householdId ?? ""}`;
   const billingStatus = billing.getStatus();
   const billingDisabled = !billingStatus.configured;
   const isResolving = subscription.status === "loading" || subscription.view === "loading" || subscription.view === "syncing";
   const hasSubscriptionError = subscription.status === "error" || subscription.view === "error";
-  const isFree = subscription.status === "ready" && !subscription.customerInfo?.hasRevenueCatPremium &&
-    (subscription.view === "free" || subscription.view === "expired") &&
-    (!subscription.householdEntitlement || subscription.householdEntitlement.role === "owner");
-  const isPremium = isOwnPaidSubscription(subscription) || subscription.view === "shared_premium";
+  const isFree = canPurchaseHouseholdPlan(subscription);
+  const isPremium = subscription.householdEntitlement?.isPremium === true;
   const canUpgradeYearly = canSwitchToYearly(subscription);
-  const managementUrl = safeBillingManagementUrl(subscription.customerInfo?.managementUrl);
+  const managementUrl = isOwnPaidSubscription(subscription) ? safeBillingManagementUrl(subscription.customerInfo?.managementUrl) : null;
 
   useEffect(() => {
     setProducts([]);
@@ -54,7 +55,7 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
       if (!cancelled) setStatusMessage(error instanceof Error ? error.message : t("pricing.productsUnavailable"));
     });
     return () => { cancelled = true; };
-  }, [billingDisabled, subscription.userId, language]);
+  }, [billingDisabled, subscription.userId, subscription.householdId, language]);
 
   useEffect(() => {
     if (pendingPlanRef.current && subscription.status === "ready" &&
@@ -69,19 +70,23 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
   const purchase = async (period: "monthly" | "yearly") => {
     if (purchaseInProgress.current || isAwaitingConfirmation || (!isFree && !(period === "yearly" && canUpgradeYearly))) return;
     purchaseInProgress.current = true;
+    const purchaseScope = subscriptionScopeRef.current;
     setIsPurchasing(true);
     setStatusMessage(t("pricing.openingPurchase"));
     let providerPurchaseCompleted = false;
     try {
       if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
       await beginHouseholdPurchase(subscription.householdId);
-      const info = period === "monthly" ? await billing.purchasePremiumMonthly()
-        : canUpgradeYearly ? await billing.changePlan("yearly")
-        : await billing.purchasePremiumYearly();
+      if (subscriptionScopeRef.current !== purchaseScope) return;
+      const info = period === "monthly" ? await billing.purchasePremiumMonthly(subscription.householdId)
+        : canUpgradeYearly ? await billing.changePlan("yearly", subscription.householdId)
+        : await billing.purchasePremiumYearly(subscription.householdId);
       providerPurchaseCompleted = true;
+      if (subscriptionScopeRef.current !== purchaseScope) return;
       pendingPlanRef.current = period;
       const refreshed = await onSubscriptionChanged();
-      const confirmed = info.hasRevenueCatPremium && refreshed.status === "ready" &&
+      if (subscriptionScopeRef.current !== purchaseScope) return;
+      const confirmed = info.hasRevenueCatPremium && refreshed.status === "ready" && refreshed.householdId === subscription.householdId &&
         (period === "monthly"
           ? refreshed.view === "monthly_active" || refreshed.view === "monthly_cancelled_active"
           : refreshed.view === "yearly_active" || refreshed.view === "yearly_cancelled_active");
@@ -89,6 +94,7 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
       setIsAwaitingConfirmation(!confirmed);
       setStatusMessage(confirmed ? t("pricing.currentServerPremium") : t("pricing.purchaseSubmitted"));
     } catch (error) {
+      if (subscriptionScopeRef.current !== purchaseScope) return;
       const pending = providerPurchaseCompleted || error instanceof BillingConfirmationPendingError;
       pendingPlanRef.current = pending ? period : null;
       setIsAwaitingConfirmation(pending);
@@ -117,6 +123,7 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
         {hasSubscriptionError ? <p className="report-status" role="alert">{t("pricing.refreshFailed")}</p> : null}
         {statusMessage ? <p className="report-status" role="status">{statusMessage}</p> : null}
         {isPremium ? <p className="report-status" role="status">{t("pricing.currentServerPremium")}</p> : null}
+        {subscription.householdEntitlement?.role === "viewer" ? <p>{householdSubscriptionCopy(language).ownerOnly}</p> : null}
         <div className="upgrade-actions">
           {isFree ? (
             <LoadingButton className="primary-action" type="button" disabled={billingDisabled || isPurchasing || isAwaitingConfirmation || !subscription.userId || !products.some((item) => item.id === revenueCatProductIds.premiumMonthly)} isLoading={isPurchasing} onClick={() => void purchase("monthly")}>

@@ -1,6 +1,20 @@
 # RevenueCat billing architecture
 
-RevenueCat billing uses `@revenuecat/purchases-capacitor` on iOS and Android and `@revenuecat/purchases-js` in the browser. Both use the authenticated Supabase user UUID as the RevenueCat App User ID. The frontend never grants Premium: the RevenueCat webhook updates Supabase, and household plan usage remains the access-control source of truth.
+RevenueCat billing uses `@revenuecat/purchases-capacitor` on iOS and Android and `@revenuecat/purchases-js` in the browser. New purchases use a server-allocated RevenueCat App User ID for the selected household. Existing subscriptions retain their original purchaser UUID and provider receipt. The frontend never grants Premium: the RevenueCat webhook updates Supabase, and the selected household entitlement and usage remain the access-control source of truth.
+
+## Household identity and rollout
+
+Apply `20261007120000_household_invitation_lifecycle.sql`, then `20261007123000_household_billing_identity.sql`, before deploying the updated webhook and frontend. These migrations and the code in this checkout require a coordinated release; local validation does not apply or deploy them. The billing migration changes `begin_household_purchase(uuid)` from `void` to a provider customer ID; older clients that ignore its response remain compatible.
+
+`get_household_billing_customer(householdId)` and `begin_household_purchase(householdId)` require an active Owner and return an opaque, stable `hh_<random UUID>` identity. Repeating an abandoned or cancelled checkout returns the same identity without reserving an irreversible purchase intent. An Owner can manage two households independently. A Viewer receives the selected household's plan, billing interval, validity, cancellation state and capacity from Supabase and does not need to read a provider customer.
+
+`household_billing_customers` resolves new provider customers to their household. `household_subscription_sources` preserves existing source subscription associations. `household_provider_transactions` prevents a provider receipt from granting access to a second household. These mapping tables are private to trusted server code. A legacy subscription continues using its purchaser UUID; its purchasing Owner can manage it, while another Owner cannot impersonate that legacy payer. No existing purchase is aliased or migrated into a new provider account.
+
+Supported new and legacy callbacks use the service-role-only `apply_household_provider_event` transaction. It serializes the selected household (and a legacy source row), deduplicates event IDs, protects immutable receipt associations, ignores older provider timestamps and superseded periods, updates billing history and reconciles membership access atomically. Legacy callbacks also update their existing `user_subscriptions`, `user_entitlements` and usage row inside that transaction. Event timestamp ordering starts with events received by the new code; older rows do not contain a historical provider timestamp. Missing provider timestamps use receipt time for backward compatibility, so production payloads should retain RevenueCat's `event_timestamp_ms`.
+
+Cancellation retains paid Premium until the confirmed end of its period. Expiry suspends eligible Viewers and invalidates pending invitations; it does not delete plants, membership history or the configured special Owners. A subscription on another household never contributes Premium to the selected one.
+
+RevenueCat and the device's store still determine which purchases, product changes and restores they support. One receipt cannot be restored into a different Plantie household. **Release prerequisite: configure RevenueCat's restore behavior to “Keep with original App User ID” before enabling new native household billing**, following the [restore behavior documentation](https://www.revenuecat.com/docs/projects/restore-behavior). The default transfer behavior can move the receipt at RevenueCat even though Plantie's database rejects reassignment, leaving later renewal events on the wrong provider customer. Database checks alone cannot prevent that provider-side move. `VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED` defaults to `false`: new `hh_` native purchases, plan changes and restores fail closed before a provider mutation. Set it to exactly `true` and rebuild only after confirming the remote policy. Household customer reads, legacy purchaser-UUID operations and web billing remain supported. This checkout does not change the remote RevenueCat configuration. Verify the policy, native store account restrictions, coowner management, renewal and actual cancellation in the store/web sandbox. No real provider purchase or cancellation is exercised by the SQL fixtures.
 
 ## Product and entitlement mapping
 
@@ -45,11 +59,12 @@ src/lib/billingService.ts
 Interface:
 
 - `getAvailableProducts()`
-- `purchasePremiumMonthly()`
-- `purchasePremiumYearly()`
-- `restorePurchases()`
-- `getCustomerInfo()`
-- `syncEntitlements()`
+- `purchasePremiumMonthly(householdId)`
+- `purchasePremiumYearly(householdId)`
+- `changePlan(period, householdId)`
+- `restorePurchases(householdId)`
+- `getCustomerInfo(forceRefresh, householdId)`
+- `syncEntitlements(householdId)`
 
 Current adapter:
 
@@ -58,7 +73,7 @@ Current adapter:
 - Detects runtime as `web`, `ios`, or `android`.
 - Returns `BillingNotConfiguredError` if the runtime's public SDK key is missing.
 - Fetches the current offering and purchases its monthly or yearly package through the platform SDK.
-- Uses the Supabase user id as RevenueCat `appUserID`.
+- Resolves the selected household's authorized provider identity before customer, purchase and restore calls; serializes shared SDK identity changes and rejects results after an account switch.
 - Re-fetches RevenueCat customer info after web checkout, refreshes Supabase entitlement state, and waits for the webhook-driven household plan update.
 - On web, `restorePurchases()` refreshes the existing identified customer's info; mobile keeps the native restore operation.
 - Never activates Premium locally.
@@ -71,10 +86,12 @@ These are browser-safe public SDK keys from RevenueCat Project Settings > API ke
 VITE_REVENUECAT_API_KEY_IOS=
 VITE_REVENUECAT_API_KEY_ANDROID=
 VITE_REVENUECAT_API_KEY_WEB=
+VITE_REVENUECAT_API_KEY_WEB_SANDBOX=
 VITE_REVENUECAT_API_KEY_TEST_STORE=
+VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED=false
 ```
 
-Development and Netlify deploy previews use only the `test_...` Test Store key. Production web builds require a separate `rcb_...` public Web Billing key and a configured web billing provider; if absent, purchase buttons fail closed. Never put the Test Store key in the production web key or expose webhook, Stripe, or Supabase service-role secrets to the browser. The production Netlify site does not enable real web billing until its Web Billing configuration is set up intentionally.
+Local browser development uses the `rcb_sb_...` Web Billing sandbox key when provided in `.env.development.local`; otherwise it uses the `test_...` Test Store key. Native development and Netlify deploy previews use the Test Store key. Production web builds require a separate `rcb_...` public Web Billing key and a configured web billing provider; if absent, purchase buttons fail closed. Never put the Test Store or sandbox key in the production web key or expose webhook, Stripe, or Supabase service-role secrets to the browser. The production Netlify site does not enable real web billing until its Web Billing configuration is set up intentionally.
 
 ## Active webhook endpoint
 
@@ -99,8 +116,8 @@ Current behavior:
 - Rejects invalid secret with `401`.
 - Parses JSON safely.
 - Logs only safe metadata: event type, event ID, product ID, and app user id prefix.
-- Stores each accepted event ID in `subscription_events` after any subscription and entitlement writes succeed, so a failed write remains retryable.
-- Updates `user_subscriptions`, `user_entitlements`, and current-month `usage_counters` for known Supabase users and known products.
+- Commits supported subscription updates and their `subscription_events` ID in one database transaction, so failed writes remain retryable.
+- Updates only the resolved household for new customer identities; preserves legacy personal subscription rows and their fixed household source mapping.
 - Never creates an entitlement for an unknown Supabase user.
 - Never grants Premium for an unknown product or missing `premium` entitlement.
 - Leaves the current entitlement unchanged when a known subscription event lacks the `premium` entitlement or an active period has no valid expiration date.
@@ -127,6 +144,7 @@ Use only validated fields needed for entitlement updates:
 
 - `event.id`
 - `event.type`
+- `event.event_timestamp_ms`
 - `event.app_user_id`
 - `event.product_id`
 - `event.entitlement_ids`
@@ -150,7 +168,7 @@ Do not log raw receipts, auth headers, tokens, subscriber attributes, customer i
 - Use `event.id` as idempotency key.
 - Store sanitized payload subset only.
 
-`user_subscriptions`:
+`household_subscriptions` stores the effective plan, lifecycle, provider customer, original transaction and most recent provider timestamp for one household. Its entitlement is the access authority for every active member. `user_subscriptions` remains the compatibility source for existing purchaser-UUID subscriptions:
 
 - `user_id`: resolved from `event.app_user_id`.
 - `plan_key`: map from product ID.
@@ -209,8 +227,9 @@ RevenueCat should send the secret as `Authorization: Bearer <secret>`.
 
 - Use Netlify Dev or invoke the function with a local POST.
 - Set `REVENUECAT_WEBHOOK_SECRET`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` locally.
-- Use a Supabase auth user id as `event.app_user_id`; unknown users are stored as events but do not receive Premium.
+- Use a server-authorized household provider customer as `event.app_user_id`, or an existing mapped legacy purchaser UUID. An unknown customer or unbound legacy user does not grant household Premium.
 - Re-send the same `event.id` to verify idempotency.
+- `supabase/tests/household_billing_binding.sql` and `household_invitation_lifecycle.sql` contain synthetic assertions. Run both migrations and fixtures within one `BEGIN` / `ROLLBACK` transaction; never apply these fixtures to production without rollback. Multi-session provider delivery and real store restore behavior still require staging checks.
 
 ## Native setup
 

@@ -27,7 +27,7 @@ Apply `supabase/migrations/20260601093000_storage_image_buckets.sql` after the c
 The migration creates policies on `storage.objects`:
 
 - Authenticated household members can read objects whose first path segment is their household ID.
-- Household editors/owners can insert, update, and delete objects in their household path.
+- Active household Owners and Viewers can insert, update, and delete plant and diagnosis images in their own household path.
 - Invalid paths are denied by a UUID parser helper.
 - Anonymous users cannot read or write these buckets.
 

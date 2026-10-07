@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import type { LegalPageId } from "../lib/releaseReadiness";
+import { isInvitationId } from "../lib/householdInvitationRules.js";
 
 export type AppRoute =
   | { page: "dashboard" }
   | { page: "detail"; flowerId: string; panel: "diagnostics" | ""; scan: boolean }
   | { page: "diagnose" }
   | { page: "health" }
-  | { page: "join"; invite: string }
+  | { page: "join"; invite: string; invitationId?: string }
   | { page: "legal"; legalPageId: LegalPageId }
   | { page: "menu"; section: string }
   | { page: "qr" }
@@ -42,7 +43,9 @@ export const parseHashRoute = (hash: string): AppRoute => {
   const joinMatch = normalizedHash.match(/^#\/join(?:\?(.+))?$/);
   if (joinMatch) {
     const params = new URLSearchParams(joinMatch[1] ?? "");
-    return { invite: params.get("invite") ?? "", page: "join" };
+    const invitations = params.getAll("invitation");
+    const invitationId = invitations.length === 1 && isInvitationId(invitations[0]) ? invitations[0] : null;
+    return { invite: params.get("invite") ?? "", page: "join", ...(invitationId ? { invitationId } : {}) };
   }
 
   const legalPageMatch = normalizedHash.match(/^#\/(privacy|terms|support|delete-account|subscription-terms)$/);

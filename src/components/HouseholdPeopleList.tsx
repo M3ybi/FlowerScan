@@ -8,6 +8,7 @@ import type { HouseholdRole } from "../lib/plantieRepository";
 import type { createTranslator } from "../lib/i18n";
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { resolveHouseholdPermissions } from "../lib/householdPermissions";
+import { householdInvitationCopy } from "../lib/householdInvitationCopy";
 
 type Props = {
   items: HouseholdPersonItem[];
@@ -60,7 +61,7 @@ export const HouseholdPeopleList = ({ items, loading, error, currentUserId, curr
       {error ? <p className="report-status" role="alert">{error} <button type="button" onClick={onRetry}>{t("household.peopleRetry")}</button></p> : null}
       {pageItems.length ? <div className="menu-invite-rows">
         {pageItems.map((item) => {
-          const date = formatLocalizedTimestampDate(item.since, language);
+          const date = formatLocalizedTimestampDate(item.status === "pending" && item.expiresAt ? item.expiresAt : item.since, language);
           const removing = removingKeys.has(item.key);
           const isYou = currentUserId !== null && item.status === "active" && item.userId === currentUserId;
           const roleLabel = t(item.role === "owner" ? "household.roleOwner" : "household.roleViewer");
@@ -80,7 +81,7 @@ export const HouseholdPeopleList = ({ items, loading, error, currentUserId, curr
             <span className={`menu-invite-status status-${item.status}`}>{item.status === "suspended_plan_limit" ? householdSubscriptionCopy(language).inactive : t(item.status === "active" ? "household.peopleActive" : "household.peoplePending")}</span>
             <span className={`menu-invite-role role-${item.role}`}><RoleIcon size={14} aria-hidden="true" />{roleLabel}</span>
             <span className="menu-invite-date"><CalendarDays size={16} aria-hidden="true" /><span>
-              <small>{t(item.status === "pending" ? "household.peopleInvitedLabel" : "household.peopleMemberSinceLabel")}</small>
+              <small>{item.status === "pending" && item.expiresAt ? householdInvitationCopy(language).expires : t(item.status === "pending" ? "household.peopleInvitedLabel" : "household.peopleMemberSinceLabel")}</small>
               <span>{date || "—"}</span>
             </span></span>
             {canRemove(item) ? <button

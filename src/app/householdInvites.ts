@@ -1,4 +1,5 @@
 import type { HouseholdInvite } from "../lib/plantieRepository";
+import { isValidPendingHouseholdInvite } from "../lib/householdInvitationRules.js";
 
 export const createInviteUrl = (token: string, currentHref = window.location.href) => {
   const url = new URL(currentHref);
@@ -38,7 +39,7 @@ export const createSingleFlightInviteJoin = () => {
   };
 };
 
-export const isActiveInvite = (invite: HouseholdInvite) => !invite.usedAt && !invite.revokedAt;
+export const isActiveInvite = (invite: HouseholdInvite, now = Date.now()) => isValidPendingHouseholdInvite(invite, now);
 
 const readableErrorMessage = (error: unknown) => {
   const details = typeof error === "object" && error !== null ? error as { code?: string; details?: string; hint?: string; message?: string } : {};
@@ -61,6 +62,10 @@ export const inviteErrorMessage = (error: unknown) => {
 
   if (message.includes("sharing requires premium")) return "household.invitePremiumRequired";
   if (message.includes("member limit reached")) return "household.inviteLimitReached";
+
+  if (message.includes("expired")) return "household.inviteStatusExpired";
+  if (message.includes("verified email") || message.includes("email verification")) return "household.inviteStatusVerificationRequired";
+  if (message.includes("matching email") || message.includes("different email")) return "household.inviteStatusWrongAccount";
 
   if (message.includes("invalid invite email") || message.includes("valid family member email") || message.includes("invalid email")) {
     return "household.inviteStatusInvalidEmail";
@@ -98,6 +103,10 @@ export const joinInviteErrorMessage = (error: unknown) => {
 
   if (message.includes("sharing requires premium")) return "household.invitePremiumRequired";
   if (message.includes("member limit reached")) return "household.inviteLimitReached";
+
+  if (message.includes("expired")) return "household.inviteStatusExpired";
+  if (message.includes("verified email") || message.includes("email verification")) return "household.inviteStatusVerificationRequired";
+  if (message.includes("matching email") || message.includes("different email")) return "household.inviteStatusWrongAccount";
 
   if (message.includes("revoked") || message.includes("invalid") || message.includes("used")) {
     return "household.inviteStatusInvalidInvite";

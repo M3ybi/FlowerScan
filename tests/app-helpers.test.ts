@@ -12,6 +12,8 @@ import {
 import { areStringRecordsEqual, mergeCloudRecords } from "../src/app/records.js";
 import { isRouteAllowedWithoutHousehold, parseHashRoute } from "../src/app/routes.js";
 import type { FlowerRecords } from "../src/hooks/useFlowerRecords.js";
+import { householdAfterInviteAcceptance, readSelectedHouseholdId, resolveHouseholdSelection, writeSelectedHouseholdId } from "../src/lib/householdSelection.js";
+import type { Household } from "../src/lib/plantieRepository.js";
 
 test("invite helper normalizes raw tokens and copied invite URLs", () => {
   const token = "abc1234567890_DEF-abc1234567890_DEF";
@@ -76,6 +78,24 @@ test("route helper parses public and protected app routes", () => {
   assert.equal(isRouteAllowedWithoutHousehold({ page: "menu", section: "" }), true);
   assert.equal(isRouteAllowedWithoutHousehold({ page: "legal", legalPageId: "terms" }), true);
   assert.equal(isRouteAllowedWithoutHousehold({ page: "dashboard" }), false);
+});
+
+test("accepting an invite preserves the selected household and selection stays account-scoped", () => {
+  const firstUser = "11111111-1111-4111-8111-111111111111";
+  const secondUser = "22222222-2222-4222-8222-222222222222";
+  const personal = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Personal", legacyPublicToken: null } as Household;
+  const joined = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", name: "Family", legacyPublicToken: null } as Household;
+  const values = new Map<string, string>();
+  const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+  writeSelectedHouseholdId(storage, firstUser, personal.id);
+  writeSelectedHouseholdId(storage, secondUser, joined.id);
+
+  assert.equal(householdAfterInviteAcceptance(personal, joined), personal);
+  assert.equal(householdAfterInviteAcceptance(null, joined), joined);
+  assert.equal(resolveHouseholdSelection([personal, joined], readSelectedHouseholdId(storage, firstUser)), personal);
+  assert.equal(resolveHouseholdSelection([personal, joined], readSelectedHouseholdId(storage, secondUser)), joined);
+  assert.equal(resolveHouseholdSelection([personal], joined.id), personal);
+  assert.equal(readSelectedHouseholdId({ getItem: () => "invalid JSON" }, firstUser), null);
 });
 
 test("record helper prefers non-empty cloud records without discarding local-only records", () => {

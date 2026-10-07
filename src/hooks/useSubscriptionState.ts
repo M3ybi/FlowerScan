@@ -10,7 +10,7 @@ export const useSubscriptionState = (userId: string | null, householdId: string 
   const controllerRef = useRef<ReturnType<typeof createSubscriptionStateController> | null>(null);
   if (!controllerRef.current) {
     controllerRef.current = createSubscriptionStateController({
-      getCustomerInfo: (forceProviderRefresh) => getBillingService().getCustomerInfo(forceProviderRefresh),
+      getCustomerInfo: (forceProviderRefresh, targetHouseholdId) => getBillingService().getCustomerInfo(forceProviderRefresh, targetHouseholdId),
       getHouseholdPlanUsage,
       getHouseholdEntitlement,
       onChange: (nextSnapshot) => {

@@ -73,9 +73,9 @@ test("Supabase startup loads authenticated household even without a cached token
   const resolverSection = appSource.slice(appSource.indexOf("const resolveHousehold"), appSource.indexOf("void resolveHousehold"));
 
   assert.match(resolverSection, /!token && \(!isSupabaseBackend \|\| !auth\.isAuthenticated\)/);
-  assert.match(resolverSection, /const households = await getUserHouseholds\(\)/);
-  assert.match(resolverSection, /\(token \? households\.find/);
-  assert.match(resolverSection, /\?\? households\[0\] \?\? null/);
+  assert.match(resolverSection, /const households = await householdDirectory\.refresh\(\)/);
+  assert.match(resolverSection, /resolveHouseholdSelection\(households, token\)/);
+  assert.match(resolverSection, /if \(!isCurrent\(\)\) return/);
 });
 
 test("Supabase startup without memberships prompts create or join instead of invalid link", () => {

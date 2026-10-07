@@ -11,7 +11,9 @@ interface ImportMetaEnv {
   readonly VITE_REVENUECAT_API_KEY_ANDROID?: string;
   readonly VITE_REVENUECAT_API_KEY_IOS?: string;
   readonly VITE_REVENUECAT_API_KEY_WEB?: string;
+  readonly VITE_REVENUECAT_API_KEY_WEB_SANDBOX?: string;
   readonly VITE_REVENUECAT_API_KEY_TEST_STORE?: string;
+  readonly VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED?: string;
 }
 
 interface ImportMeta {

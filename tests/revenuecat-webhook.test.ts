@@ -111,6 +111,35 @@ const createMockSupabase = (knownUsers = new Set([userId])) => {
   };
 
   const client = {
+    async rpc(name: string, args: Record<string, unknown>) {
+      assert.equal(name, "apply_household_provider_event");
+      const eventId = String(args.provider_event_id);
+      if (state.events.has(eventId)) return { data: false, error: null };
+      if (state.failEntitlementWrites > 0) {
+        state.failEntitlementWrites -= 1;
+        return { data: null, error: { message: "temporary outage" } };
+      }
+      const id = String(args.customer_id);
+      const current = [...state.subscriptions.values()].find((row) => row.platform_customer_id === id);
+      state.events.set(eventId, { id: `event-row-${state.events.size + 1}`, event_id: eventId });
+      if (current?.current_period_end && args.period_end &&
+          Date.parse(String(current.current_period_end)) > Date.parse(String(args.period_end))) {
+        return { data: false, error: null };
+      }
+      const subscriptionId = String(current?.id ?? `subscription-${state.subscriptions.size + 1}`);
+      state.subscriptions.set(subscriptionId, {
+        id: subscriptionId, user_id: id, platform_customer_id: id,
+        platform_original_transaction_id: args.original_transaction_id,
+        platform_transaction_id: args.event_transaction_id, plan_key: args.event_plan_key,
+        status: args.event_status, current_period_end: args.period_end,
+      });
+      const premium = args.event_status !== "expired" && args.event_status !== "refunded";
+      state.entitlements.set(id, { user_id: id, is_premium: premium,
+        plan_key: premium ? args.event_plan_key : "free", source_subscription_id: subscriptionId,
+        valid_until: premium ? args.period_end : null });
+      state.usageCounters.set(id, { value: 0 });
+      return { data: true, error: null };
+    },
     auth: {
       admin: {
         async getUserById(id: string) {
@@ -260,6 +289,29 @@ test("expiration deactivates premium", async () => {
 
   assert.equal(state.entitlements.get(userId)?.is_premium, false);
   assert.equal(state.entitlements.get(userId)?.plan_key, "free");
+  assert.equal(state.entitlements.get(userId)?.source_subscription_id, [...state.subscriptions.values()][0].id);
+});
+
+test("household provider identities route to the atomic trusted RPC without modifying personal entitlements", async () => {
+  const { client, state } = createMockSupabase();
+  const calls: Array<Record<string, unknown>> = [];
+  client.rpc = async (name, args) => {
+    assert.equal(name, "apply_household_provider_event");
+    calls.push(args);
+    return { data: true, error: null };
+  };
+  const householdCustomer = "hh_22222222-2222-4222-8222-222222222222";
+  const result = await processRevenueCatWebhookEvent(client, baseEvent({
+    appUserId: householdCustomer, eventOccurredAtMs: Date.parse("2026-06-01T00:00:01Z"),
+  }));
+  assert.equal(result.subscriptionUpdated, true);
+  assert.equal(calls[0].customer_id, householdCustomer);
+  assert.equal(calls[0].original_transaction_id, "original-transaction");
+  assert.equal(calls[0].event_occurred_at, "2026-06-01T00:00:01.000Z");
+  assert.equal(state.entitlements.size, 0);
+  assert.equal(state.subscriptions.size, 0);
+  client.rpc = async () => ({ data: null, error: { message: "temporary outage" } });
+  await assert.rejects(() => processRevenueCatWebhookEvent(client, baseEvent({ appUserId: householdCustomer })), /Household subscription/);
 });
 
 test("refund deactivates premium", async () => {
@@ -279,13 +331,14 @@ test("duplicate event id is idempotent", async () => {
   assert.equal(state.events.size, 1);
 });
 
-test("retry applies entitlement when a previous write failed after subscription update", async () => {
+test("a failed atomic RPC remains retryable without partially committing subscription or event state", async () => {
   const { client, state } = createMockSupabase();
   state.failEntitlementWrites = 1;
 
-  await assert.rejects(processRevenueCatWebhookEvent(client, baseEvent()), /User entitlement could not be updated/);
+  await assert.rejects(processRevenueCatWebhookEvent(client, baseEvent()), /Household subscription state could not be updated/);
   assert.equal(state.events.has("event-1"), false);
   assert.equal(state.entitlements.has(userId), false);
+  assert.equal(state.subscriptions.size, 0);
 
   const retry = await processRevenueCatWebhookEvent(client, baseEvent());
   assert.equal(retry.entitlementUpdated, true);

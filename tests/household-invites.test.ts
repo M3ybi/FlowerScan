@@ -12,7 +12,7 @@ const nameSafetySql = read(nameSafetyMigrationPath);
 const functionSlice = (name: string, nextName: string) =>
   sql.slice(sql.indexOf(`create or replace function public.${name}`), sql.indexOf(`create or replace function public.${nextName}`));
 
-test("migration replaces invite RPCs and adds viewer removal RPC", () => {
+test("historical migration replaced invite RPCs and added viewer removal RPC", () => {
   assert.match(sql, /drop function if exists public\.create_household_invite\(uuid, text, public\.household_member_role, timestamptz\)/);
   assert.match(sql, /create or replace function public\.create_household_invite/);
   assert.match(sql, /create or replace function public\.join_household_by_invite/);
@@ -25,7 +25,7 @@ test("migration replaces invite RPCs and adds viewer removal RPC", () => {
   assert.match(sql, /grant execute on function public\.rename_household\(uuid, text\) to authenticated/);
 });
 
-test("invite tokens are high entropy, stored only as hashes, and no expiry is written", () => {
+test("historical invitation creation used high-entropy hashes without expiry", () => {
   const createFunction = functionSlice("create_household_invite", "join_household_by_invite");
 
   assert.match(createFunction, /gen_random_bytes\(32\)/);
@@ -36,7 +36,7 @@ test("invite tokens are high entropy, stored only as hashes, and no expiry is wr
   assert.match(createFunction, /raw_token,\s*created_invite\.created_at/s);
 });
 
-test("invite creation validates email and rejects active duplicate targets without expiry logic", () => {
+test("historical creation validated email and rejected active duplicate targets", () => {
   const createFunction = functionSlice("create_household_invite", "join_household_by_invite");
 
   assert.match(createFunction, /normalized_email := lower\(trim\(coalesce\(invite_email, ''\)\)\)/);
@@ -48,7 +48,7 @@ test("invite creation validates email and rejects active duplicate targets witho
   assert.doesNotMatch(createFunction, /expires_at|invite_expires_at|expiration/i);
 });
 
-test("current invite RPC is owner-only, Viewer-only, and checks Premium capacity", () => {
+test("earlier membership migration made invitations Owner-only, Viewer-only and Premium-gated", () => {
   const currentSql = read("supabase/migrations/20261005180000_household_subscription_membership.sql");
   const createFunction = currentSql.slice(
     currentSql.indexOf("create or replace function public.create_household_invite"),
@@ -60,7 +60,7 @@ test("current invite RPC is owner-only, Viewer-only, and checks Premium capacity
   assert.match(createFunction, /used_slots >= 3/);
 });
 
-test("join rejects invalid revoked or reused invites for new members without expiry logic", () => {
+test("historical joining rejected invalid, revoked and used invitations", () => {
   const joinFunction = functionSlice("join_household_by_invite", "list_household_invites");
 
   assert.match(joinFunction, /raw_token is null or length\(trim\(raw_token\)\) < 32/);
@@ -78,7 +78,7 @@ test("already-member invite joins remain idempotent and role assignment is prese
   assert.match(joinFunction, /set used_at = now\(\)/);
 });
 
-test("list and revoke do not expose raw invite tokens or expiry data", () => {
+test("historical listing and revocation kept tokens private", () => {
   const listFunction = functionSlice("list_household_invites", "remove_household_viewer");
   const legacyMigration = read("supabase/migrations/20260603103000_household_invite_rpcs.sql");
   const revokeFunction = legacyMigration.slice(
@@ -153,7 +153,11 @@ test("frontend repository exposes authenticated invite and viewer removal operat
   assert.match(repository, /export const isValidInviteEmail/);
   assert.match(repository, /\.rpc\("create_household_invite"/);
   assert.match(repository, /invite_email: normalizedEmail/);
-  assert.doesNotMatch(repository, /invite_expires_at|expiresAt|expires_at/);
+  assert.match(repository, /expiresAt: invite\.expires_at/);
+  assert.match(repository, /export const listMyHouseholdInvitations/);
+  assert.match(repository, /rpc\("list_my_household_invitations"\)/);
+  assert.match(repository, /export const acceptHouseholdInvitation/);
+  assert.match(repository, /export const declineHouseholdInvitation/);
   assert.match(repository, /export const listHouseholdInvites/);
   assert.match(repository, /export const revokeHouseholdInvite/);
   assert.match(repository, /export const joinHouseholdByInvite/);
@@ -166,7 +170,7 @@ test("frontend repository exposes authenticated invite and viewer removal operat
   assert.match(repository, /functions\.invoke<HouseholdInviteEmailResult>\("send-household-invite-email"/);
 });
 
-test("frontend invite flow creates invites without expiration UI state or payload", () => {
+test("frontend invites use server-defined expiry and a single pending record for email retries", () => {
   const appSource = read("src/App.tsx");
   const inviteSource = read("src/app/householdInvites.ts");
 
@@ -178,7 +182,8 @@ test("frontend invite flow creates invites without expiration UI state or payloa
   assert.match(appSource, /household\.invitationSent/);
   assert.match(inviteSource, /export const inviteErrorMessage/);
   assert.match(appSource, /inviteErrorMessage\(error\)/);
-  assert.doesNotMatch(appSource, /inviteExpiresAt|setInviteExpiresAt|datetime-local|invite_expires_at|expiresAt/);
+  assert.doesNotMatch(appSource, /inviteExpiresAt|setInviteExpiresAt|datetime-local|invite_expires_at/);
+  assert.match(inviteSource, /isValidPendingHouseholdInvite/);
 });
 
 test("frontend uses one current-state list and owner-only member removal", () => {
@@ -193,7 +198,7 @@ test("frontend uses one current-state list and owner-only member removal", () =>
   assert.match(appSource, /Promise\.all\(\[/);
 });
 
-test("current household migration keeps only actionable invites and enforces removal permissions", () => {
+test("earlier people migration restricted invitation writes and member removal", () => {
   const managementSql = read("supabase/migrations/20261005120000_household_people_management.sql");
   assert.match(managementSql, /create unique index household_invites_active_email_idx/);
   assert.match(managementSql, /partition by household_id, lower\(btrim\(invitee_email\)\)/);
@@ -222,14 +227,15 @@ test("frontend exposes owner-only household rename in sheet and menu", () => {
   assert.match(appSource, /applyRenamedHousehold\(household\)/);
 });
 
-test("signed-out pending invite resumes after authentication", () => {
-  const appSource = read("src/App.tsx");
-
-  assert.match(appSource, /pendingInviteStorageKey/);
-  assert.match(appSource, /window\.localStorage\.setItem\(pendingInviteStorageKey, token\)/);
-  assert.match(appSource, /window\.localStorage\.getItem\(pendingInviteStorageKey\)/);
-  assert.match(appSource, /handleJoinInvite\(pendingInvite\)/);
-  assert.match(appSource, /#\/join\?invite=/);
+test("signed-out invitation resumes review after authentication without autoacceptance", () => {
+  const panelSource = read("src/components/AuthPanel.tsx");
+  const contextSource = read("src/lib/invitationAuthContext.ts");
+  const authSource = read("src/hooks/useAuth.ts");
+  assert.match(panelSource, /rememberInvitationAuthContext/);
+  assert.match(contextSource, /invitationValidityMs/);
+  assert.match(contextSource, /#\/join\?invitation=/);
+  assert.match(authSource, /invitationReturnLocation/);
+  assert.doesNotMatch(authSource, /acceptHouseholdInvitation|joinHouseholdByInvite/);
 });
 
 test("legacy household links remain available only through legacy compatibility paths", () => {

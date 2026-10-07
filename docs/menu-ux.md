@@ -39,14 +39,14 @@ The legacy migration and fallback code may remain for internal rollback or devel
 
 Family sharing is presented as email invites:
 
-1. Owner/editor enters a family member email.
+1. An Owner enters a family member email, including recipients without a Plantie account.
 2. Plantie creates a one-time Supabase invite token through authenticated RPC.
 3. Plantie stores the normalized invitee email with the hashed invite token and blocks duplicate active invites for the same email.
-4. The raw invite link is shown once for copying.
-5. The invited user signs in or registers, opens the invite link, and accepts or declines.
-6. Membership is created server-side by Supabase RPC/RLS.
+4. The invitation reserves a slot for seven days. An Owner can retry email or recover the same link without creating another reservation.
+5. The invited user signs in or registers and verifies the invited email, then explicitly accepts or declines the invitation review. Verified recipients can also open it from the global mail inbox.
+6. Membership is created atomically server-side. Existing households remain unchanged and selected; the new household becomes available in the household switcher.
 
-Current limitation: automated email delivery still requires a deployed email provider workflow. Until that is configured, the UI creates the email-bound invite and shows the copyable link without exposing provider internals.
+Email delivery uses the authenticated `send-household-invite-email` Edge Function and verified Resend sender. Delivery failure preserves the invitation and reservation so the Owner can retry or copy the link. Account verification uses the signed Auth hook described in `auth-email-hook.md`.
 
 ## Account Deletion
 

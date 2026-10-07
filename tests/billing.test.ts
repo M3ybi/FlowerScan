@@ -13,6 +13,7 @@ import {
   normalizeBillingError,
   revenueCatEntitlementId,
   revenueCatProductIds,
+  selectRevenueCatApiKey,
 } from "../src/lib/billingService.js";
 import { handler } from "../netlify/functions/revenuecat-webhook.js";
 
@@ -20,6 +21,24 @@ test("RevenueCat product identifiers are stable", () => {
   assert.equal(revenueCatEntitlementId, "premium");
   assert.equal(revenueCatProductIds.premiumMonthly, "plantie_premium_monthly");
   assert.equal(revenueCatProductIds.premiumYearly, "plantie_premium_yearly");
+});
+
+test("local web uses the Web Billing sandbox without changing mobile or preview keys", () => {
+  const keys = {
+    testStore: "test_public",
+    webSandbox: "rcb_sb_public",
+    web: "rcb_live_public",
+    android: "goog_public",
+  };
+
+  assert.equal(selectRevenueCatApiKey("web", "development", keys), "rcb_sb_public");
+  assert.equal(selectRevenueCatApiKey("web", "development", { ...keys, webSandbox: "" }), "test_public");
+  assert.equal(selectRevenueCatApiKey("android", "development", keys), "test_public");
+  assert.equal(selectRevenueCatApiKey("web", "test", keys), "test_public");
+  assert.equal(selectRevenueCatApiKey("web", "production", keys), "rcb_live_public");
+  assert.equal(selectRevenueCatApiKey("android", "production", keys), "goog_public");
+  assert.equal(selectRevenueCatApiKey("web", "development", { ...keys, webSandbox: "invalid" }), "");
+  assert.equal(selectRevenueCatApiKey("web", "production", { ...keys, web: "rcb_sb_public" }), "");
 });
 
 const customerInfo = {
@@ -168,6 +187,12 @@ test("purchase syncs server entitlements but does not grant premium locally", as
   assert.equal(info.willRenew, true);
   assert.equal(info.expiresAt, "2026-11-01T00:00:00Z");
   assert.deepEqual(calls, ["configure:user-id", "purchase:plantie_premium_monthly", "refresh-entitlement"]);
+});
+
+test("native completed checkout with unavailable server confirmation is pending rather than a failed purchase", async () => {
+  const { calls, service } = createMockBilling({ refreshServerEntitlement: async () => { throw new Error("offline"); } });
+  await assert.rejects(() => service.purchasePremiumMonthly(), BillingConfirmationPendingError);
+  assert.equal(calls.filter((call) => call.startsWith("purchase:")).length, 1);
 });
 
 test("Android monthly to yearly passes the old product to the store and reads the confirmed plan", async () => {
@@ -326,6 +351,37 @@ test("native account switch logs in the new Supabase user without reconfiguring 
   ]);
 });
 
+test("native checkout never starts if the account changes during SDK configuration or offerings lookup", async () => {
+  for (const delayedStep of ["configure", "offerings"] as const) {
+    let currentUserId = "original-user";
+    let release!: () => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    let checkoutCount = 0;
+    const { service } = createMockBilling({
+      getCurrentUserId: async () => currentUserId,
+      purchases: {
+        configure: async () => { if (delayedStep === "configure") { markStarted(); await wait; } },
+        logIn: async () => ({ customerInfo } as never),
+        getCustomerInfo: async () => ({ customerInfo: freeCustomerInfo } as never),
+        getOfferings: async () => {
+          if (delayedStep === "offerings") { markStarted(); await wait; }
+          return { current: { availablePackages: [monthlyPackage] } } as never;
+        },
+        purchasePackage: async () => { checkoutCount += 1; return { customerInfo } as never; },
+        restorePurchases: async () => ({ customerInfo } as never),
+      },
+    });
+    const purchase = service.purchasePremiumMonthly();
+    await started;
+    currentUserId = "different-user";
+    release();
+    await assert.rejects(purchase, BillingAuthRequiredError);
+    assert.equal(checkoutCount, 0);
+  }
+});
+
 test("native SDK already configured in the process switches identity without configuring again", async () => {
   const calls: string[] = [];
   const { service } = createMockBilling({
@@ -438,6 +494,7 @@ const createMockWebBilling = (options: {
   customerInfoWait?: Promise<void>;
   onCustomerInfoStarted?: () => void;
   refreshError?: boolean;
+  resolveProviderUserId?: Parameters<typeof createRevenueCatWebBillingService>[0]["resolveProviderUserId"];
 } = {}) => {
   const calls: string[] = [];
   let userId: string | null = "user-id";
@@ -497,6 +554,7 @@ const createMockWebBilling = (options: {
     },
     getApiKey: () => options.apiKey ?? "test-public-key",
     getCurrentUserId: async () => userId,
+    resolveProviderUserId: options.resolveProviderUserId,
     refreshServerEntitlement: async () => {
       calls.push("refresh-entitlement");
       if (options.refreshError) throw new Error("Supabase unavailable");
@@ -518,6 +576,65 @@ test("web initializes with the Supabase user and loads current offering", async 
     [revenueCatProductIds.premiumYearly, "$39.99"],
   ]);
   assert.deepEqual(calls, ["configure:user-id", "offerings"]);
+});
+
+test("web uses the server-authorized household customer and restores the correct identity after switching", async () => {
+  const authorized: string[] = [];
+  const { calls, createService } = createMockWebBilling({
+    resolveProviderUserId: async (user, household, forPurchase) => {
+      assert.equal(user, "user-id");
+      if (!household) throw new BillingAuthRequiredError();
+      authorized.push(`${household}:${forPurchase}`);
+      return `hh_${household}`;
+    },
+  });
+  const service = createService();
+  assert.equal((await service.getCustomerInfo(true, "first-home")).appUserId, "hh_first-home");
+  assert.equal((await service.getCustomerInfo(true, "second-home")).appUserId, "hh_second-home");
+  await service.purchasePremiumMonthly("first-home");
+  assert.deepEqual(authorized, ["first-home:false", "second-home:false", "first-home:true"]);
+  assert.ok(calls.indexOf("change-user:hh_first-home") < calls.indexOf(`purchase:${revenueCatProductIds.premiumMonthly}`));
+  await assert.rejects(() => service.purchasePremiumMonthly(), BillingAuthRequiredError);
+});
+
+test("native purchases use authorized household identity independently of the authenticated user", async () => {
+  const resolved: string[] = [];
+  const { calls, service } = createMockBilling({
+    householdNativeBillingEnabled: true,
+    resolveProviderUserId: async (user, household, forPurchase) => {
+      assert.equal(user, "user-id");
+      if (!household) throw new BillingAuthRequiredError();
+      resolved.push(`${household}:${forPurchase}`);
+      return `hh_${household}`;
+    },
+  });
+  await service.getCustomerInfo(true, "first-home");
+  await service.getCustomerInfo(true, "second-home");
+  await service.purchasePremiumYearly("first-home");
+  assert.deepEqual(resolved, ["first-home:false", "second-home:false", "first-home:true"]);
+  assert.deepEqual(calls.slice(0, 3), ["configure:hh_first-home", "log-in:hh_second-home", "log-in:hh_first-home"]);
+  assert.ok(calls.includes(`purchase:${revenueCatProductIds.premiumYearly}`));
+  await assert.rejects(() => service.restorePurchases(), BillingAuthRequiredError);
+});
+
+test("new native household purchases, plan changes and restores fail closed until the receipt policy is confirmed", async () => {
+  const { calls, service } = createMockBilling({ resolveProviderUserId: async () => "hh_new-household" });
+  await service.getCustomerInfo(true, "household-id");
+  const callsBeforeActions = [...calls];
+  for (const action of [() => service.purchasePremiumMonthly("household-id"),
+    () => service.purchasePremiumYearly("household-id"), () => service.changePlan("yearly", "household-id"),
+    () => service.restorePurchases("household-id")]) {
+    await assert.rejects(action, (error: unknown) => error instanceof BillingNotConfiguredError && /original customer/.test(error.message));
+  }
+  assert.deepEqual(calls, callsBeforeActions);
+});
+
+test("legacy native purchaser identity remains supported when new household native billing is disabled", async () => {
+  const { calls, service } = createMockBilling({ resolveProviderUserId: async () => "legacy-purchaser-id" });
+  await service.purchasePremiumMonthly("legacy-household");
+  await service.restorePurchases("legacy-household");
+  assert.ok(calls.includes(`purchase:${revenueCatProductIds.premiumMonthly}`));
+  assert.ok(calls.includes("restore"));
 });
 
 test("web successful purchase refreshes RevenueCat and server entitlement", async () => {

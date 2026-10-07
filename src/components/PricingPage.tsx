@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { ChevronDown, Crown, History, Leaf, Sprout } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, Crown, History, Leaf, Sprout, Users } from "lucide-react";
 import { LoadingButton } from "./LoadingButton";
 import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
 import type { BillingProduct, BillingStatus } from "../lib/billingService";
@@ -12,8 +12,10 @@ import type { HouseholdSubscriptionEvent } from "../lib/householdSubscriptionHis
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { beginHouseholdPurchase } from "../lib/householdPlanService";
 import { resolveHouseholdPermissions } from "../lib/householdPermissions";
+import { usedHouseholdSlots } from "../lib/householdMembershipRules";
 import {
   canCancelSubscription,
+  canPurchaseHouseholdPlan,
   createCancellationHandoff,
   formatSubscriptionDate,
   getSubscriptionPresentation,
@@ -58,7 +60,6 @@ const matchesPurchasedPlan = (subscription: SubscriptionSnapshot, period: "month
 export const PricingPage = ({
   subscription,
   language = null,
-  householdMemberCount = 0,
   onSubscriptionChanged,
 }: {
   subscription: SubscriptionSnapshot;
@@ -89,6 +90,8 @@ export const PricingPage = ({
   const managementListenerRef = useRef<{ remove(): Promise<void> } | null>(null);
   const onSubscriptionChangedRef = useRef(onSubscriptionChanged);
   onSubscriptionChangedRef.current = onSubscriptionChanged;
+  const subscriptionScopeRef = useRef("");
+  subscriptionScopeRef.current = `${subscription.userId ?? ""}:${subscription.householdId ?? ""}`;
   const fallbackPlans = useMemo(() => createFallbackPlans(t), [t]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const presentation = getSubscriptionPresentation(subscription);
@@ -99,10 +102,9 @@ export const PricingPage = ({
     : entitlement?.planKey === "premium_yearly" ? "yearly" : null;
   const hasSubscriptionError = presentation.status === "error";
   const billingDetailsUnavailable = subscription.status === "ready" && isOwner && !subscription.customerInfo;
-  const canPurchasePlan = isOwner && !subscription.customerInfo?.hasRevenueCatPremium &&
-    (presentation.status === "free" || presentation.status === "expired");
+  const canPurchasePlan = canPurchaseHouseholdPlan(subscription);
   const billingDisabled = !billingStatus.configured;
-  const managementUrl = safeBillingManagementUrl(subscription.customerInfo?.managementUrl);
+  const managementUrl = isOwnPaidSubscription(subscription) ? safeBillingManagementUrl(subscription.customerInfo?.managementUrl) : null;
   const formattedDate = formatSubscriptionDate(presentation.date, language);
   const isBusy = isPurchasing || isRefreshing || isOpeningManagement;
   const planName = presentation.plan === "monthly" ? t("pricing.monthlyPlan")
@@ -154,7 +156,7 @@ export const PricingPage = ({
       if (!cancelled) setIsLoadingProducts(false);
     });
     return () => { cancelled = true; };
-  }, [billingStatus.configured, subscription.userId, t]);
+  }, [billingStatus.configured, subscription.userId, subscription.householdId, t]);
 
   useEffect(() => {
     if (pendingPlanRef.current && matchesPurchasedPlan(subscription, pendingPlanRef.current)) {
@@ -257,6 +259,7 @@ export const PricingPage = ({
   const runPurchase = async (period: "monthly" | "yearly") => {
     if (actionInProgress.current || !isOwner || !(canPurchasePlan || isOwnPaidSubscription(subscription))) return;
     actionInProgress.current = true;
+    const purchaseScope = subscriptionScopeRef.current;
     setIsPurchasing(true);
     setBillingMessage(t("pricing.openingPurchase"));
     let providerPurchaseCompleted = false;
@@ -270,17 +273,21 @@ export const PricingPage = ({
       }
       if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
       await beginHouseholdPurchase(subscription.householdId);
+      if (subscriptionScopeRef.current !== purchaseScope) return;
       const info = changingPlan
-        ? await billing.changePlan(period)
-        : period === "monthly" ? await billing.purchasePremiumMonthly() : await billing.purchasePremiumYearly();
+        ? await billing.changePlan(period, subscription.householdId)
+        : period === "monthly" ? await billing.purchasePremiumMonthly(subscription.householdId) : await billing.purchasePremiumYearly(subscription.householdId);
       providerPurchaseCompleted = true;
+      if (subscriptionScopeRef.current !== purchaseScope) return;
       pendingPlanRef.current = period;
       const refreshed = await onSubscriptionChanged();
-      const confirmed = info.hasRevenueCatPremium && matchesPurchasedPlan(refreshed, period);
+      if (subscriptionScopeRef.current !== purchaseScope) return;
+      const confirmed = info.hasRevenueCatPremium && refreshed.householdId === subscription.householdId && matchesPurchasedPlan(refreshed, period);
       if (confirmed) pendingPlanRef.current = null;
       setIsAwaitingConfirmation(!confirmed);
       setBillingMessage(confirmed ? t("pricing.currentServerPremium") : t("pricing.purchaseSubmitted"));
     } catch (error) {
+      if (subscriptionScopeRef.current !== purchaseScope) return;
       const pending = providerPurchaseCompleted || error instanceof BillingConfirmationPendingError;
       if (pending) pendingPlanRef.current = period;
       else pendingPlanRef.current = null;
@@ -326,17 +333,17 @@ export const PricingPage = ({
           {planName ? <span className="pricing-status-badge">{statusName}</span> : null}
         </div>
         {isPremium ? <p>{copy.premiumBody}</p> : null}
-        {entitlement ? <div className="pricing-summary-detail"><span>{t("household.members")}</span><strong>{copy.members(entitlement.activeMemberCount || householdMemberCount, entitlement.maxMembers)}</strong></div> : null}
-        {householdPeriod || presentation.period ? <div className="pricing-summary-detail"><span>{t("pricing.billingPeriod")}</span><strong>{householdPeriod === "monthly" || !householdPeriod && presentation.period === "monthly" ? t("pricing.periodMonthly") : t("pricing.periodYearly")}{householdPeriod ? ` · ${productsById.get(householdPeriod === "monthly" ? revenueCatProductIds.premiumMonthly : revenueCatProductIds.premiumYearly)?.price ?? ""}` : ""}</strong></div> : null}
+        {entitlement ? <div className="pricing-summary-detail"><span><Users size={16} aria-hidden="true" />{copy.slotsLabel}</span><strong>{copy.members(usedHouseholdSlots(entitlement), entitlement.maxMembers)}</strong></div> : null}
+        {householdPeriod || presentation.period ? <div className="pricing-summary-detail"><span><CalendarDays size={16} aria-hidden="true" />{t("pricing.billingPeriod")}</span><strong>{householdPeriod === "monthly" || !householdPeriod && presentation.period === "monthly" ? t("pricing.periodMonthly") : t("pricing.periodYearly")}{householdPeriod && productsById.has(householdPeriod === "monthly" ? revenueCatProductIds.premiumMonthly : revenueCatProductIds.premiumYearly) ? ` · ${productsById.get(householdPeriod === "monthly" ? revenueCatProductIds.premiumMonthly : revenueCatProductIds.premiumYearly)!.price}` : ""}</strong></div> : null}
         {presentation.previousPlan ? <div className="pricing-summary-detail"><span>{t("pricing.previousPlan")}</span><strong>{presentation.previousPlan === "monthly" ? t("pricing.monthlyPlan") : t("pricing.yearlyPlan")}</strong></div> : null}
-        {entitlement?.validUntil ? <div className="pricing-summary-detail"><span>{entitlement.status === "cancelled" ? copy.activeUntil : copy.periodEnds}</span><strong><time dateTime={entitlement.validUntil}>{formatSubscriptionDate(entitlement.validUntil, language)}</time></strong></div> : dateLabel && formattedDate && presentation.date ? <div className="pricing-summary-detail"><span>{dateLabel}</span><strong><time dateTime={presentation.date}>{formattedDate}</time></strong></div> : null}
+        {entitlement?.validUntil ? <div className="pricing-summary-detail"><span><Clock size={16} aria-hidden="true" />{entitlement.cancelAtPeriodEnd || entitlement.status === "cancelled" ? copy.activeUntil : copy.periodEnds}</span><strong><time dateTime={entitlement.validUntil}>{formatSubscriptionDate(entitlement.validUntil, language)}</time></strong></div> : dateLabel && formattedDate && presentation.date ? <div className="pricing-summary-detail"><span><Clock size={16} aria-hidden="true" />{dateLabel}</span><strong><time dateTime={presentation.date}>{formattedDate}</time></strong></div> : null}
         {presentation.status === "free" ? <p>{t("pricing.noActiveSubscription")}</p> : null}
         {presentation.status === "free" && isOwner && subscription.customerInfo?.hasRevenueCatPremium && !entitlement?.billingBoundHere ? <p>{copy.purchaseLinkedElsewhere}</p> : null}
         {presentation.status === "expired" ? <p>{t("pricing.expiredNotice")}</p> : null}
-        {entitlement?.status === "cancelled" ? <p>{copy.cancelledNotice}</p> : null}
+        {isPremium && (entitlement?.cancelAtPeriodEnd || entitlement?.status === "cancelled") ? <p>{copy.cancelledNotice}</p> : null}
         {!isPremium && entitlement?.suspendedMemberCount ? <p>{copy.suspended(entitlement.suspendedMemberCount)}</p> : null}
-        {presentation.status === "shared" && !billingDetailsUnavailable ? <p>{t("pricing.householdAccessBody")}</p> : null}
         {billingDetailsUnavailable ? <p>{copy.billingDetailsUnavailable}</p> : null}
+        {isOwner && isPremium && householdPeriod && !entitlement?.billingBoundHere ? <p>{copy.managementAccountRequired}</p> : null}
         {entitlement?.role === "viewer" ? <p className="pricing-action-note">{copy.ownerOnly}</p> : null}
         {hasSubscriptionError ? <p>{t("pricing.refreshFailed")}</p> : null}
         <div className="pricing-summary-actions">
@@ -393,7 +400,7 @@ export const PricingPage = ({
       </div>
       {isOwner ? <section className="pricing-history" aria-labelledby="pricing-history-title">
         <div className="pricing-section-heading"><History size={20} aria-hidden="true" /><h3 id="pricing-history-title">{copy.history}</h3><p>{copy.historyBody}</p></div>
-        {historyError ? <p role="alert">{historyError}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><time dateTime={entry.createdAt}>{formatSubscriptionDate(entry.createdAt, language)}</time><strong>{entry.eventType.replace(/_/g, " ")} · {entry.planKey.replace(/_/g, " ")}</strong></li>)}</ol> : <p>{copy.historyEmpty}</p>}
+        {historyError ? <p role="alert">{historyError}</p> : history.length ? <ol>{history.map((entry) => <li key={entry.id}><time dateTime={entry.createdAt}>{formatSubscriptionDate(entry.createdAt, language)}</time><strong>{copy.historyEvents[entry.eventType] ?? copy.historyUpdated} · {entry.planKey === "premium_monthly" ? t("pricing.monthlyPlan") : entry.planKey === "premium_yearly" ? t("pricing.yearlyPlan") : entry.planKey === "free" ? t("pricing.freePlan") : copy.householdPremium}</strong></li>)}</ol> : <p>{copy.historyEmpty}</p>}
       </section> : null}
       {isCancelModalOpen ? (
         <div className="modal-backdrop" role="presentation">

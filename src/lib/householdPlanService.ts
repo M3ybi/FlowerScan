@@ -26,6 +26,12 @@ export type HouseholdEntitlement = {
   suspendedMemberCount: number;
   role: "owner" | "viewer";
   billingBoundHere: boolean;
+  billingInterval?: "monthly" | "yearly" | null;
+  renewalDate?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  usedCapacity?: number;
+  previousPlanKey?: "premium_monthly" | "premium_yearly" | null;
+  previousValidUntil?: string | null;
 };
 
 export const getHouseholdEntitlement = async (householdId: string): Promise<HouseholdEntitlement> => {
@@ -42,6 +48,12 @@ export const getHouseholdEntitlement = async (householdId: string): Promise<Hous
     pending_invite_count: number;
     suspended_member_count: number;
     role: HouseholdEntitlement["role"];
+    billing_interval?: HouseholdEntitlement["billingInterval"];
+    renewal_date?: string | null;
+    cancel_at_period_end?: boolean;
+    used_capacity?: number;
+    previous_plan_key?: HouseholdEntitlement["previousPlanKey"];
+    previous_valid_until?: string | null;
   }>();
   const bindingRequest = getClient().rpc("is_household_billing_bound", { target_household_id: householdId });
   const [{ data, error }, { data: billingBoundHere, error: bindingError }] = await Promise.all([entitlementRequest, bindingRequest]);
@@ -60,6 +72,13 @@ export const getHouseholdEntitlement = async (householdId: string): Promise<Hous
     suspendedMemberCount: data.suspended_member_count,
     role: data.role,
     billingBoundHere: billingBoundHere === true,
+    billingInterval: data.billing_interval ?? (data.plan_key === "premium_monthly" ? "monthly"
+      : data.plan_key === "premium_yearly" ? "yearly" : null),
+    renewalDate: data.renewal_date ?? null,
+    cancelAtPeriodEnd: data.cancel_at_period_end ?? data.status === "cancelled",
+    usedCapacity: data.used_capacity ?? data.active_member_count + data.pending_invite_count,
+    previousPlanKey: data.previous_plan_key ?? null,
+    previousValidUntil: data.previous_valid_until ?? null,
   };
 };
 

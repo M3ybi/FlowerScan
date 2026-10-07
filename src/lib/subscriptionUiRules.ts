@@ -10,24 +10,33 @@ export type SubscriptionPresentation = {
 };
 
 export const getSubscriptionPresentation = (subscription: SubscriptionSnapshot): SubscriptionPresentation => {
+  const entitlement = subscription.householdEntitlement;
   switch (subscription.view) {
     case "monthly_active":
     case "yearly_active": {
       const period = subscription.view === "monthly_active" ? "monthly" : "yearly";
-      return { plan: period, status: "active", period, previousPlan: null, date: subscription.customerInfo?.expiresAt ?? null, dateMeaning: "renews" };
+      return { plan: period, status: "active", period, previousPlan: null,
+        date: entitlement?.renewalDate ?? entitlement?.validUntil ?? subscription.customerInfo?.expiresAt ?? null,
+        dateMeaning: entitlement && !entitlement.renewalDate ? "accessUntil" : "renews" };
     }
     case "monthly_cancelled_active":
     case "yearly_cancelled_active": {
       const period = subscription.view === "monthly_cancelled_active" ? "monthly" : "yearly";
-      return { plan: period, status: "cancelled", period, previousPlan: null, date: subscription.customerInfo?.expiresAt ?? null, dateMeaning: "accessUntil" };
+      return { plan: period, status: "cancelled", period, previousPlan: null,
+        date: entitlement?.validUntil ?? subscription.customerInfo?.expiresAt ?? null, dateMeaning: "accessUntil" };
     }
     case "expired":
-      return { plan: "free", status: "expired", period: null, previousPlan: subscription.customerInfo?.lastExpiredPlan ?? null,
-        date: subscription.customerInfo?.lastExpiredAt ?? null, dateMeaning: "ended" };
+      return { plan: "free", status: "expired", period: null,
+        previousPlan: entitlement?.previousPlanKey === "premium_monthly" ? "monthly"
+          : entitlement?.previousPlanKey === "premium_yearly" ? "yearly"
+          : !entitlement || entitlement.billingBoundHere ? subscription.customerInfo?.lastExpiredPlan ?? null : null,
+        date: entitlement?.previousValidUntil ?? (!entitlement || entitlement.billingBoundHere ? subscription.customerInfo?.lastExpiredAt ?? null : null),
+        dateMeaning: "ended" };
     case "free":
       return { plan: "free", status: "free", period: null, previousPlan: null, date: null, dateMeaning: null };
     case "shared_premium":
-      return { plan: "household", status: "shared", period: null, previousPlan: null, date: null, dateMeaning: null };
+      return { plan: "household", status: "shared", period: null, previousPlan: null,
+        date: entitlement?.validUntil ?? null, dateMeaning: entitlement?.validUntil ? "accessUntil" : null };
     case "syncing":
       return { plan: null, status: "syncing", period: null, previousPlan: null, date: null, dateMeaning: null };
     case "error":
@@ -46,10 +55,20 @@ const ownPaidViews = new Set<SubscriptionSnapshot["view"]>([
 
 export const isOwnPaidSubscription = (subscription: SubscriptionSnapshot) =>
   subscription.status === "ready" &&
-  (!subscription.householdEntitlement || subscription.householdEntitlement.role === "owner") &&
-  Boolean(subscription.userId) &&
+  subscription.householdEntitlement?.role === "owner" &&
+  subscription.householdEntitlement.billingBoundHere &&
+  Boolean(subscription.userId && subscription.householdId) &&
   ownPaidViews.has(subscription.view) &&
-  subscription.customerInfo?.hasRevenueCatPremium === true;
+  subscription.customerInfo?.hasRevenueCatPremium === true &&
+  subscription.householdEntitlement.planKey === `premium_${subscription.customerInfo.activePlan}`;
+
+export const canPurchaseHouseholdPlan = (subscription: SubscriptionSnapshot) =>
+  subscription.status === "ready" &&
+  Boolean(subscription.userId && subscription.householdId) &&
+  subscription.householdEntitlement?.role === "owner" &&
+  subscription.householdEntitlement.isPremium === false &&
+  subscription.customerInfo?.hasRevenueCatPremium === false &&
+  (subscription.view === "free" || subscription.view === "expired");
 
 export const canCancelSubscription = (subscription: SubscriptionSnapshot) =>
   isOwnPaidSubscription(subscription) &&

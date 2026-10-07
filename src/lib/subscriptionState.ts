@@ -27,16 +27,39 @@ export const emptySubscriptionSnapshot = (userId: string | null = null, househol
   error: null,
 });
 
-export const resolveSubscriptionView = (usage: HouseholdPlanUsage, customerInfo: BillingCustomerInfo, entitlement?: HouseholdEntitlement): SubscriptionView => {
-  if (entitlement && entitlement.isPremium !== usage.isPremium) return "syncing";
-  if (entitlement && !entitlement.isPremium) {
-    if (entitlement.role === "owner" && entitlement.billingBoundHere && customerInfo.hasRevenueCatPremium) return "syncing";
-    return customerInfo.lastExpiredPlan ? "expired" : "free";
+export const resolveSubscriptionView = (
+  usage: HouseholdPlanUsage,
+  customerInfo: BillingCustomerInfo | null,
+  entitlement?: HouseholdEntitlement,
+  referenceAt = Date.now(),
+): SubscriptionView => {
+  if (entitlement) {
+    if (entitlement.isPremium !== usage.isPremium) return "syncing";
+    if (!entitlement.isPremium) {
+      if (entitlement.role === "owner" && entitlement.billingBoundHere && customerInfo?.hasRevenueCatPremium) return "syncing";
+      if (entitlement.previousPlanKey && entitlement.previousValidUntil &&
+          Number.isFinite(Date.parse(entitlement.previousValidUntil)) && Date.parse(entitlement.previousValidUntil) <= referenceAt) return "expired";
+      if (entitlement.billingBoundHere && customerInfo?.lastExpiredPlan && customerInfo.lastExpiredAt &&
+          Number.isFinite(Date.parse(customerInfo.lastExpiredAt)) && Date.parse(customerInfo.lastExpiredAt) <= referenceAt) return "expired";
+      return "free";
+    }
+    // The selected household supplies lifecycle details for every member. The
+    // member's own provider account is used only for a bound Owner's controls.
+    const period = entitlement.billingInterval ?? (entitlement.planKey === "premium_monthly" ? "monthly"
+      : entitlement.planKey === "premium_yearly" ? "yearly" : null);
+    if (!period) return "shared_premium";
+    if (!entitlement.validUntil || !Number.isFinite(Date.parse(entitlement.validUntil))) return "error";
+    if (Date.parse(entitlement.validUntil) <= referenceAt) return "syncing";
+    const cancelled = entitlement.cancelAtPeriodEnd ?? entitlement.status === "cancelled";
+    return period === "monthly" ? cancelled ? "monthly_cancelled_active" : "monthly_active"
+      : cancelled ? "yearly_cancelled_active" : "yearly_active";
   }
-  if (customerInfo.hasRevenueCatPremium && (!entitlement || entitlement.role === "owner") &&
-    (!entitlement || entitlement.planKey === `premium_${customerInfo.activePlan}`)) {
+  // Compatibility for callers without the household entitlement RPC. Current
+  // application callers always resolve the authenticated household entitlement.
+  if (!customerInfo) return "error";
+  if (customerInfo.hasRevenueCatPremium) {
     if (!customerInfo.activePlan || typeof customerInfo.willRenew !== "boolean" || !customerInfo.expiresAt || !Number.isFinite(Date.parse(customerInfo.expiresAt)) ||
-      Date.parse(customerInfo.expiresAt) <= Date.now()) return "error";
+      Date.parse(customerInfo.expiresAt) <= referenceAt) return "error";
     if (!usage.isPremium) return "syncing";
     if (customerInfo.activePlan === "monthly") {
       return customerInfo.willRenew === false ? "monthly_cancelled_active" : "monthly_active";
@@ -47,17 +70,18 @@ export const resolveSubscriptionView = (usage: HouseholdPlanUsage, customerInfo:
   if (customerInfo.lastExpiredPlan && customerInfo.lastExpiredAt) {
     const expiredAt = Date.parse(customerInfo.lastExpiredAt);
     if (!Number.isFinite(expiredAt)) return "error";
-    if (expiredAt <= Date.now()) return "expired";
+    if (expiredAt <= referenceAt) return "expired";
   }
   return "free";
 };
 
 type SubscriptionDependencies = {
-  getCustomerInfo: (forceProviderRefresh: boolean) => Promise<BillingCustomerInfo>;
+  getCustomerInfo: (forceProviderRefresh: boolean, householdId: string) => Promise<BillingCustomerInfo>;
   getHouseholdPlanUsage: (householdId: string) => Promise<HouseholdPlanUsage>;
   getHouseholdEntitlement?: (householdId: string) => Promise<HouseholdEntitlement>;
   onChange: (snapshot: SubscriptionSnapshot) => void;
   timeoutMs?: number;
+  now?: () => number;
 };
 
 const withTimeout = <T>(operation: Promise<T>, timeoutMs: number): Promise<T> => new Promise((resolve, reject) => {
@@ -84,16 +108,18 @@ export const createSubscriptionStateController = (deps: SubscriptionDependencies
 
     const currentRequestId = ++requestId;
     if (snapshot.status !== "ready") publish({ ...snapshot, status: "loading", view: "loading", error: null });
+    const entitlementRequest = deps.getHouseholdEntitlement
+      ? withTimeout(Promise.resolve().then(() => deps.getHouseholdEntitlement!(householdId)), timeoutMs)
+      : Promise.resolve(null);
     const nextRequest = Promise.allSettled([
-      withTimeout(Promise.resolve().then(() => deps.getCustomerInfo(force)), timeoutMs),
+      entitlementRequest.then((entitlement) => entitlement?.role === "viewer" ? null
+        : withTimeout(Promise.resolve().then(() => deps.getCustomerInfo(force, householdId)), timeoutMs)),
       withTimeout(Promise.resolve().then(() => deps.getHouseholdPlanUsage(householdId)), timeoutMs),
-      deps.getHouseholdEntitlement
-        ? withTimeout(Promise.resolve().then(() => deps.getHouseholdEntitlement!(householdId)), timeoutMs)
-        : Promise.resolve(null),
+      entitlementRequest,
     ]).then(([customerResult, usageResult, entitlementResult]) => {
       if (currentRequestId !== requestId || snapshot.userId !== userId || snapshot.householdId !== householdId) return snapshot;
       if (customerResult.status === "fulfilled" && usageResult.status === "fulfilled" && entitlementResult.status === "fulfilled") {
-        const view = resolveSubscriptionView(usageResult.value, customerResult.value, entitlementResult.value ?? undefined);
+        const view = resolveSubscriptionView(usageResult.value, customerResult.value, entitlementResult.value ?? undefined, deps.now?.());
         if (view !== "error") {
           return publish({ status: "ready", view, userId, householdId, householdPlanUsage: usageResult.value,
             customerInfo: customerResult.value, householdEntitlement: entitlementResult.value, error: null });
@@ -104,9 +130,10 @@ export const createSubscriptionStateController = (deps: SubscriptionDependencies
       if (customerResult.status === "rejected" && usageResult.status === "fulfilled" &&
           entitlementResult.status === "fulfilled" && entitlementResult.value &&
           entitlementResult.value.isPremium === usageResult.value.isPremium) {
-        return publish({
+        const view = resolveSubscriptionView(usageResult.value, null, entitlementResult.value, deps.now?.());
+        if (view !== "error") return publish({
           status: "ready",
-          view: usageResult.value.isPremium ? "shared_premium" : "free",
+          view,
           userId,
           householdId,
           householdPlanUsage: usageResult.value,

@@ -7,6 +7,7 @@ import { PricingPage } from "../src/components/PricingPage.js";
 import type { SubscriptionSnapshot } from "../src/lib/subscriptionState.js";
 import {
   canCancelSubscription,
+  canPurchaseHouseholdPlan,
   canSwitchToYearly,
   createCancellationHandoff,
   formatSubscriptionDate,
@@ -14,6 +15,7 @@ import {
   safeBillingManagementUrl,
 } from "../src/lib/subscriptionUiRules.js";
 import { translate } from "../src/lib/i18n.js";
+import { householdSubscriptionCopy } from "../src/lib/householdSubscriptionCopy.js";
 
 const activeSubscription = (view: SubscriptionSnapshot["view"], willRenew: boolean | null): SubscriptionSnapshot => ({
   status: "ready",
@@ -92,14 +94,19 @@ test("Free, Monthly, Yearly, cancelled, expired, and unknown states render a dis
   }
 });
 
-test("household Premium is described once without claiming a personal billing period", () => {
-  const base = activeSubscription("shared_premium", null);
+test("Viewer sees household billing lifecycle and capacity without administrative actions", () => {
+  const base = activeSubscription("yearly_cancelled_active", null);
   const shared = renderSubscription({ ...base, customerInfo: null,
-    householdEntitlement: { ...base.householdEntitlement!, role: "viewer" } });
+    householdEntitlement: { ...base.householdEntitlement!, role: "viewer", billingBoundHere: false,
+      activeMemberCount: 2, pendingInviteCount: 1 } });
   assert.match(shared, /Household Premium/);
-  assert.match(shared, /no active personal subscription/);
-  assert.equal((shared.match(/Included with household/g) ?? []).length, 1);
-  assert.doesNotMatch(shared, /Renews on|Premium access until|Cancel subscription/);
+  assert.match(shared, /Cancelled/);
+  assert.match(shared, /Billing period.*Yearly/);
+  assert.match(shared, /Active until/);
+  assert.match(shared, /Occupied household slots/);
+  assert.match(shared, /3 \/ 3/);
+  assert.match(shared, /Only household owners can manage/);
+  assert.doesNotMatch(shared, /Cancel subscription|Change plan|no active personal subscription/);
 });
 
 test("verified Premium remains visible without personal billing details or billing actions", () => {
@@ -111,11 +118,14 @@ test("verified Premium remains visible without personal billing details or billi
   assert.doesNotMatch(html, /Cancel subscription|no active personal subscription/);
 });
 
-test("subscription presentation uses provider timestamps and the correct lifecycle labels", () => {
+test("subscription presentation uses household timestamps rather than another household's provider dates", () => {
   const cancelled = getSubscriptionPresentation(activeSubscription("monthly_cancelled_active", false));
   assert.equal(cancelled.status, "cancelled");
   assert.equal(cancelled.dateMeaning, "accessUntil");
   assert.equal(cancelled.date, "2026-11-01T00:00:00Z");
+  const selected = activeSubscription("monthly_active", true);
+  selected.householdEntitlement!.validUntil = "2026-12-01T00:00:00Z";
+  assert.equal(getSubscriptionPresentation(selected).date, "2026-12-01T00:00:00Z");
   const localTime = formatSubscriptionDate("2026-10-15T14:32:00Z", "en", "Europe/Bratislava");
   assert.match(localTime ?? "", /4:32/);
   assert.equal(formatSubscriptionDate("not-a-date", "en"), null);
@@ -137,6 +147,25 @@ test("yearly switching is only offered to an active monthly subscriber", () => {
   assert.equal(canSwitchToYearly(activeSubscription("monthly_active", true)), true);
   assert.equal(canSwitchToYearly(activeSubscription("monthly_cancelled_active", false)), false);
   assert.equal(canSwitchToYearly(activeSubscription("yearly_active", true)), false);
+});
+
+test("provider management and purchases fail closed without the selected household's Owner membership", () => {
+  const paid = activeSubscription("monthly_active", true);
+  for (const entitlement of [null,
+    { ...paid.householdEntitlement!, role: "viewer" as const },
+    { ...paid.householdEntitlement!, billingBoundHere: false },
+    { ...paid.householdEntitlement!, planKey: "premium_yearly" as const },
+  ]) {
+    const snapshot = { ...paid, householdEntitlement: entitlement };
+    assert.equal(canCancelSubscription(snapshot), false);
+    assert.equal(canSwitchToYearly(snapshot), false);
+  }
+  const free = { ...activeSubscription("free", null), customerInfo: { ...paid.customerInfo!, hasRevenueCatPremium: false } };
+  assert.equal(canPurchaseHouseholdPlan(free), true);
+  assert.equal(canPurchaseHouseholdPlan({ ...free, householdEntitlement: null }), false);
+  assert.equal(canPurchaseHouseholdPlan({ ...free, householdEntitlement: { ...free.householdEntitlement!, role: "viewer" } }), false);
+  assert.equal(canPurchaseHouseholdPlan({ ...free, customerInfo: null }), false);
+  assert.equal(canPurchaseHouseholdPlan({ ...free, customerInfo: paid.customerInfo }), false);
 });
 
 test("dismissing the cancellation dialog leaves the provider and subscription unchanged", async () => {
@@ -273,4 +302,17 @@ test("subscription loading, errors, cancellation, and provider handoff are trans
       assert.notEqual(translate(language, key), key);
     }
   }
+});
+
+test("billing history names every supported transition in the selected language", () => {
+  for (const language of ["en", "sk", "de", "fr", "es"] as const) {
+    const copy = householdSubscriptionCopy(language);
+    for (const eventType of ["subscription_started", "upgraded", "downgraded", "renewed", "cancelled",
+      "resumed", "expired", "switched_to_free", "payment_failed"]) {
+      assert.ok(copy.historyEvents[eventType]);
+      assert.notEqual(copy.historyEvents[eventType], eventType);
+    }
+    assert.ok(copy.historyUpdated);
+  }
+  assert.equal(householdSubscriptionCopy("sk").historyEvents.cancelled, "Automatické obnovenie zrušené");
 });

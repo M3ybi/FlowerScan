@@ -15,6 +15,8 @@ const i18n = readFileSync(resolve("src/lib/i18n.ts"), "utf8");
 const billingService = readFileSync(resolve("src/lib/billingService.ts"), "utf8");
 const revenueCatProducts = readFileSync(resolve("src/lib/revenueCatProducts.ts"), "utf8");
 const revenueCatWebhook = readFileSync(resolve("netlify/functions/revenuecat-webhook.ts"), "utf8");
+const revenueCatEdgeWebhook = readFileSync(resolve("supabase/functions/revenuecat-webhook/index.ts"), "utf8");
+const householdBillingMigration = readFileSync(resolve("supabase/migrations/20261007123000_household_billing_identity.sql"), "utf8");
 
 const requiredSeedFragments = [
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -177,9 +179,8 @@ const requiredWebhookFragments = [
   "Invalid RevenueCat webhook payload.",
   "processRevenueCatWebhookEvent",
   "subscription_events",
-  "user_subscriptions",
-  "user_entitlements",
-  "usage_counters",
+  'rpc("apply_household_provider_event"',
+  "event_occurred_at",
   "updatesApplied",
   "RevenueCat webhook received",
 ];
@@ -187,6 +188,33 @@ const requiredWebhookFragments = [
 for (const fragment of requiredWebhookFragments) {
   if (!revenueCatWebhook.includes(fragment)) {
     throw new Error(`RevenueCat webhook is missing required fragment: ${fragment}`);
+  }
+}
+
+if (!revenueCatEdgeWebhook.includes('rpc("apply_household_provider_event"')) {
+  throw new Error("Primary RevenueCat webhook must use the same atomic household provider event RPC.");
+}
+
+const requiredHouseholdBillingFragments = [
+  "create table public.household_billing_customers",
+  "create table public.household_subscription_sources",
+  "create table public.household_provider_transactions",
+  "create function public.apply_household_provider_event",
+  "security definer",
+  "for update",
+  "on conflict (event_id) do nothing",
+  "previous_row.last_provider_event_at > event_occurred_at",
+  "insert into public.household_subscriptions",
+  "insert into public.user_subscriptions",
+  "insert into public.user_entitlements",
+  "insert into public.usage_counters",
+  "perform public.reconcile_household_access(target_household)",
+  "from public, anon, authenticated",
+  "to service_role",
+];
+for (const fragment of requiredHouseholdBillingFragments) {
+  if (!householdBillingMigration.includes(fragment)) {
+    throw new Error(`Atomic household billing migration is missing required fragment: ${fragment}`);
   }
 }
 

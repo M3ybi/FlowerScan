@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildInviteUrl, classifyEmailError, escapeHtml, parseSender } from "../supabase/functions/_shared/householdInviteEmail";
+import { buildInviteUrl, classifyEmailError, escapeHtml, parseSender, renderHouseholdInvitationEmail } from "../supabase/functions/_shared/householdInviteEmail";
 
 const token = "A".repeat(43);
 
@@ -27,7 +27,25 @@ test("provider failures become safe codes and HTML content is escaped", () => {
   assert.equal(classifyEmailError({ statusCode: 429 }).errorCode, "EMAIL_RATE_LIMITED");
   assert.equal(classifyEmailError({ statusCode: 422 }).errorCode, "EMAIL_INVALID_RECIPIENT");
   assert.equal(classifyEmailError({ statusCode: 503 }).errorCode, "EMAIL_PROVIDER_UNAVAILABLE");
+  assert.deepEqual(classifyEmailError({ statusCode: null }), { errorCode: "EMAIL_PROVIDER_REJECTED", providerStatus: null, providerCategory: "unknown" });
   assert.equal(escapeHtml("<script>&'\""), "&lt;script&gt;&amp;&#39;&quot;");
+});
+
+test("email explains registration, verified recipient, preserved households and actual seven-day expiry", () => {
+  const message = renderHouseholdInvitationEmail({
+    householdName: "Family <script>",
+    senderEmail: "owner@example.com",
+    invitedEmail: "new@example.com",
+    inviteUrl: `https://example.com/#/join?invite=${token}`,
+    expiresAt: "2026-10-14T10:00:00Z",
+  });
+  assert.match(message.html, /Family &lt;script&gt;/);
+  assert.doesNotMatch(message.html, /<script>/);
+  assert.match(message.text, /create an account using new@example.com and verify your email/);
+  assert.match(message.text, /existing household and plants will stay unchanged/);
+  assert.match(message.text, /7 days from creation.*2026-10-14 10:00 UTC/);
+  assert.match(message.text, /Resending does not extend/);
+  assert.throws(() => renderHouseholdInvitationEmail({ householdName: "Family", senderEmail: "a@example.com", invitedEmail: "b@example.com", inviteUrl: "https://example.com", expiresAt: "invalid" }), /Invalid invitation expiry/);
 });
 
 test("retry loads the existing invite, and database enforces Owner, Premium and active state", () => {

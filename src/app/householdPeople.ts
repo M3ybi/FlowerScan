@@ -1,5 +1,6 @@
 import type { HouseholdInvite, HouseholdMember, HouseholdRole } from "../lib/plantieRepository";
 import { normalizeInviteEmail } from "../lib/plantieRepository";
+import { isValidPendingHouseholdInvite } from "../lib/householdInvitationRules.js";
 
 export type HouseholdPersonItem = {
   key: string;
@@ -9,17 +10,19 @@ export type HouseholdPersonItem = {
   since: string;
   userId: string | null;
   inviteId: string | null;
+  expiresAt?: string;
 };
 
 export const buildHouseholdPeople = (
   householdId: string,
   members: HouseholdMember[],
   invites: HouseholdInvite[],
+  now = Date.now(),
 ): HouseholdPersonItem[] => {
   const byEmail = new Map<string, HouseholdPersonItem>();
 
   for (const member of members) {
-    if (member.householdId !== householdId) continue;
+    if (member.householdId !== householdId || member.status && member.status !== "active") continue;
     const email = normalizeInviteEmail(member.email);
     if (!email || byEmail.has(email)) continue;
     byEmail.set(email, {
@@ -34,7 +37,7 @@ export const buildHouseholdPeople = (
   }
 
   for (const invite of invites) {
-    if (invite.householdId !== householdId || invite.usedAt || invite.revokedAt) continue;
+    if (invite.householdId !== householdId || !isValidPendingHouseholdInvite(invite, now)) continue;
     const email = normalizeInviteEmail(invite.inviteeEmail);
     if (!email || byEmail.has(email)) continue;
     byEmail.set(email, {
@@ -45,6 +48,7 @@ export const buildHouseholdPeople = (
       since: invite.createdAt,
       userId: null,
       inviteId: invite.id,
+      expiresAt: invite.expiresAt,
     });
   }
 

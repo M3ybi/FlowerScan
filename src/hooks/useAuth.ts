@@ -10,8 +10,9 @@ import {
   onAuthStateChange,
   removeNativeAuthListener,
 } from "../lib/authService";
-import { authReturnPathStorageKey, readWebAuthCallback, safeAuthReturnLocation } from "../lib/authRedirects";
+import { authReturnInvitationStorageKey, authReturnPathStorageKey, readWebAuthCallback, resolveAuthCallbackReturnLocation, safeAuthReturnLocation } from "../lib/authRedirects";
 import { isSupabaseConfigured } from "../lib/supabase";
+import { invitationReturnLocation, readInvitationAuthContext } from "../lib/invitationAuthContext";
 
 export type AuthState = {
   callbackError: boolean;
@@ -23,15 +24,22 @@ export type AuthState = {
   user: User | null;
 };
 
-const finishWebCallback = (kind: "callback" | "recovery", error: boolean) => {
+const finishWebCallback = (kind: "callback" | "recovery", error: boolean, callbackInvitationId?: string) => {
   let savedPath: string | null = null;
+  let savedInvitationId: string | null = null;
   try {
     savedPath = window.sessionStorage.getItem(authReturnPathStorageKey);
+    savedInvitationId = window.sessionStorage.getItem(authReturnInvitationStorageKey);
     window.sessionStorage.removeItem(authReturnPathStorageKey);
+    window.sessionStorage.removeItem(authReturnInvitationStorageKey);
   } catch {
     // Private browsing may restrict sessionStorage; the fallback stays internal.
   }
-  const destination = kind === "recovery" || error ? "/#/menu?section=account" : safeAuthReturnLocation(savedPath);
+  let invitationId = callbackInvitationId ?? null;
+  try { invitationId ??= readInvitationAuthContext(window.localStorage); } catch { /* Storage can be restricted. */ }
+  const destination = kind === "recovery" || error ? "/#/menu?section=account"
+    : callbackInvitationId ? resolveAuthCallbackReturnLocation(savedPath, callbackInvitationId, savedInvitationId)
+    : savedPath ? safeAuthReturnLocation(savedPath) : invitationId ? invitationReturnLocation(invitationId) : safeAuthReturnLocation(savedPath);
   window.history.replaceState(window.history.state, "", destination);
   window.dispatchEvent(new Event("hashchange"));
 };
@@ -106,7 +114,7 @@ export const useAuth = (): AuthState => {
           const error = Boolean(callback && (callbackFailed || !effectiveSession ||
             (callback.kind === "recovery" && !recoveryVerified)));
           if (callback) {
-            finishWebCallback(callback.kind, error);
+            finishWebCallback(callback.kind, error, callback.invitationId);
             setCallbackError(error);
           }
         }
@@ -114,7 +122,7 @@ export const useAuth = (): AuthState => {
         if (!lastEvent) applySession(null);
         if (mounted) {
           if (callback) {
-            finishWebCallback(callback.kind, true);
+            finishWebCallback(callback.kind, true, callback.invitationId);
             setCallbackError(true);
           }
         }

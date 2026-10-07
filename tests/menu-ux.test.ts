@@ -141,7 +141,7 @@ test("transient UI feedback is cleared on route, auth, and household changes", (
   assert.match(appSource, /useEffect\(\(\) => \{\s*clearTransientMessages\(\);\s*\}, \[routeLifecycleKey\]\)/);
   assert.match(appSource, /const householdLifecycleKey = activeSupabaseHouseholdId \|\| activeHousehold\?\.publicToken \|\| ""/);
   assert.match(appSource, /useEffect\(\(\) => \{\s*clearTransientMessages\(\);\s*\}, \[householdLifecycleKey\]\)/);
-  assert.match(appSource, /previousAuthUserIdRef\.current = nextUserId;\s*clearTransientMessages\(\);/);
+  assert.match(appSource, /previousAuthUserIdRef\.current = nextUserId;[\s\S]*?invalidateSupabaseReadThroughCache\(\);\s*clearTransientMessages\(\);/);
   assert.match(appSource, /useSubscriptionState\([\s\S]*auth\.user\?\.id \?\? null,[\s\S]*isSupabaseAuthIdentityTransition \? null : activeSupabaseHouseholdId \|\| null/);
   assert.match(appSource, /const currentHouseholdPlanUsage = subscription\.householdPlanUsage/);
   assert.match(appSource, /const nextSnapshot = await refreshSubscriptionState\(\)/);
@@ -194,8 +194,10 @@ test("pending invite route has accept and decline actions", () => {
     ? appSource.indexOf('if (route.page === "join") {\r\n    return')
     : appSource.indexOf('if (route.page === "join") {\n    return');
   const joinRoute = appSource.slice(joinRouteStart, appSource.indexOf('if (route.page === "legal"', joinRouteStart));
-  assert.match(joinRoute, /handleJoinInvite/);
-  assert.match(joinRoute, /declinePendingInvite/);
+  assert.match(joinRoute, /<HouseholdInvitationReview/);
+  assert.match(joinRoute, /onAccept=\{\(invitation\) => void handleAcceptInvitation/);
+  assert.match(joinRoute, /onDecline=\{\(invitation\) => void handleDeclineInvitation/);
+  assert.doesNotMatch(joinRoute, /onSuccess=.*handleJoinInvite|inviteToken/);
 });
 
 test("dashboard remains blocked before auth and household", () => {
@@ -220,9 +222,24 @@ test("primary navigation provides secondary app routes", () => {
   assert.match(styleSource, /\.mobile-bottom-nav\s*\{/);
 });
 
-test("changing household can restore the previous logged-in household", () => {
-  assert.match(appSource, /previousHousehold/);
-  assert.match(appSource, /const restorePreviousHousehold = \(\) =>/);
-  assert.match(appSource, /storeHouseholdSession\(previousHousehold\)/);
-  assert.match(appSource, /className="neutral-action access-return-action"/);
+test("household switching uses the active membership directory and isolates old data", () => {
+  const switching = appSource.slice(appSource.indexOf("const selectHousehold"), appSource.indexOf("const renderHeroActions"));
+  assert.match(switching, /householdDirectory\.households\.find/);
+  assert.match(switching, /householdDataGenerationRef\.current \+= 1/);
+  assert.match(switching, /setSupabaseReadState\(null\)/);
+  assert.match(switching, /writeSelectedHouseholdId/);
+  assert.match(switching, /<HouseholdSwitcher/);
+  assert.doesNotMatch(appSource, /const restorePreviousHousehold/);
+});
+
+test("completed invitation mutations refresh account data even after leaving the review", () => {
+  const accept = appSource.slice(appSource.indexOf("const handleAcceptInvitation"), appSource.indexOf("const handleDeclineInvitation"));
+  const decline = appSource.slice(appSource.indexOf("const handleDeclineInvitation"), appSource.indexOf("const handleInvitationAccountChange"));
+  for (const action of [accept, decline]) {
+    const accountGuard = action.indexOf("if (!isCurrentAccount())");
+    const inboxRefresh = action.indexOf("invitationInbox.refresh(true)");
+    const routeGuard = action.indexOf("if (!isCurrent())");
+    assert.ok(accountGuard >= 0 && inboxRefresh > accountGuard && routeGuard > inboxRefresh);
+  }
+  assert.match(accept, /householdDirectory\.refresh\(true\)/);
 });

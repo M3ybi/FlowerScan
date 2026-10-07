@@ -1,4 +1,5 @@
 import { schedule } from "@netlify/functions";
+import { isLegacyNetlifyServerEnabled } from "./_shared/household-scope";
 import { createEmailReport } from "./_shared/report";
 import { readHouseholds, readPlantState, readSettings, writeSettings } from "./_shared/storage";
 
@@ -45,6 +46,7 @@ const sendEmail = async (to: string, subject: string, html: string, text: string
 };
 
 export const handler = schedule("0 * * * *", async () => {
+  if (!isLegacyNetlifyServerEnabled()) return { statusCode: 200, body: "Skipped: legacy household backend is disabled." };
   const now = bratislavaParts();
 
   if (now.hour !== "19") {

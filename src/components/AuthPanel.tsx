@@ -22,23 +22,32 @@ import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import { nativeOAuthErrorEvent, nativeOAuthSuccessEvent } from "../lib/nativeOAuth";
 import { LoadingButton } from "./LoadingButton";
+import { rememberInvitationAuthContext } from "../lib/invitationAuthContext";
 
 type AuthPanelProps = {
   compact?: boolean;
   initialMode?: AuthMode;
   language?: PlantieLanguage | null;
   onSuccess?: () => void;
+  initialEmail?: string;
+  invitationId?: string;
 };
 
-export const AuthPanel = ({ compact = false, initialMode = "register", language = null, onSuccess }: AuthPanelProps) => {
+export const AuthPanel = ({ compact = false, initialMode = "register", language = null, onSuccess, initialEmail = "", invitationId }: AuthPanelProps) => {
   const t = useMemo(() => createTranslator(language), [language]);
   const [mode, setMode] = useState<AuthMode>(initialMode);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail.trim().toLowerCase());
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitting = useRef(false);
+
+  useEffect(() => {
+    if (initialEmail) setEmail(initialEmail.trim().toLowerCase());
+    if (!invitationId) return;
+    try { rememberInvitationAuthContext(invitationId, window.localStorage); } catch { /* OAuth keeps its session return route. */ }
+  }, [initialEmail, invitationId]);
 
   useEffect(() => {
     const handleNativeOAuthSuccess = () => {
@@ -157,6 +166,7 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
             value={email}
             placeholder="you@example.com"
             autoComplete="email"
+            readOnly={Boolean(initialEmail && invitationId)}
             onChange={(event) => setEmail(event.target.value)}
           />
         </label>}

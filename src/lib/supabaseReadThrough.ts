@@ -251,6 +251,7 @@ const loadRowsForHousehold = async (household: Household) => {
 export const loadSupabaseReadThroughState = async (
   activeHousehold: HouseholdSession | null,
   options: SupabaseReadThroughOptions = {},
+  reader?: SupabaseReadThroughReader,
 ): Promise<SupabaseReadThroughState | null> => {
   const cacheKey = readThroughCacheKey(activeHousehold);
   const cached = readThroughCache.get(cacheKey);
@@ -263,34 +264,50 @@ export const loadSupabaseReadThroughState = async (
     return inFlight;
   }
 
-  const request = loadSupabaseReadThroughStateUncached(activeHousehold)
+  const request = loadSupabaseReadThroughStateUncached(activeHousehold, reader)
     .then((state) => {
-      readThroughCache.set(cacheKey, { loadedAt: Date.now(), state });
+      if (readThroughRequests.get(cacheKey) === request) {
+        readThroughCache.set(cacheKey, { loadedAt: Date.now(), state });
+      }
       return state;
     })
     .finally(() => {
-      readThroughRequests.delete(cacheKey);
+      if (readThroughRequests.get(cacheKey) === request) {
+        readThroughRequests.delete(cacheKey);
+      }
     });
 
   readThroughRequests.set(cacheKey, request);
   return request;
 };
 
-const loadSupabaseReadThroughStateUncached = async (
+type SupabaseReadThroughReader = {
+  listHouseholds: () => Promise<Household[]>;
+  loadHouseholdRows: (household: Household) => Promise<SupabaseReadRows>;
+};
+
+export const loadSupabaseReadThroughStateUncached = async (
   activeHousehold: HouseholdSession | null,
+  reader: SupabaseReadThroughReader = {
+    listHouseholds: getUserHouseholds,
+    loadHouseholdRows: loadRowsForHousehold,
+  },
 ): Promise<SupabaseReadThroughState | null> => {
-  const households = await getUserHouseholds();
+  const households = await reader.listHouseholds();
   const preferredHousehold = activeHousehold?.publicToken
     ? households.find((household) => household.id === activeHousehold.publicToken || household.legacyPublicToken === activeHousehold.publicToken)
     : null;
-  const candidates = [
-    ...(preferredHousehold ? [preferredHousehold] : []),
-    ...households.filter((household) => household.id !== preferredHousehold?.id && household.legacyPublicToken),
-    ...households.filter((household) => household.id !== preferredHousehold?.id && !household.legacyPublicToken),
-  ];
+  // An explicit household is an identity boundary, including when membership
+  // has just been removed. Default discovery is only for an unset selection.
+  const candidates = activeHousehold
+    ? (preferredHousehold ? [preferredHousehold] : [])
+    : [
+      ...households.filter((household) => household.legacyPublicToken),
+      ...households.filter((household) => !household.legacyPublicToken),
+    ];
 
   for (const household of candidates) {
-    const rows = await loadRowsForHousehold(household);
+    const rows = await reader.loadHouseholdRows(household);
     if (rows) {
       return mapSupabaseRowsToLegacyStateShape(rows);
     }

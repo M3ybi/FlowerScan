@@ -1,4 +1,5 @@
 import { schedule } from "@netlify/functions";
+import { isLegacyNetlifyServerEnabled } from "./_shared/household-scope";
 import webPush from "web-push";
 import { flowerReportMeta } from "./_shared/flowers";
 import {
@@ -25,6 +26,7 @@ const bratislavaHour = () =>
   }).format(new Date());
 
 export const handler = schedule("0 * * * *", async () => {
+  if (!isLegacyNetlifyServerEnabled()) return { statusCode: 200, body: "Skipped: legacy household backend is disabled." };
   if (bratislavaHour() !== "09") {
     return { statusCode: 200, body: "Skipped: not 09:00 Europe/Bratislava." };
   }

@@ -1,5 +1,16 @@
 export type HouseholdScopedState<T> = Record<string, T | undefined>;
 
+// Legacy token access has no authenticated membership check. Keep it disabled
+// unless an operator explicitly enables the isolated rollback backend.
+export const isLegacyNetlifyServerEnabled = (flag = process.env.ENABLE_NETLIFY_LEGACY_BACKEND) => flag === "true";
+
+export const legacyBackendDisabledResponse = (headers: Record<string, string>) =>
+  isLegacyNetlifyServerEnabled() ? null : {
+    body: JSON.stringify({ error: "Legacy household access is disabled. Sign in to Plantie to access your household." }),
+    headers,
+    statusCode: 410,
+  };
+
 export const householdTokenPattern = /^[A-Za-z0-9_-]{18,80}$/;
 
 export const isValidHouseholdTokenValue = (value: unknown): value is string =>

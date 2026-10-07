@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { legacyBackendDisabledResponse } from "./_shared/household-scope";
 import {
   createHousehold,
   getHouseholdByToken,
@@ -16,6 +17,9 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { headers, statusCode: 204 };
   }
+
+  const disabled = legacyBackendDisabledResponse(headers);
+  if (disabled) return disabled;
 
   if (event.httpMethod === "GET") {
     const householdToken = getHouseholdTokenFromRequest(event);

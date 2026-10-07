@@ -40,13 +40,13 @@ export type BillingStatus = {
 
 export interface BillingService {
   getStatus(): BillingStatus;
-  getAvailableProducts(): Promise<BillingProduct[]>;
-  purchasePremiumMonthly(): Promise<BillingCustomerInfo>;
-  purchasePremiumYearly(): Promise<BillingCustomerInfo>;
-  changePlan(targetPlan: "monthly" | "yearly"): Promise<BillingCustomerInfo>;
-  restorePurchases(): Promise<BillingCustomerInfo>;
-  getCustomerInfo(forceRefresh?: boolean): Promise<BillingCustomerInfo>;
-  syncEntitlements(): Promise<void>;
+  getAvailableProducts(householdId?: string): Promise<BillingProduct[]>;
+  purchasePremiumMonthly(householdId?: string): Promise<BillingCustomerInfo>;
+  purchasePremiumYearly(householdId?: string): Promise<BillingCustomerInfo>;
+  changePlan(targetPlan: "monthly" | "yearly", householdId?: string): Promise<BillingCustomerInfo>;
+  restorePurchases(householdId?: string): Promise<BillingCustomerInfo>;
+  getCustomerInfo(forceRefresh?: boolean, householdId?: string): Promise<BillingCustomerInfo>;
+  syncEntitlements(householdId?: string): Promise<void>;
 }
 
 export class BillingNotConfiguredError extends Error {
@@ -94,13 +94,22 @@ export class BillingUnavailableError extends Error {
 type BillingDependencies = {
   getApiKey: (runtime: BillingRuntime) => string;
   getCurrentUserId: () => Promise<string | null>;
+  resolveProviderUserId?: (userId: string, householdId: string | undefined, forPurchase: boolean) => Promise<string>;
+  householdNativeBillingEnabled?: boolean;
   getRuntime: () => BillingRuntime;
   purchases: Pick<PurchasesPlugin, "configure" | "getCustomerInfo" | "getOfferings" | "logIn" | "purchasePackage" | "restorePurchases"> &
     Partial<Pick<PurchasesPlugin, "getAppUserID" | "invalidateCustomerInfoCache" | "isConfigured">>;
-  refreshServerEntitlement: () => Promise<unknown>;
+  refreshServerEntitlement: (householdId?: string) => Promise<unknown>;
 };
 
 const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+type RevenueCatApiKeys = {
+  android?: string;
+  ios?: string;
+  testStore?: string;
+  web?: string;
+  webSandbox?: string;
+};
 const revenueCatErrorCodes = {
   configuration: "23",
   network: "10",
@@ -117,26 +126,27 @@ export const detectBillingRuntime = (): BillingRuntime => {
   return platform === "ios" || platform === "android" ? platform : "web";
 };
 
-const getApiKeyFromEnv = (runtime: BillingRuntime) => {
-  if (env?.MODE !== "production") {
-    return env?.VITE_REVENUECAT_API_KEY_TEST_STORE ?? "";
+export const selectRevenueCatApiKey = (runtime: BillingRuntime, mode: string, keys: RevenueCatApiKeys): string => {
+  if (mode === "development" && runtime === "web" && keys.webSandbox) {
+    return keys.webSandbox.startsWith("rcb_sb_") && keys.webSandbox.length > "rcb_sb_".length ? keys.webSandbox : "";
   }
-
+  if (mode !== "production") return keys.testStore ?? "";
   if (runtime === "web") {
-    const webKey = env?.VITE_REVENUECAT_API_KEY_WEB ?? "";
+    const webKey = keys.web ?? "";
     return webKey.startsWith("rcb_") && !webKey.startsWith("rcb_sb_") ? webKey : "";
   }
-
-  if (runtime === "ios") {
-    return env?.VITE_REVENUECAT_API_KEY_IOS ?? "";
-  }
-
-  if (runtime === "android") {
-    return env?.VITE_REVENUECAT_API_KEY_ANDROID ?? "";
-  }
-
+  if (runtime === "ios") return keys.ios ?? "";
+  if (runtime === "android") return keys.android ?? "";
   return "";
 };
+
+const getApiKeyFromEnv = (runtime: BillingRuntime) => selectRevenueCatApiKey(runtime, env?.MODE ?? "", {
+  android: env?.VITE_REVENUECAT_API_KEY_ANDROID,
+  ios: env?.VITE_REVENUECAT_API_KEY_IOS,
+  testStore: env?.VITE_REVENUECAT_API_KEY_TEST_STORE,
+  web: env?.VITE_REVENUECAT_API_KEY_WEB,
+  webSandbox: env?.VITE_REVENUECAT_API_KEY_WEB_SANDBOX,
+});
 
 const getCurrentSupabaseUserId = async () => {
   if (!supabase) {
@@ -151,12 +161,23 @@ const getCurrentSupabaseUserId = async () => {
   return data.session?.user.id ?? null;
 };
 
-const refreshSupabaseEntitlement = async () => {
+const resolveHouseholdProviderUserId = async (_userId: string, householdId: string | undefined, forPurchase: boolean) => {
+  if (!supabase || !householdId) throw new BillingAuthRequiredError();
+  const { data, error } = await supabase.rpc(forPurchase ? "begin_household_purchase" : "get_household_billing_customer", {
+    target_household_id: householdId,
+  });
+  if (error || typeof data !== "string" || !data) throw new BillingUnavailableError("Household billing could not be authorized.");
+  return data;
+};
+
+const refreshSupabaseEntitlement = async (householdId?: string) => {
   if (!supabase) {
     throw new Error("Supabase is not configured. Entitlement checks require an authenticated Supabase session.");
   }
 
-  const { data, error } = await supabase.rpc("get_my_entitlement").single();
+  const { data, error } = householdId
+    ? await supabase.rpc("get_household_entitlement", { target_household_id: householdId }).single()
+    : await supabase.rpc("get_my_entitlement").single();
   if (error) {
     throw error;
   }
@@ -355,7 +376,7 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
     if (await deps.getCurrentUserId() !== userId) throw new BillingAuthRequiredError();
   };
 
-  const withConfiguredUser = <T>(operation: (userId: string) => Promise<T>): Promise<T> => {
+  const withConfiguredUser = <T>(operation: (userId: string) => Promise<T>, householdId?: string, forPurchase = false, resolveHousehold = true): Promise<T> => {
     const ready = operationQueue.then(async () => {
       const status = getStatus();
       if (!status.configured) {
@@ -364,6 +385,11 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
 
       const userId = await deps.getCurrentUserId();
       if (!userId) throw new BillingAuthRequiredError();
+      const providerUserId = deps.resolveProviderUserId && resolveHousehold ? await deps.resolveProviderUserId(userId, householdId, forPurchase) : userId;
+      await assertCurrentUser(userId);
+      if (forPurchase && providerUserId.startsWith("hh_") && status.runtime !== "web" && deps.householdNativeBillingEnabled !== true) {
+        throw new BillingNotConfiguredError("Mobile household billing is not enabled yet. Configure RevenueCat to keep receipts with the original customer before enabling purchases or restores.");
+      }
 
       if (configuredUserId === null) {
         // A WebView reload can recreate this service while the native SDK remains configured.
@@ -375,17 +401,18 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
         } else {
           await deps.purchases.configure({
             apiKey: deps.getApiKey(status.runtime),
-            appUserID: userId,
+            appUserID: providerUserId,
           });
-          configuredUserId = userId;
+          configuredUserId = providerUserId;
         }
       }
 
-      if (configuredUserId !== userId) {
-        await deps.purchases.logIn({ appUserID: userId });
-        configuredUserId = userId;
+      if (configuredUserId !== providerUserId) {
+        await deps.purchases.logIn({ appUserID: providerUserId });
+        configuredUserId = providerUserId;
       }
 
+      await assertCurrentUser(userId);
       const result = await operation(userId);
       await assertCurrentUser(userId);
       return result;
@@ -424,18 +451,20 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
     return mapped;
   };
 
-  const purchase = async (productId: BillingProductId, changingPlan = false) => {
+  const purchase = async (productId: BillingProductId, changingPlan = false, householdId?: string) => {
     if (purchaseInProgress) throw new BillingUnavailableError("A purchase is already in progress.");
     purchaseInProgress = true;
     try {
       return await withConfiguredUser(async (userId) => {
         const current = mapCustomerInfo((await deps.purchases.getCustomerInfo()).customerInfo);
+        await assertCurrentUser(userId);
         if (changingPlan
           ? !current.hasRevenueCatPremium || getRevenueCatPlan(current.productId ?? "")?.productId === productId
           : current.hasRevenueCatPremium) {
           throw new BillingUnavailableError("The current subscription must be refreshed before changing plans.");
         }
         const packages = await getPackages();
+        await assertCurrentUser(userId);
         const aPackage = packages.find((item) => getRevenueCatPlan(item.product.identifier)?.productId === productId);
         if (!aPackage) throw new BillingProductUnavailableError();
         const runtime = deps.getRuntime();
@@ -446,9 +475,14 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
             : {}),
         });
         await assertCurrentUser(userId);
-        await deps.refreshServerEntitlement();
+        try {
+          await deps.refreshServerEntitlement(householdId);
+        } catch (error) {
+          if (error instanceof BillingAuthRequiredError) throw error;
+          throw new BillingConfirmationPendingError();
+        }
         return mapCustomerInfo(result.customerInfo);
-      });
+      }, householdId, true);
     } catch (error) {
       throw normalizeBillingError(error);
     } finally {
@@ -458,50 +492,50 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
 
   return {
     getStatus,
-    async getAvailableProducts() {
+    async getAvailableProducts(householdId) {
       try {
-        return await withConfiguredUser(() => getProducts());
+        return await withConfiguredUser(() => getProducts(), householdId, false, Boolean(householdId));
       } catch (error) {
         throw normalizeBillingError(error);
       }
     },
-    purchasePremiumMonthly() {
-      return purchase(revenueCatProductIds.premiumMonthly);
+    purchasePremiumMonthly(householdId) {
+      return purchase(revenueCatProductIds.premiumMonthly, false, householdId);
     },
-    purchasePremiumYearly() {
-      return purchase(revenueCatProductIds.premiumYearly);
+    purchasePremiumYearly(householdId) {
+      return purchase(revenueCatProductIds.premiumYearly, false, householdId);
     },
-    changePlan(targetPlan) {
-      return purchase(revenueCatProductIds[targetPlan === "yearly" ? "premiumYearly" : "premiumMonthly"], true);
+    changePlan(targetPlan, householdId) {
+      return purchase(revenueCatProductIds[targetPlan === "yearly" ? "premiumYearly" : "premiumMonthly"], true, householdId);
     },
-    async restorePurchases() {
+    async restorePurchases(householdId) {
       try {
         return await withConfiguredUser(async (userId) => {
           const { customerInfo } = await deps.purchases.restorePurchases();
           await assertCurrentUser(userId);
-          await deps.refreshServerEntitlement();
+          await deps.refreshServerEntitlement(householdId);
           return mapCustomerInfo(customerInfo);
-        });
+        }, householdId, true);
       } catch (error) {
         throw normalizeBillingError(error);
       }
     },
-    async getCustomerInfo(forceRefresh = false) {
+    async getCustomerInfo(forceRefresh = false, householdId) {
       try {
         return await withConfiguredUser(async () => {
           if (forceRefresh) await deps.purchases.invalidateCustomerInfoCache?.();
           const { customerInfo } = await deps.purchases.getCustomerInfo();
           return mapCustomerInfo(customerInfo);
-        });
+        }, householdId);
       } catch (error) {
         throw normalizeBillingError(error);
       }
     },
-    async syncEntitlements() {
+    async syncEntitlements(householdId) {
       await withConfiguredUser(async (userId) => {
         await assertCurrentUser(userId);
-        await deps.refreshServerEntitlement();
-      });
+        await deps.refreshServerEntitlement(householdId);
+      }, householdId);
     },
   };
 };
@@ -509,6 +543,8 @@ export const createRevenueCatBillingService = (deps: BillingDependencies): Billi
 export const revenueCatBillingAdapter = createRevenueCatBillingService({
   getApiKey: getApiKeyFromEnv,
   getCurrentUserId: getCurrentSupabaseUserId,
+  resolveProviderUserId: resolveHouseholdProviderUserId,
+  householdNativeBillingEnabled: env?.VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED === "true",
   getRuntime: detectBillingRuntime,
   purchases: lazyPurchases,
   refreshServerEntitlement: refreshSupabaseEntitlement,
@@ -520,7 +556,8 @@ type WebBillingDependencies = {
   createPurchases: (apiKey: string, appUserId: string) => Promise<WebPurchasesClient>;
   getApiKey: () => string;
   getCurrentUserId: () => Promise<string | null>;
-  refreshServerEntitlement: () => Promise<unknown>;
+  resolveProviderUserId?: BillingDependencies["resolveProviderUserId"];
+  refreshServerEntitlement: (householdId?: string) => Promise<unknown>;
 };
 
 const mapWebProduct = (product: WebPackage["product"]): BillingProduct | null => {
@@ -548,14 +585,16 @@ export const createRevenueCatWebBillingService = (deps: WebBillingDependencies):
     if (await deps.getCurrentUserId() !== userId) throw new BillingAuthRequiredError();
   };
 
-  const withConfiguredUser = <T>(operation: (purchases: WebPurchasesClient, userId: string) => Promise<T>): Promise<T> => {
+  const withConfiguredUser = <T>(operation: (purchases: WebPurchasesClient, userId: string) => Promise<T>, householdId?: string, forPurchase = false, resolveHousehold = true): Promise<T> => {
     const ready = operationQueue.then(async () => {
       const apiKey = deps.getApiKey();
       if (!apiKey) throw new BillingNotConfiguredError("RevenueCat web billing is not configured.");
       const userId = await deps.getCurrentUserId();
       if (!userId) throw new BillingAuthRequiredError();
-      if (!client) client = await deps.createPurchases(apiKey, userId);
-      else if (client.getAppUserId() !== userId) await client.changeUser(userId);
+      const providerUserId = deps.resolveProviderUserId && resolveHousehold ? await deps.resolveProviderUserId(userId, householdId, forPurchase) : userId;
+      await assertCurrentUser(userId);
+      if (!client) client = await deps.createPurchases(apiKey, providerUserId);
+      if (client.getAppUserId() !== providerUserId) await client.changeUser(providerUserId);
       await assertCurrentUser(userId);
       const result = await operation(client, userId);
       await assertCurrentUser(userId);
@@ -571,7 +610,7 @@ export const createRevenueCatWebBillingService = (deps: WebBillingDependencies):
     return offerings.current.availablePackages.filter((rcPackage) => getRevenueCatPlan(rcPackage.product.identifier));
   };
 
-  const purchase = async (productId: BillingProductId) => {
+  const purchase = async (productId: BillingProductId, householdId?: string) => {
     if (purchaseInProgress) throw new BillingUnavailableError("A purchase is already in progress.");
     purchaseInProgress = true;
     try {
@@ -590,14 +629,14 @@ export const createRevenueCatWebBillingService = (deps: WebBillingDependencies):
         try {
           const customerInfo = await purchases.getCustomerInfo();
           await assertCurrentUser(userId);
-          await deps.refreshServerEntitlement();
+          await deps.refreshServerEntitlement(householdId);
           await assertCurrentUser(userId);
           return mapWebCustomerInfo(customerInfo);
         } catch (error) {
           if (error instanceof BillingAuthRequiredError) throw error;
           throw new BillingConfirmationPendingError();
         }
-      });
+      }, householdId, true);
     } catch (error) {
       throw normalizeBillingError(error);
     } finally {
@@ -607,46 +646,46 @@ export const createRevenueCatWebBillingService = (deps: WebBillingDependencies):
 
   return {
     getStatus,
-    async getAvailableProducts() {
+    async getAvailableProducts(householdId) {
       try {
         return await withConfiguredUser(async (purchases) => {
           const packages = await getPackages(purchases);
           if (!packages.length) throw new BillingProductUnavailableError();
           return packages.map((item) => mapWebProduct(item.product)).filter((item): item is BillingProduct => Boolean(item));
-        });
+        }, householdId, false, Boolean(householdId));
       } catch (error) {
         throw normalizeBillingError(error);
       }
     },
-    purchasePremiumMonthly: () => purchase(revenueCatProductIds.premiumMonthly),
-    purchasePremiumYearly: () => purchase(revenueCatProductIds.premiumYearly),
+    purchasePremiumMonthly: (householdId) => purchase(revenueCatProductIds.premiumMonthly, householdId),
+    purchasePremiumYearly: (householdId) => purchase(revenueCatProductIds.premiumYearly, householdId),
     async changePlan() {
       throw new BillingUnavailableError("Change your web subscription through the billing provider's management page.");
     },
-    async restorePurchases() {
+    async restorePurchases(householdId) {
       try {
         return await withConfiguredUser(async (purchases, userId) => {
           const customerInfo = await purchases.getCustomerInfo();
           await assertCurrentUser(userId);
-          await deps.refreshServerEntitlement();
+          await deps.refreshServerEntitlement(householdId);
           return mapWebCustomerInfo(customerInfo);
-        });
+        }, householdId, true);
       } catch (error) {
         throw normalizeBillingError(error);
       }
     },
-    async getCustomerInfo() {
+    async getCustomerInfo(_forceRefresh, householdId) {
       try {
-        return await withConfiguredUser(async (purchases) => mapWebCustomerInfo(await purchases.getCustomerInfo()));
+        return await withConfiguredUser(async (purchases) => mapWebCustomerInfo(await purchases.getCustomerInfo()), householdId);
       } catch (error) {
         throw normalizeBillingError(error);
       }
     },
-    async syncEntitlements() {
+    async syncEntitlements(householdId) {
       await withConfiguredUser(async (_purchases, userId) => {
         await assertCurrentUser(userId);
-        await deps.refreshServerEntitlement();
-      });
+        await deps.refreshServerEntitlement(householdId);
+      }, householdId);
     },
   };
 };
@@ -660,6 +699,7 @@ export const revenueCatWebBillingAdapter = createRevenueCatWebBillingService({
   },
   getApiKey: () => getApiKeyFromEnv("web"),
   getCurrentUserId: getCurrentSupabaseUserId,
+  resolveProviderUserId: resolveHouseholdProviderUserId,
   refreshServerEntitlement: refreshSupabaseEntitlement,
 });
 

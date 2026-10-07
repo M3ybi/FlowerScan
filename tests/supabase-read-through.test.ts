@@ -5,6 +5,9 @@ import type { LegacyHouseholdState } from "../src/lib/legacyMigrationRules.js";
 import {
   compareLegacyAndSupabaseHouseholdState,
   detectDataSourceMode,
+  invalidateSupabaseReadThroughCache,
+  loadSupabaseReadThroughState,
+  loadSupabaseReadThroughStateUncached,
   mapSupabaseRowsToLegacyStateShape,
 } from "../src/lib/supabaseReadThrough.js";
 import type { Household, HouseholdPlant, SupabasePlantDiagnostic } from "../src/lib/plantieRepository.js";
@@ -235,6 +238,137 @@ test("Supabase read shape preserves empty households before first plant", () => 
   assert.equal(state.household.name, "Petzvalova");
   assert.deepEqual(state.allFlowers, []);
   assert.deepEqual(state.records, {});
+});
+
+test("an explicit selected household cannot fall back to another authorized household", async () => {
+  const readIds: string[] = [];
+  const state = await loadSupabaseReadThroughStateUncached({ name: "Removed membership", publicToken: "missing-household" }, {
+    listHouseholds: async () => [household],
+    loadHouseholdRows: async (selected) => {
+      readIds.push(selected.id);
+      return { household: selected, plants: [], careRecords: [], diagnostics: [], reportSettings: null };
+    },
+  });
+  assert.equal(state, null);
+  assert.deepEqual(readIds, []);
+});
+
+test("selected household read denial propagates without reading a different household", async () => {
+  const selectedHousehold = { ...household, id: "selected-household", legacyPublicToken: null };
+  const readIds: string[] = [];
+  const denial = new Error("Household membership is required.");
+  await assert.rejects(loadSupabaseReadThroughStateUncached({ name: selectedHousehold.name, publicToken: selectedHousehold.id }, {
+    listHouseholds: async () => [household, selectedHousehold],
+    loadHouseholdRows: async (selected) => {
+      readIds.push(selected.id);
+      throw denial;
+    },
+  }), (error) => error === denial);
+  assert.deepEqual(readIds, [selectedHousehold.id]);
+});
+
+test("explicit household reads keep empty households and resolve legacy selection tokens", async () => {
+  const otherHousehold = { ...household, id: "other-household", legacyPublicToken: null };
+  const readIds: string[] = [];
+  const state = await loadSupabaseReadThroughStateUncached({ name: household.name, publicToken: household.legacyPublicToken! }, {
+    listHouseholds: async () => [otherHousehold, household],
+    loadHouseholdRows: async (selected) => {
+      readIds.push(selected.id);
+      return { household: selected, plants: [], careRecords: [], diagnostics: [], reportSettings: null };
+    },
+  });
+  assert.equal(state?.household.id, household.id);
+  assert.deepEqual(state?.allFlowers, []);
+  assert.deepEqual(readIds, [household.id]);
+});
+
+test("unset selection retains legacy household discovery ordering", async () => {
+  const otherHousehold = { ...household, id: "other-household", legacyPublicToken: null };
+  const readIds: string[] = [];
+  const state = await loadSupabaseReadThroughStateUncached(null, {
+    listHouseholds: async () => [otherHousehold, household],
+    loadHouseholdRows: async (selected) => {
+      readIds.push(selected.id);
+      return { household: selected, plants: [], careRecords: [], diagnostics: [], reportSettings: null };
+    },
+  });
+  assert.equal(state?.household.id, household.id);
+  assert.deepEqual(readIds, [household.id]);
+});
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+};
+
+test("invalidation prevents an older in-flight household read from replacing refreshed cache", async () => {
+  invalidateSupabaseReadThroughCache();
+  const selection = { name: household.name, publicToken: household.id };
+  const olderReadStarted = deferred<void>();
+  const finishOlderRead = deferred<void>();
+  let reads = 0;
+  const reader = {
+    listHouseholds: async () => [household],
+    loadHouseholdRows: async (selected: Household) => {
+      reads += 1;
+      if (reads === 1) {
+        olderReadStarted.resolve();
+        await finishOlderRead.promise;
+        return { household: { ...selected, name: "Stale household" }, plants: [], careRecords: [], diagnostics: [], reportSettings: null };
+      }
+      return { household: { ...selected, name: "Refreshed household" }, plants: [], careRecords: [], diagnostics: [], reportSettings: null };
+    },
+  };
+  const older = loadSupabaseReadThroughState(selection, {}, reader);
+  await olderReadStarted.promise;
+  invalidateSupabaseReadThroughCache(selection);
+  const refreshed = await loadSupabaseReadThroughState(selection, {}, reader);
+  finishOlderRead.resolve();
+  await older;
+  const cached = await loadSupabaseReadThroughState(selection, {}, reader);
+  assert.equal(refreshed?.household.name, "Refreshed household");
+  assert.equal(cached?.household.name, "Refreshed household");
+  assert.equal(reads, 2);
+  invalidateSupabaseReadThroughCache();
+});
+
+test("an older completion cannot clear a newer forced request or cache its stale state", async () => {
+  invalidateSupabaseReadThroughCache();
+  const selection = { name: household.name, publicToken: household.id };
+  const firstStarted = deferred<void>();
+  const secondStarted = deferred<void>();
+  const finishFirst = deferred<void>();
+  const finishSecond = deferred<void>();
+  let reads = 0;
+  const reader = {
+    listHouseholds: async () => [household],
+    loadHouseholdRows: async (selected: Household) => {
+      reads += 1;
+      const readNumber = reads;
+      if (readNumber === 1) {
+        firstStarted.resolve();
+        await finishFirst.promise;
+      } else {
+        secondStarted.resolve();
+        await finishSecond.promise;
+      }
+      return { household: { ...selected, name: `Read ${readNumber}` }, plants: [], careRecords: [], diagnostics: [], reportSettings: null };
+    },
+  };
+  const older = loadSupabaseReadThroughState(selection, {}, reader);
+  await firstStarted.promise;
+  const refreshed = loadSupabaseReadThroughState(selection, { force: true }, reader);
+  await secondStarted.promise;
+  finishFirst.resolve();
+  await older;
+  const deduplicated = loadSupabaseReadThroughState(selection, {}, reader);
+  finishSecond.resolve();
+  assert.equal((await refreshed)?.household.name, "Read 2");
+  assert.equal((await deduplicated)?.household.name, "Read 2");
+  assert.equal(reads, 2);
+  assert.equal((await loadSupabaseReadThroughState(selection, {}, reader))?.household.name, "Read 2");
+  invalidateSupabaseReadThroughCache();
 });
 
 test("comparison utility detects count, legacy ID, and hidden plant mismatches", () => {

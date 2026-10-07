@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { BillingCustomerInfo } from "../src/lib/billingService.js";
 import type { HouseholdEntitlement, HouseholdPlanUsage } from "../src/lib/householdPlanService.js";
-import { createSubscriptionStateController } from "../src/lib/subscriptionState.js";
+import { createSubscriptionStateController, resolveSubscriptionView } from "../src/lib/subscriptionState.js";
 
 const usage = (isPremium: boolean): HouseholdPlanUsage => ({
   aiAnalyzesMonthlyLimit: isPremium ? null : 10,
@@ -42,7 +42,7 @@ test("household tier is authoritative for Viewers and provider/server disagreeme
     onChange: () => undefined,
   });
   viewer.bind("user-a", "shared-home");
-  assert.equal((await viewer.refresh()).view, "shared_premium");
+  assert.equal((await viewer.refresh()).view, "monthly_active");
 
   const owner = createSubscriptionStateController({
     getCustomerInfo: async () => customer("monthly"),
@@ -185,7 +185,7 @@ test("a verified household plan remains usable when the personal billing SDK is 
   premium.bind("user-a", "household-a");
   const premiumSnapshot = await premium.refresh();
   assert.equal(premiumSnapshot.status, "ready");
-  assert.equal(premiumSnapshot.view, "shared_premium");
+  assert.equal(premiumSnapshot.view, "monthly_active");
   assert.equal(premiumSnapshot.householdEntitlement?.invitationsEnabled, true);
   assert.equal(premiumSnapshot.customerInfo, null);
 
@@ -255,4 +255,64 @@ test("malformed provider plan data is an error, not a free entitlement", async (
   const result = await controller.refresh();
   assert.equal(result.view, "error");
   assert.equal(result.householdPlanUsage?.isPremium, true);
+});
+
+test("selected household supplies the same paid lifecycle for Owner, coowner, and Viewer", () => {
+  const now = Date.parse("2026-10-07T12:00:00Z");
+  for (const role of ["owner", "viewer"] as const) {
+    for (const billingBoundHere of [true, false]) {
+      const monthly = { ...householdEntitlement(true, role), billingBoundHere };
+      assert.equal(resolveSubscriptionView(usage(true), customer("yearly"), monthly, now), "monthly_active");
+      const cancelled = { ...monthly, status: "cancelled", cancelAtPeriodEnd: true };
+      assert.equal(resolveSubscriptionView(usage(true), null, cancelled, now), "monthly_cancelled_active");
+      const yearly = { ...cancelled, planKey: "premium_yearly" as const, billingInterval: "yearly" as const };
+      assert.equal(resolveSubscriptionView(usage(true), customer(null), yearly, now), "yearly_cancelled_active");
+    }
+  }
+});
+
+test("Viewer snapshot does not require or expose the household owner's billing customer", async () => {
+  let providerReads = 0;
+  const controller = createSubscriptionStateController({
+    getCustomerInfo: async () => { providerReads += 1; return customer("yearly"); },
+    getHouseholdPlanUsage: async () => usage(true),
+    getHouseholdEntitlement: async () => householdEntitlement(true, "viewer"),
+    onChange: () => undefined,
+    now: () => Date.parse("2026-10-07T12:00:00Z"),
+  });
+  controller.bind("user-a", "shared-home");
+  const snapshot = await controller.refresh();
+  assert.equal(providerReads, 0);
+  assert.equal(snapshot.customerInfo, null);
+  assert.equal(snapshot.view, "monthly_active");
+});
+
+test("personal expired subscriptions do not leak into an unrelated household", () => {
+  const now = Date.parse("2026-10-07T12:00:00Z");
+  const personal = { ...customer(null), lastExpiredPlan: "yearly" as const, lastExpiredAt: "2026-09-01T00:00:00Z" };
+  const unrelated = { ...householdEntitlement(false), billingBoundHere: false };
+  assert.equal(resolveSubscriptionView(usage(false), personal, unrelated, now), "free");
+  const householdExpired = { ...unrelated, previousPlanKey: "premium_monthly" as const, previousValidUntil: "2026-09-20T00:00:00Z" };
+  assert.equal(resolveSubscriptionView(usage(false), null, householdExpired, now), "expired");
+});
+
+test("household switch discards outstanding entitlement reads for the previous household", async () => {
+  const oldEntitlement = deferred<HouseholdEntitlement>();
+  const controller = createSubscriptionStateController({
+    getCustomerInfo: async () => customer("monthly"),
+    getHouseholdPlanUsage: async (householdId) => usage(householdId === "paid-home"),
+    getHouseholdEntitlement: async (householdId) => householdId === "paid-home" ? oldEntitlement.promise
+      : { ...householdEntitlement(false), billingBoundHere: false },
+    onChange: () => undefined,
+    now: () => Date.parse("2026-10-07T12:00:00Z"),
+  });
+  controller.bind("user-a", "paid-home");
+  const previous = controller.refresh();
+  await Promise.resolve();
+  controller.bind("user-a", "free-home");
+  assert.equal((await controller.refresh()).view, "free");
+  oldEntitlement.resolve(householdEntitlement(true));
+  await previous;
+  assert.equal(controller.getSnapshot().householdId, "free-home");
+  assert.equal(controller.getSnapshot().householdEntitlement?.isPremium, false);
 });

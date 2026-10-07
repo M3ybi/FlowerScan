@@ -89,10 +89,10 @@ This validation does not connect to Supabase.
 
 ## RLS policy summary
 
-- Users can read only households where they have a `household_members` row.
-- `owner` and `editor` members can insert, update, and delete household plants, plant care records, diagnostics, report settings, and related child rows.
-- `viewer` members can read household-owned data but cannot write it.
-- Household owners and editors can manage non-owner invitations; only owners can manage owner invitations or remove non-owner members.
+- Users can read only households where they have an active authorized membership. Suspended Viewers do not retain access.
+- Active `owner` and `viewer` members have equal plant, care-record, diagnosis and plant-image rights within their household and its plan limits.
+- Household administration, report settings, invitations, member removal and subscription management are Owner-only. Invitations create Viewers; generic actions cannot create or remove Owners.
+- Runtime roles are `owner` and `viewer`. The historical PostgreSQL Editor enum label is retained only for dependent signature compatibility; database constraints reject it.
 - Push subscriptions are writable only by authenticated members of the household.
 - Notification delivery rows are readable by household members and have no client insert/update/delete policy.
 - Plant catalog rows are publicly readable but not publicly writable.
@@ -105,7 +105,7 @@ The `20261005120000_household_people_management.sql` migration keeps invitation 
 - `households.legacy_public_token` preserves the current public household token model for future migration.
 - `plant_catalog.legacy_id`, `plants.legacy_id`, and `plant_diagnostics.legacy_id` preserve current IDs such as `flower-04`, `custom-*`, and `diag-*`.
 - Existing localStorage keys and Netlify Blob keys are intentionally untouched.
-- The active Supabase backend reads and writes household data through the repository layer; legacy storage remains available in its configured compatibility modes.
+- The active Supabase backend reads and writes household data through the repository layer. Netlify's legacy token APIs, direct legacy AI endpoints, and scheduled legacy email/push jobs are disabled on the server by default, independently of browser rollback flags. Public legacy endpoints return HTTP 410 before reading/writing legacy storage or calling OpenAI; scheduled jobs skip delivery. Only an operator's explicit server variable `ENABLE_NETLIFY_LEGACY_BACKEND=true` enables the old backend for an isolated internal rollback; it does not enforce Supabase memberships or household AI quotas and must remain unset in production. Existing legacy storage is retained. Authenticated Supabase Edge AI/auth paths and signed RevenueCat webhooks are unaffected.
 
 ## Repository layer
 

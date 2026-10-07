@@ -64,6 +64,10 @@ type DbHouseholdInvite = {
   role: HouseholdRole;
   used_at?: string | null;
   revoked_at?: string | null;
+  declined_at?: string | null;
+  expired_at?: string | null;
+  expires_at?: string;
+  status?: HouseholdInvitationStatus;
   token?: string;
   created_at: string;
   created_by?: string | null;
@@ -189,8 +193,42 @@ export type HouseholdInvite = {
   role: HouseholdRole;
   usedAt: string | null;
   revokedAt: string | null;
+  declinedAt?: string | null;
+  expiredAt?: string | null;
+  expiresAt?: string;
+  status?: HouseholdInvitationStatus;
   createdAt: string;
   createdBy: string | null;
+};
+
+export type HouseholdInvitationStatus = "pending" | "accepted" | "declined" | "revoked" | "expired" | "unavailable";
+
+export type HouseholdInvitation = {
+  id: string;
+  householdId: string;
+  householdName: string;
+  invitedEmail: string;
+  inviterEmail: string;
+  role: "viewer";
+  status: HouseholdInvitationStatus;
+  expiresAt: string;
+  activeMemberCount: number;
+  maxSlots: number;
+  isMember: boolean;
+};
+
+type DbHouseholdInvitation = {
+  id: string;
+  household_id: string;
+  household_name: string;
+  invited_email: string;
+  inviter_email: string | null;
+  role: "viewer";
+  status: HouseholdInvitationStatus;
+  expires_at: string;
+  active_member_count: number;
+  max_slots: number;
+  is_member: boolean;
 };
 
 export type CreatedHouseholdInvite = HouseholdInvite & {
@@ -534,8 +572,26 @@ const mapHouseholdInvite = (invite: DbHouseholdInvite): HouseholdInvite => ({
   id: invite.id,
   inviteeEmail: invite.invitee_email,
   revokedAt: invite.revoked_at ?? null,
+  declinedAt: invite.declined_at ?? null,
+  expiredAt: invite.expired_at ?? null,
+  expiresAt: invite.expires_at,
+  status: invite.status,
   role: invite.role,
   usedAt: invite.used_at ?? null,
+});
+
+const mapHouseholdInvitation = (invite: DbHouseholdInvitation): HouseholdInvitation => ({
+  id: invite.id,
+  householdId: invite.household_id,
+  householdName: invite.household_name,
+  invitedEmail: normalizeInviteEmail(invite.invited_email),
+  inviterEmail: invite.inviter_email ?? "",
+  role: "viewer",
+  status: invite.status,
+  expiresAt: invite.expires_at,
+  activeMemberCount: Number(invite.active_member_count),
+  maxSlots: Number(invite.max_slots),
+  isMember: invite.is_member,
 });
 
 const mapCreatedHouseholdInvite = (invite: DbHouseholdInvite): CreatedHouseholdInvite => ({
@@ -702,16 +758,14 @@ export const getPlantCatalogByLegacyId = async (legacyId: string) => {
 export const getUserHouseholds = async () => {
   logSupabaseRead("households", "list_for_current_user");
   const { data, error } = await getClient()
-    .from("households")
-    .select(householdSelect)
-    .order("created_at", { ascending: true })
+    .rpc("list_my_households")
     .returns<DbHousehold[]>();
 
   if (error) {
     throw error;
   }
 
-  return data.map(mapHousehold);
+  return ((data ?? []) as DbHousehold[]).map(mapHousehold);
 };
 
 export const getHouseholdPlants = async (householdId: string) => {
@@ -925,6 +979,38 @@ export const joinHouseholdByInvite = async (token: string) => {
   }
 
   return mapHousehold(data);
+};
+
+export const getHouseholdInvitation = async ({ token, invitationId }: { token?: string; invitationId?: string }) => {
+  const { data, error } = await getClient()
+    .rpc("get_household_invitation", {
+      raw_token: token || null,
+      target_invite_id: token ? null : invitationId || null,
+    })
+    .maybeSingle<DbHouseholdInvitation>();
+  if (error) throw error;
+  return data ? mapHouseholdInvitation(data) : null;
+};
+
+// Recipient identity comes from the verified backend session, never a client email argument.
+export const listMyHouseholdInvitations = async () => {
+  const { data, error } = await getClient().rpc("list_my_household_invitations").returns<DbHouseholdInvitation[]>();
+  if (error) throw error;
+  return ((data ?? []) as DbHouseholdInvitation[]).map(mapHouseholdInvitation);
+};
+
+export const acceptHouseholdInvitation = async (invitationId: string) => {
+  const { data, error } = await getClient()
+    .rpc("accept_household_invitation", { target_invite_id: invitationId })
+    .single<DbHousehold>();
+  if (error) throw error;
+  if (!data) throw new Error("The household invitation could not be accepted.");
+  return mapHousehold(data);
+};
+
+export const declineHouseholdInvitation = async (invitationId: string) => {
+  const { error } = await getClient().rpc("decline_household_invitation", { target_invite_id: invitationId });
+  if (error) throw error;
 };
 
 export type HouseholdInviteEmailResult = {

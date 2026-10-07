@@ -32,14 +32,14 @@ test("async actions share accessible loading button and logic-level duplicate gu
   assert.match(styleSource, /\.primary-action svg,[\s\S]*\.button-spinner\s*\{[\s\S]*color:\s*currentColor;/);
   assert.match(appSource, /import \{ LoadingButton \}/);
   assert.match(appSource, /if \(isCreatingInvite\) \{/);
-  assert.match(appSource, /if \(isJoiningInvite\) \{/);
+  assert.match(appSource, /const handleAcceptInvitation = .*joinInviteOnceRef\.current/);
   assert.match(appSource, /if \(signingOutRef\.current\) \{/);
   assert.match(appSource, /finally \{\s*signingOutRef\.current = false;/);
   assert.match(appSource, /if \(isAddingPlant\) \{/);
   assert.match(appSource, /if \(isCapturingNewPlantImage \|\| isAddingPlant\) \{/);
-  assert.match(appSource, /finally \{\s*setIsCreatingInvite\(false\);/);
+  assert.match(appSource, /finally \{\s*if \(isHouseholdOperationCurrent\(\)\) setIsCreatingInvite\(false\);/);
   assert.match(appSource, /finally \{\s*setIsJoiningInvite\(false\);/);
-  assert.match(appSource, /finally \{\s*setPendingQuickRecordKey\(""\);/);
+  assert.match(appSource, /finally \{\s*if \(isHouseholdOperationCurrent\(\)\) setPendingQuickRecordKey\(""\);/);
 });
 
 test("scan action button text is centered and not recolored by panel copy selectors", () => {

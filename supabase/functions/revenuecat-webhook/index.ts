@@ -1,4 +1,4 @@
-import { createServiceClient } from "../_shared/auth.ts";
+﻿import { createServiceClient } from "../_shared/auth.ts";
 import { json } from "../_shared/cors.ts";
 const premiumEntitlementId = "premium";
 type RevenueCatPlan = { billingPeriod: "monthly" | "yearly"; planKey: "premium_monthly" | "premium_yearly" };
@@ -18,6 +18,7 @@ type RevenueCatEvent = {
   currency: string | null;
   entitlementId: string;
   eventId: string;
+  eventOccurredAtMs: number | null;
   expirationAtMs: number | null;
   originalTransactionId: string;
   periodType: string;
@@ -65,6 +66,7 @@ const parsePayload = async (request: Request): Promise<RevenueCatEvent | null> =
       currency: stringValue(event.currency) || null,
       entitlementId: firstEntitlementId(event),
       eventId: stringValue(event.id),
+      eventOccurredAtMs: nullableTimestamp(event.event_timestamp_ms),
       expirationAtMs: nullableTimestamp(event.expiration_at_ms),
       originalTransactionId: stringValue(event.original_transaction_id),
       periodType: stringValue(event.period_type),
@@ -136,102 +138,37 @@ Deno.serve(async (request) => {
     if (existingEventError) throw existingEventError;
     if (existingEvent) return json(200, { duplicate: true, status: "accepted", updatesApplied: false });
 
-    const hasUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.appUserId);
+    const isHouseholdCustomer = /^hh_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.appUserId);
+    const hasUserId = !isHouseholdCustomer && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.appUserId);
     const { data: userData, error: userError } = hasUserId
       ? await client.auth.admin.getUserById(event.appUserId)
       : { data: { user: null }, error: null };
     if (userError && userError.status !== 404) throw userError;
-    const isKnownUser = Boolean(userData.user);
-
-    const storeEvent = async (subscriptionId: string | null) => {
-      const { error } = await client.from("subscription_events").insert({
-        event_id: event.eventId,
-        event_type: event.type,
-        platform: mapPlatform(event.store),
-        payload: createSanitizedPayload(event),
-        subscription_id: subscriptionId,
-        user_id: isKnownUser ? event.appUserId : null,
-      });
-      if (error?.code === "23505") return true;
-      if (error) throw error;
-      return false;
-    };
-
-    // RevenueCat sends the effective INITIAL_PURCHASE or RENEWAL separately for plan changes.
-    if (event.type === "PRODUCT_CHANGE") {
-      const duplicate = await storeEvent(null);
-      return json(200, { duplicate, status: "accepted", updatesApplied: false });
-    }
-
+    const isKnownLegacyUser = Boolean(userData.user);
     const status = mapStatus(event);
     const plan = getRevenueCatPlan(event.productId);
-    const needsExpiration = status !== "expired" && status !== "refunded";
-    if (!stateChangingEventTypes.has(event.type) || !status || !plan || !isKnownUser || event.entitlementId !== premiumEntitlementId || (needsExpiration && !event.expirationAtMs)) {
-      const duplicate = await storeEvent(null);
-      return json(200, { duplicate, status: "accepted", updatesApplied: false });
+    if (!status || !plan || !stateChangingEventTypes.has(event.type) ||
+        (!isHouseholdCustomer && !isKnownLegacyUser) || event.entitlementId !== premiumEntitlementId ||
+        (!event.originalTransactionId && !event.transactionId) ||
+        (status !== "expired" && status !== "refunded" && !event.expirationAtMs)) {
+      // PRODUCT_CHANGE records the pending change; an effective purchase/renewal updates access.
+      const { error } = await client.from("subscription_events").insert({
+        event_id: event.eventId, event_type: event.type, platform: mapPlatform(event.store),
+        payload: createSanitizedPayload(event), user_id: isKnownLegacyUser ? event.appUserId : null, subscription_id: null,
+      });
+      if (error && error.code !== "23505") throw error;
+      return json(200, { duplicate: error?.code === "23505", status: "accepted", updatesApplied: false });
     }
-
-    if (event.expirationAtMs) {
-      const { data: current, error } = await client.from("user_entitlements")
-        .select("is_premium, valid_until")
-        .eq("user_id", event.appUserId)
-        .maybeSingle();
-      if (error) throw error;
-      if (current?.is_premium && current.valid_until && Date.parse(current.valid_until) > event.expirationAtMs) {
-        const duplicate = await storeEvent(null);
-        return json(200, { duplicate, status: "accepted", updatesApplied: false });
-      }
-    }
-
-    const originalTransactionId = event.originalTransactionId || event.transactionId;
-    const { data: existing, error: existingSubscriptionError } = originalTransactionId
-      ? await client.from("user_subscriptions").select("id").eq("user_id", event.appUserId).eq("platform_original_transaction_id", originalTransactionId).maybeSingle()
-      : { data: null, error: null };
-    if (existingSubscriptionError) throw existingSubscriptionError;
-    const { data: subscription, error: subscriptionError } = await client.from("user_subscriptions").upsert({
-      ...(existing?.id ? { id: existing.id } : {}),
-      billing_period: plan.billingPeriod,
-      cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
-      current_period_end: msToIso(event.expirationAtMs),
-      current_period_start: msToIso(event.purchasedAtMs),
-      expires_at: msToIso(event.expirationAtMs),
-      metadata: { currency: event.currency, entitlement_id: event.entitlementId, period_type: event.periodType, price: event.price },
-      plan_key: plan.planKey,
-      platform: mapPlatform(event.store),
-      platform_customer_id: event.appUserId,
-      platform_original_transaction_id: originalTransactionId || null,
-      platform_transaction_id: event.transactionId || null,
-      status,
-      user_id: event.appUserId,
-    }).select("id").single();
-    if (subscriptionError) throw subscriptionError;
-
-    const activatesPremium = event.entitlementId === premiumEntitlementId && status !== "expired" && status !== "refunded";
-    const entitlementPlanKey = activatesPremium ? plan.planKey : "free";
-    const { data: planRow, error: planError } = await client
-      .from("subscription_plans")
-      .select("ai_scans_monthly_limit, plants_limit, qr_labels_limit, ai_diagnosis_enabled, cloud_backup_enabled, household_sharing_enabled")
-      .eq("plan_key", entitlementPlanKey)
-      .maybeSingle();
-    if (planError || !planRow) throw planError ?? new Error("Plan not found");
-
-    const { error: entitlementError } = await client.from("user_entitlements").upsert({
-      ai_diagnosis_enabled: planRow.ai_diagnosis_enabled,
-      ai_scans_monthly_limit: planRow.ai_scans_monthly_limit,
-      cloud_backup_enabled: planRow.cloud_backup_enabled,
-      household_sharing_enabled: planRow.household_sharing_enabled,
-      is_premium: activatesPremium,
-      plan_key: entitlementPlanKey,
-      plants_limit: planRow.plants_limit,
-      qr_labels_limit: planRow.qr_labels_limit,
-      source_subscription_id: activatesPremium ? subscription.id : null,
-      user_id: event.appUserId,
-      valid_until: activatesPremium ? msToIso(event.expirationAtMs) : null,
-    }, { onConflict: "user_id" });
-    if (entitlementError) throw entitlementError;
-
-    const duplicate = await storeEvent(subscription.id);
-    return json(200, { duplicate, status: "accepted", updatesApplied: true });
+    const { data, error } = await client.rpc("apply_household_provider_event", {
+      customer_id: event.appUserId, provider_event_id: event.eventId, provider_event_type: event.type,
+      event_plan_key: plan.planKey, event_status: status, event_billing_period: plan.billingPeriod,
+      event_provider: mapPlatform(event.store), original_transaction_id: event.originalTransactionId || event.transactionId,
+      period_start: msToIso(event.purchasedAtMs), period_end: msToIso(event.expirationAtMs),
+      event_occurred_at: msToIso(event.eventOccurredAtMs ?? Date.now()), event_metadata: createSanitizedPayload(event),
+      event_transaction_id: event.transactionId || null,
+    });
+    if (error) throw error;
+    return json(200, { status: "accepted", updatesApplied: data === true });
   } catch {
     return json(500, { error: "RevenueCat webhook processing failed." });
   }

@@ -12,7 +12,7 @@ const member = (userId: string, email: string, role: HouseholdMember["role"] = "
 });
 const invite = (id: string, email: string, changes: Partial<HouseholdInvite> = {}): HouseholdInvite => ({
   createdAt: "2026-10-03T10:00:00Z", createdBy: "owner", householdId: "home", id,
-  inviteeEmail: email, role: "viewer", revokedAt: null, usedAt: null, ...changes,
+  inviteeEmail: email, role: "viewer", revokedAt: null, usedAt: null, expiresAt: "2099-10-10T10:00:00Z", ...changes,
 });
 const renderList = (items: ReturnType<typeof buildHouseholdPeople>, currentRole: HouseholdMember["role"] = "owner") => renderToStaticMarkup(createElement(HouseholdPeopleList, {
   items, loading: false, error: "", currentUserId: "owner", currentRole,
@@ -91,7 +91,7 @@ test("rows display state, role, membership or invitation date, and safe remove c
   ], [invite("pending", "pending@example.com", { role: "viewer" })]);
   const html = renderList(items);
   assert.match(html, /Member since/);
-  assert.match(html, /Invited/);
+  assert.match(html, /Expires/);
   assert.match(html, /Active/);
   assert.match(html, /Pending/);
   assert.match(html, /Remove long.address.for.a.household.member@example.com/);
