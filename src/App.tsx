@@ -68,6 +68,7 @@ import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
 import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
 import { AuthPanel } from "./components/AuthPanel";
+import { LoggedOutMenu } from "./components/LoggedOutMenu";
 import { HouseholdPeopleList } from "./components/HouseholdPeopleList";
 import { HouseholdInvitationInbox, InvitationInboxButton } from "./components/HouseholdInvitationInbox";
 import { HouseholdInvitationReview } from "./components/HouseholdInvitationReview";
@@ -145,7 +146,7 @@ import {
   assertCanAddPlant,
   recordCareTipGeneration,
 } from "./lib/householdPlanService";
-import { PLAN_LIMITS } from "./lib/householdPlanRules";
+import { freeQrLabelLimit, PLAN_LIMITS } from "./lib/householdPlanRules";
 import { canInviteHouseholdMember, usedHouseholdSlots as countUsedHouseholdSlots } from "./lib/householdMembershipRules";
 import { householdSubscriptionCopy } from "./lib/householdSubscriptionCopy";
 import { resolveHouseholdPermissions } from "./lib/householdPermissions";
@@ -1187,7 +1188,7 @@ export const App = () => {
       setQrExportStatus(subscriptionCopy.entitlementUnknown);
       return;
     }
-    if (!subscription.householdEntitlement.isPremium && allFlowers.length > 10) {
+    if (!subscription.householdEntitlement.isPremium && allFlowers.length > freeQrLabelLimit) {
       setQrExportStatus(subscriptionCopy.freeQrLimit);
       return;
     }
@@ -3843,84 +3844,21 @@ export const App = () => {
     const openMenuSection = route.section === "household" ? "household" : "account";
 
     if (!auth.isAuthenticated) {
-      return (
-        <main className="app-shell compact">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">Plantie</p>
-              <h1>{t("menu.heading")}</h1>
-              <p className="topbar-copy">{t("menu.signedOutBody")}</p>
-            </div>
-          </header>
-          <section className="menu-stack" aria-label={t("menu.heading")}>
-            <details className="menu-section" open>
-              <summary>
-                <span>{t("menu.account")}</span>
-              </summary>
-              <div className="menu-section-body">
-                <p>{t("account.loginRequiredBody")}</p>
-                <AuthPanel
-                  compact
-                  language={selectedLanguage}
-                  onSuccess={() => {
-                    if (normalizeInviteTokenInput(joinInviteInput)) {
-                      void handleJoinInvite(joinInviteInput);
-                    }
-                  }}
-                />
-              </div>
-            </details>
-
-            <details className="menu-section" open={Boolean(joinInviteInput || inviteStatus)}>
-              <summary>
-                <span>{t("household.inviteTitle")}</span>
-              </summary>
-              <div className="menu-section-body">
-                <p>{t("household.invitePasteBody")}</p>
-                <label className="field">
-                  <span>{t("household.inviteToken")}</span>
-                  <input
-                    value={joinInviteInput}
-                    onChange={(event) => setJoinInviteInput(event.target.value)}
-                    placeholder="#/join?invite=..."
-                  />
-                </label>
-                <LoadingButton
-                  className="primary-action"
-                  type="button"
-                  onClick={() => void handleJoinInvite()}
-                  isLoading={isJoiningInvite}
-                  loadingLabel={t("household.joining")}
-                >
-                  {t("household.continueWithInvite")}
-                </LoadingButton>
-                {inviteStatus ? <p className={inviteStatusClass}>{inviteStatus}</p> : null}
-              </div>
-            </details>
-
-            <details className="menu-section">
-              <summary>
-                <span>{t("account.language")}</span>
-              </summary>
-              <div className="menu-section-body">
-                <div className="onboarding-language-grid compact-language-grid">
-                  {supportedLanguages.map((language) => (
-                    <button
-                      type="button"
-                      key={language.code}
-                      className={selectedLanguage === language.code ? "selected-language" : ""}
-                      onClick={() => selectOnboardingLanguage(language.code)}
-                    >
-                      <strong>{language.nativeName}</strong>
-                      <span>{language.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </details>
-          </section>
-        </main>
-      );
+      return <LoggedOutMenu
+        language={selectedLanguage}
+        onLanguageChange={selectOnboardingLanguage}
+        inviteInput={joinInviteInput}
+        onInviteInputChange={setJoinInviteInput}
+        onContinueInvite={() => { void handleJoinInvite(); }}
+        isJoiningInvite={isJoiningInvite}
+        inviteStatus={inviteStatus}
+        inviteStatusClass={inviteStatusClass}
+        onAuthSuccess={() => {
+          if (normalizeInviteTokenInput(joinInviteInput)) void handleJoinInvite(joinInviteInput);
+        }}
+        onAddPlant={openAddPlantFromMobileNav}
+        initialSection={route.section === "household" ? "household" : "account"}
+      />;
     }
 
     return (

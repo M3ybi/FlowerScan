@@ -1,6 +1,6 @@
 # Plantie Menu UX
 
-Plantie uses a production menu tab for account, household, QR, subscription, language, and support settings.
+Plantie uses a production Menu tab for account, household, subscription, language, and support settings. QR tools remain in the existing application navigation.
 
 ## Navigation
 
@@ -8,6 +8,7 @@ Bottom navigation:
 
 - Plants
 - Diagnose
+- Add plant
 - QR
 - Menu
 
@@ -17,10 +18,23 @@ The old `#/account` route is treated as a compatibility alias for `#/menu`.
 
 - Account: sign in/create account when logged out; email/provider, sign out, and delete account when logged in.
 - Household / Family: current household, member summary, pending invites, and email invite creation.
-- QR Labels: links to QR label tools and PDF export.
 - Subscription: Premium status and mobile billing entry points.
 - Language: app language selector.
 - Support & Legal: privacy, terms, support, subscription terms, and release health.
+
+## Logged-out Menu
+
+`LoggedOutMenu` presents six expandable sections in this order: Account, Household / Family, Subscription, Language, Help & Support, and About Plantie. Above 900 CSS pixels, Account and Household initially open in two columns; collapsing Account lets the information sections use the full width. At narrower widths, only one section opens at a time. Whole headers are semantic buttons with associated panels, visible focus, and expansion state. Hidden panels stay mounted so language and accordion changes preserve account input. Opening a real invitation still uses the existing invitation review and authentication routes.
+
+The Menu opts into the `AuthPanel` presentation through `appearance="menu"`. Registration, sign-in, reset, Google authentication, and native callbacks retain the existing service handlers. Password confirmation and the eight-character minimum use the current validation rules. Auth tabs support arrow keys, Home, and End; password visibility controls have independent accessible labels. Google is enabled when Supabase is configured. Apple and Amazon remain visibly disabled planned options; missing auth configuration disables submission and shows an explanatory state.
+
+Public facts come from `menuProductInfo`: canonical Free quotas, household limits, supported languages, legal destinations, and package version. `loggedOutMenuCopy` supplies complete copy for English, Slovak, German, French, and Spanish. The existing Free QR export gate and public explanation share `freeQrLabelLimit`; its behavior remains unchanged. Installed native versions use Capacitor App metadata and show an unavailable state on failure instead of substituting a web version.
+
+There are no example members, households, current plans, transactions, or guessed prices. Billing product loading currently requires authentication, so this view explains Free and Premium Monthly/Yearly and directs users to sign in for provider prices. Standard Free households have one occupied slot and no invitations; Premium supports three slots, including active members and valid pending invitations. Active Viewers retain full plant-care permissions while Owners administer the household and billing. Joining another household preserves existing memberships. The existing authenticated Menu continues to show real household, invitation, subscription, and history data.
+
+Language changes reuse the existing device preference handler and show actual navigation translations and a localized current date. Support links use existing routes; no support inbox, FAQ, live chat, bug-report system, or release history is invented. About links to the existing privacy, terms, and subscription-terms pages.
+
+Run `npm run test:auth-panel-ui` and `npm run test:logged-out-menu-facts` for presentation, provider states, canonical facts, translations, destinations, and version behavior. Both are included in `npm test`. After the full suite, run `npm run test:logged-out-menu-browser` for isolated exact-width fixtures at 320, 390, 768, 1024, 1280, and 1600 CSS pixels. The runner exercises the production components and stylesheet with only auth/config boundaries substituted, including validation, pending/error states, accordion retention, language changes, overflow, and bottom-navigation clearance. Screenshots and DOM results are saved in `.tmp-tests/logged-out-menu-browser`. On Windows it discovers Edge; elsewhere set `PLANTIE_TEST_BROWSER` to an installed Chromium executable. These programmatic checks do not send signup/reset emails or complete live OAuth, and do not replace physical-device or trusted-input testing. This interface change requires no database migration or new environment variables.
 
 ## Removed From Production UI
 

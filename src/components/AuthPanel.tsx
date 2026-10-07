@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
-import { KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { FormEvent, KeyboardEvent, ReactNode } from "react";
+import { Eye, EyeOff, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import {
   registerWithEmailPassword,
@@ -23,6 +24,9 @@ import type { PlantieLanguage } from "../lib/onboarding";
 import { nativeOAuthErrorEvent, nativeOAuthSuccessEvent } from "../lib/nativeOAuth";
 import { LoadingButton } from "./LoadingButton";
 import { rememberInvitationAuthContext } from "../lib/invitationAuthContext";
+import { isSupabaseConfigured } from "../lib/supabase";
+import { authPanelCopy, authPanelKeyboardMode, authPanelProviders, authPanelTabModes } from "../lib/authPanelCopy";
+import type { AuthPanelTabMode } from "../lib/authPanelCopy";
 
 type AuthPanelProps = {
   compact?: boolean;
@@ -31,10 +35,31 @@ type AuthPanelProps = {
   onSuccess?: () => void;
   initialEmail?: string;
   invitationId?: string;
+  appearance?: "menu";
 };
 
-export const AuthPanel = ({ compact = false, initialMode = "register", language = null, onSuccess, initialEmail = "", invitationId }: AuthPanelProps) => {
+const AuthField = ({ menu, label, inputId, icon: Icon, children, control, hint, hintId }: {
+  menu: boolean; label: string; inputId: string; icon: LucideIcon; children: ReactNode;
+  control?: ReactNode; hint?: string; hintId?: string;
+}) => menu ? <div className="field auth-menu-field">
+  <label className="auth-menu-field-label" htmlFor={inputId}>{label}</label>
+  <div className="auth-input-wrap"><Icon className="auth-input-icon" size={18} aria-hidden="true" />{children}{control}</div>
+  {hint ? <p className="auth-field-hint" id={hintId}>{hint}</p> : null}
+</div> : <label className="field"><span>{label}</span>{children}</label>;
+
+const modeLabels = { register: "auth.create", login: "auth.login", reset: "auth.reset" } as const;
+const providerLabels = { google: "auth.google", apple: "auth.apple", amazon: "auth.amazon" } as const;
+const providerTitles = { google: undefined, apple: "auth.appleSetupRequired", amazon: "auth.amazonNotConfigured" } as const;
+
+export const AuthPanel = ({ compact = false, initialMode = "register", language = null, onSuccess, initialEmail = "", invitationId, appearance }: AuthPanelProps) => {
   const t = useMemo(() => createTranslator(language), [language]);
+  const copy = authPanelCopy(language);
+  const menu = appearance === "menu";
+  const authUnavailable = menu && !isSupabaseConfigured;
+  const panelId = useId();
+  const tabRefs = useRef<Record<AuthPanelTabMode, HTMLButtonElement | null>>({ register: null, login: null, reset: null });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState(initialEmail.trim().toLowerCase());
   const [password, setPassword] = useState("");
@@ -75,6 +100,21 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
   const resetSensitiveFields = () => {
     setPassword("");
     setConfirmPassword("");
+    setShowPassword(false);
+    setShowConfirmation(false);
+  };
+
+  const selectMode = (nextMode: AuthPanelTabMode) => {
+    setMode(nextMode);
+    setStatus("");
+    resetSensitiveFields();
+  };
+  const handleTabKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const nextMode = authPanelKeyboardMode(mode, event.key);
+    if (!nextMode || isSubmitting) return;
+    event.preventDefault();
+    selectMode(nextMode);
+    tabRefs.current[nextMode]?.focus();
   };
 
   const submitEmailAuth = async (event: FormEvent<HTMLFormElement>) => {
@@ -143,25 +183,25 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
   };
 
   return (
-    <div className={compact ? "auth-panel auth-panel-compact" : "auth-panel"}>
+    <div className={`${compact ? "auth-panel auth-panel-compact" : "auth-panel"}${menu ? " auth-panel-menu" : ""}`}>
       {mode === "updatePassword" ? null : (
-        <div className="auth-mode-tabs" role="tablist" aria-label={t("auth.modeLabel")}>
-          <button type="button" disabled={isSubmitting} className={mode === "register" ? "active" : ""} onClick={() => { setMode("register"); setStatus(""); resetSensitiveFields(); }}>
-            {t("auth.create")}
-          </button>
-          <button type="button" disabled={isSubmitting} className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setStatus(""); resetSensitiveFields(); }}>
-            {t("auth.login")}
-          </button>
-          <button type="button" disabled={isSubmitting} className={mode === "reset" ? "active" : ""} onClick={() => { setMode("reset"); setStatus(""); resetSensitiveFields(); }}>
-            {t("auth.reset")}
-          </button>
+        <div className="auth-mode-tabs" role="tablist" aria-label={t("auth.modeLabel")} onKeyDown={menu ? handleTabKey : undefined}>
+          {authPanelTabModes.map((tabMode) => <button key={tabMode} type="button" disabled={isSubmitting} className={mode === tabMode ? "active" : ""}
+            ref={(element) => { tabRefs.current[tabMode] = element; }}
+            id={menu ? `${panelId}-${tabMode}` : undefined} role={menu ? "tab" : undefined}
+            aria-selected={menu ? mode === tabMode : undefined} aria-controls={menu ? `${panelId}-form` : undefined}
+            tabIndex={menu ? mode === tabMode ? 0 : -1 : undefined} onClick={() => selectMode(tabMode)}>
+            {t(modeLabels[tabMode])}
+          </button>)}
         </div>
       )}
 
-      <form className="auth-form" onSubmit={submitEmailAuth}>
-        {mode === "updatePassword" ? null : <label className="field">
-          <span>{t("auth.email")}</span>
+      {authUnavailable ? <p className="auth-unavailable-note" role="status">{copy.unavailable}</p> : null}
+      <form className="auth-form" onSubmit={submitEmailAuth} id={menu ? `${panelId}-form` : undefined}
+        role={menu && mode !== "updatePassword" ? "tabpanel" : undefined} aria-labelledby={menu && mode !== "updatePassword" ? `${panelId}-${mode}` : undefined}>
+        {mode === "updatePassword" ? null : <AuthField menu={menu} label={t("auth.email")} inputId={`${panelId}-email`} icon={Mail}>
           <input
+            id={menu ? `${panelId}-email` : undefined}
             type="email"
             value={email}
             placeholder="you@example.com"
@@ -169,32 +209,39 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
             readOnly={Boolean(initialEmail && invitationId)}
             onChange={(event) => setEmail(event.target.value)}
           />
-        </label>}
+        </AuthField>}
         {mode !== "reset" ? (
-          <label className="field">
-            <span>{mode === "updatePassword" ? t("auth.newPassword") : t("auth.password")}</span>
+          <AuthField menu={menu} label={mode === "updatePassword" ? t("auth.newPassword") : t("auth.password")} inputId={`${panelId}-password`} icon={KeyRound}
+            hint={menu && (mode === "register" || mode === "updatePassword") ? copy.passwordHint(minimumAuthPasswordLength) : undefined} hintId={`${panelId}-password-hint`}
+            control={<button className="auth-password-toggle" type="button" disabled={isSubmitting} aria-label={showPassword ? copy.hidePassword : copy.showPassword}
+              aria-pressed={showPassword} aria-controls={`${panelId}-password`} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>}>
             <input
-              type="password"
+              id={menu ? `${panelId}-password` : undefined}
+              type={menu && showPassword ? "text" : "password"}
               value={password}
               minLength={minimumAuthPasswordLength}
+              aria-describedby={menu && (mode === "register" || mode === "updatePassword") ? `${panelId}-password-hint` : undefined}
               autoComplete={mode === "register" || mode === "updatePassword" ? "new-password" : "current-password"}
               onChange={(event) => setPassword(event.target.value)}
             />
-          </label>
+          </AuthField>
         ) : null}
         {mode === "register" || mode === "updatePassword" ? (
-          <label className="field">
-            <span>{t("auth.passwordConfirm")}</span>
+          <AuthField menu={menu} label={t("auth.passwordConfirm")} inputId={`${panelId}-confirmation`} icon={KeyRound}
+            control={<button className="auth-password-toggle" type="button" disabled={isSubmitting} aria-label={showConfirmation ? copy.hideConfirmation : copy.showConfirmation}
+              aria-pressed={showConfirmation} aria-controls={`${panelId}-confirmation`} onClick={() => setShowConfirmation((visible) => !visible)}>{showConfirmation ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>}>
             <input
-              type="password"
+              id={menu ? `${panelId}-confirmation` : undefined}
+              type={menu && showConfirmation ? "text" : "password"}
               value={confirmPassword}
               minLength={minimumAuthPasswordLength}
               autoComplete="new-password"
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
-          </label>
+          </AuthField>
         ) : null}
-        <LoadingButton className="primary-action" type="submit" disabled={isSubmitting} isLoading={isSubmitting}>
+        {menu && mode === "register" ? <p className="auth-verification-note">{copy.confirmationHint}</p> : null}
+        <LoadingButton className="primary-action" type="submit" disabled={isSubmitting || authUnavailable} isLoading={isSubmitting}>
           <Mail size={17} aria-hidden="true" />
           {mode === "register"
             ? t("auth.create")
@@ -206,22 +253,20 @@ export const AuthPanel = ({ compact = false, initialMode = "register", language 
         </LoadingButton>
       </form>
 
-      {mode === "updatePassword" ? null : <div className="auth-provider-list" aria-label="Sign-in providers">
-        <button className="neutral-action auth-google-button" type="button" onClick={startGoogle} disabled={isSubmitting}>
-          <ShieldCheck size={17} aria-hidden="true" />
-          {t("auth.google")}
-        </button>
-        <button className="neutral-action" type="button" disabled title={t("auth.appleSetupRequired")}>
-          <KeyRound size={17} aria-hidden="true" />
-          {t("auth.apple")} <span>{t("auth.comingSoon")}</span>
-        </button>
-        <button className="neutral-action" type="button" disabled title={t("auth.amazonNotConfigured")}>
-          <KeyRound size={17} aria-hidden="true" />
-          {t("auth.amazon")} <span>{t("auth.comingSoon")}</span>
-        </button>
-      </div>}
+      {mode === "updatePassword" ? null : <>
+        {menu ? <div className="auth-provider-divider"><span>{copy.providerDivider}</span></div> : null}
+        <div className="auth-provider-list" role={menu ? "group" : undefined} aria-label={menu ? copy.providerLabel : "Sign-in providers"}>
+          {authPanelProviders(menu ? isSupabaseConfigured : true).map((provider) => <button key={provider.id}
+            className={`neutral-action${provider.id === "google" ? " auth-google-button" : ""}${menu ? ` auth-provider-option${provider.availability === "planned" ? " auth-provider-planned" : ""}` : ""}`}
+            type="button" onClick={provider.id === "google" ? startGoogle : undefined} disabled={isSubmitting || !provider.enabled}
+            title={providerTitles[provider.id] ? t(providerTitles[provider.id]!) : undefined}>
+            {provider.id === "google" ? <ShieldCheck size={17} aria-hidden="true" /> : <KeyRound size={17} aria-hidden="true" />}
+            {t(providerLabels[provider.id])}{provider.availability === "planned" ? <> <span>{t("auth.comingSoon")}</span></> : null}
+          </button>)}
+        </div>
+      </>}
 
-      <p className="auth-security-note">{t("auth.security")}</p>
+      <p className="auth-security-note">{menu ? <ShieldCheck size={16} aria-hidden="true" /> : null}{t("auth.security")}</p>
       {status ? <div className="report-status" role="status">{status}</div> : null}
     </div>
   );

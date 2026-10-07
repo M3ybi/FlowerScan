@@ -1,5 +1,6 @@
 export const plantUnwellAiAnalyzeUsageType = "plant_unwell_ai_analyze" as const;
 export const aiCareTipUsageType = "ai_care_tip" as const;
+export const freeQrLabelLimit = 10;
 
 export type HouseholdPlanKey = "free" | "premium";
 export type AiAnalyzeType = typeof plantUnwellAiAnalyzeUsageType;
