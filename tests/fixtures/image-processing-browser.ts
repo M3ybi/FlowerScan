@@ -2,7 +2,7 @@ import { runImageSelectionChecks, renderImagePickerPreview } from "./image-selec
 import { preprocessImageFile, prepareImageBlobForUpload, captureImage } from "../../src/lib/imageCaptureService";
 import { Capacitor } from "@capacitor/core";
 import { callBackendFunction } from "../../src/lib/backendConfig";
-import { imageUploadConfig, jpegDimensions } from "../../src/lib/imageUploadConfig";
+import { imageUploadConfig, jpegDimensions, validateProcessedImageDataUrl } from "../../src/lib/imageUploadConfig";
 
 const checks: string[] = [];
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); checks.push(message); };
@@ -49,6 +49,7 @@ const run = async () => {
       const dimensions = await inspect(image.blob);
       assert(image.blob.type === "image/jpeg" && dimensions.width === 40 && dimensions.height === 20, `${type} converts to JPEG without upscaling`);
       assert(image.blob.size <= imageUploadConfig.maxProcessedBytes, `${type} output fits 2 MiB`);
+      assert(!("code" in validateProcessedImageDataUrl(image.dataUrl)),`${type} normalized output passes the exact server JPEG validator`);
       assert(yielded, `${type} processing yields to the browser`);
       assert(await prepareImageBlobForUpload(image.blob) === image.blob, `${type} optimized output avoids another lossy encode`);
     } finally { URL.revokeObjectURL(image.previewUrl); }
@@ -62,6 +63,21 @@ const run = async () => {
     assert(image.sizeBytes < imageUploadConfig.preferredProcessedBytes, "ordinary photo reaches preferred size under 1 MiB");
   } finally { URL.revokeObjectURL(image.previewUrl); }
   const png = await encode(small,"image/png");
+  for(const method of ["stream-error","empty-stream"] as const){
+    const selected=new File([png],"provider.png",{type:"image/png"});
+    if(method==="empty-stream")Object.defineProperty(selected,"size",{value:0});
+    Object.defineProperty(selected,"stream",{value:()=>{
+      if(method==="stream-error")throw new TypeError("Stream unavailable");
+      return new ReadableStream<Uint8Array>({start(controller){controller.close();}});
+    }});
+    const recovered=await preprocessImageFile(selected);
+    assert(recovered.mimeType==="image/jpeg"&&!("code" in validateProcessedImageDataUrl(recovered.dataUrl)),
+      `${method} recovers once through bounded FileReader and still passes server validation`);
+    URL.revokeObjectURL(recovered.previewUrl);
+  }
+  const mismatched=await preprocessImageFile(new Blob([png],{type:"image/heic"}));
+  assert(mismatched.mimeType==="image/jpeg","a browser-converted PNG with stale HEIC metadata is decoded using its real bytes");
+  URL.revokeObjectURL(mismatched.previewUrl);
   const providerFile=new File([png],"provider.png",{type:"image/png"});
   const readAsArrayBuffer=FileReader.prototype.readAsArrayBuffer;
   let metadataReads=0;
@@ -135,7 +151,7 @@ const run = async () => {
   } finally { URL.revokeObjectURL(oriented.previewUrl); }
 
   for (const [blob, code] of [
-    [new Blob([landscape], { type: "image/png" }), "UNSUPPORTED_IMAGE_FORMAT"],
+    [new Blob([new Uint8Array([37,80,68,70])], { type: "image/png" }), "UNSUPPORTED_IMAGE_FORMAT"],
     [new Blob([new Uint8Array([255,216,255,0,0])], { type: "image/jpeg" }), "IMAGE_DECODE_FAILED"],
     [new Blob([new Uint8Array(15*1024*1024+1)], { type: "image/jpeg" }), "ORIGINAL_IMAGE_TOO_LARGE"],
   ] as const) {
@@ -150,6 +166,13 @@ const run = async () => {
     const fallback = await preprocessImageFile(portrait);
     assert((await inspect(fallback.blob)).height === 40, "HTML image fallback preserves portrait orientation");
     URL.revokeObjectURL(fallback.previewUrl);
+    const width=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"width")!;
+    try {
+      Object.defineProperty(HTMLImageElement.prototype,"width",{configurable:true,get:()=>0});
+      const intrinsic=await preprocessImageFile(portrait);
+      assert((await inspect(intrinsic.blob)).height===40,"HTML decoder uses natural pixel dimensions even when rendered width is zero");
+      URL.revokeObjectURL(intrinsic.previewUrl);
+    } finally {Object.defineProperty(HTMLImageElement.prototype,"width",width);}
   } finally { Object.defineProperty(globalThis,"createImageBitmap",{value:createBitmap,configurable:true,writable:true}); }
   try {
     Object.defineProperty(globalThis,"createImageBitmap",{value:async () => { throw new DOMException("Decoder unavailable", "NotSupportedError"); },configurable:true,writable:true});
@@ -159,9 +182,16 @@ const run = async () => {
   } finally { Object.defineProperty(globalThis,"createImageBitmap",{value:createBitmap,configurable:true,writable:true}); }
   const optimizedJpeg = await encode(canvas(30,20), "image/jpeg");
   const unchanged = await preprocessImageFile(optimizedJpeg);
-  assert(Array.from(new Uint8Array(await unchanged.blob.arrayBuffer())).join()===Array.from(new Uint8Array(await optimizedJpeg.arrayBuffer())).join(),
-    "already optimized JPEG passes decoding without another lossy encode");
+  assert(!("code" in validateProcessedImageDataUrl(unchanged.dataUrl))&&(await inspect(unchanged.blob)).width===30,
+    "small JPEG originals are decoded and normalized before reaching the server");
   URL.revokeObjectURL(unchanged.previewUrl);
+  const originalJpeg=new Uint8Array(await optimizedJpeg.arrayBuffer());
+  const comment=new Uint8Array([255,254,0,6,116,101,115,116]);
+  const withLateComment=new Blob([originalJpeg.slice(0,-2),comment,originalJpeg.slice(-2)],{type:"image/jpeg"});
+  const normalizedComment=await preprocessImageFile(withLateComment);
+  const normalizedBytes=new Uint8Array(await normalizedComment.blob.arrayBuffer());
+  assert(!normalizedBytes.some((byte,index)=>byte===255&&normalizedBytes[index+1]===254),"small originals cannot bypass normalization with metadata after the first scan");
+  URL.revokeObjectURL(normalizedComment.previewUrl);
   const toBlob = HTMLCanvasElement.prototype.toBlob;
   try {
     HTMLCanvasElement.prototype.toBlob = (callback) => callback(null);
@@ -171,10 +201,44 @@ const run = async () => {
   } finally { HTMLCanvasElement.prototype.toBlob=toBlob; }
   const afterFailure=await preprocessImageFile(png);
   assert(afterFailure.mimeType==="image/jpeg","processing recovers after a failed canvas encode");URL.revokeObjectURL(afterFailure.previewUrl);
+  try {
+    HTMLCanvasElement.prototype.toBlob=function(callback,type,quality){
+      toBlob.call(this,blob=>{
+        if(!blob){callback(null);return;}
+        void blob.arrayBuffer().then(buffer=>{
+          const bytes=new Uint8Array(buffer);
+          callback(new Blob([bytes.slice(0,2),exif,bytes.slice(2)],{type:"image/jpeg"}));
+        });
+      },type,quality);
+    };
+    const canonical=await preprocessImageFile(png);
+    assert(!("code" in validateProcessedImageDataUrl(canonical.dataUrl)),"fresh encoder output containing APP1 metadata is sanitized before the exact server validator");
+    assert(!(await inspect(canonical.blob)).hasPrivateMetadata,"normalization removes encoder metadata instead of weakening server privacy checks");
+    URL.revokeObjectURL(canonical.previewUrl);
+  } finally {HTMLCanvasElement.prototype.toBlob=toBlob;}
+  let realHeic:Blob|undefined;
+  for(const [name,type] of [["iphone-13-pro.heic","image/heic"],["sample.heif","image/heif"],["iphone-export.jpg","image/jpeg"]] as const){
+    const response=await fetch(`/images/${name}`);assert(response.ok,`${name} representative codec fixture is available`);
+    const bytes=await response.arrayBuffer();
+    const file=new File([bytes],name,{type});
+    if(type==="image/heic")realHeic=file;
+    const fromReader=await new Promise<ArrayBuffer>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result as ArrayBuffer);reader.onerror=()=>reject(reader.error);reader.readAsArrayBuffer(file);});
+    const fromArray=await file.arrayBuffer();
+    const fromStream=await new Response(file.stream()).arrayBuffer();
+    const digest=async(buffer:ArrayBuffer)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",buffer))).join();
+    assert(await digest(fromReader)===await digest(fromArray)&&await digest(fromArray)===await digest(fromStream),`${name} FileReader, arrayBuffer and stream return identical real bytes`);
+    const normalized=await preprocessImageFile(file);
+    const dimensions=await inspect(normalized.blob);
+    assert(Math.max(dimensions.width,dimensions.height)<=1600&&normalized.sizeBytes<=imageUploadConfig.maxProcessedBytes,
+      `${name} decodes real pixels, preserves bounded output and converts to JPEG`);
+    assert(!("code" in validateProcessedImageDataUrl(normalized.dataUrl)),`${name} output passes the exact server JPEG contract`);
+    if(name==="iphone-13-pro.heic")assert(dimensions.height===1600&&dimensions.width===1200,"real portrait iPhone HEIC keeps container orientation and aspect ratio");
+    URL.revokeObjectURL(normalized.previewUrl);
+  }
   const heic = new Blob([new Uint8Array([0,0,0,20,102,116,121,112,104,101,105,99,0,0,0,0,109,105,102,49])],{type:"image/heic"});
   let unsupportedDeviceFormat=false;
-  try { await preprocessImageFile(heic); } catch(error) { unsupportedDeviceFormat=(error as {code?:string}).code==="UNSUPPORTED_IMAGE_FORMAT"; }
-  assert(unsupportedDeviceFormat,"HEIC without a working platform decoder reports unsupported format instead of being renamed JPEG");
+    try { await preprocessImageFile(heic); } catch(error) { unsupportedDeviceFormat=(error as {code?:string}).code==="IMAGE_DECODE_FAILED"; }
+  assert(unsupportedDeviceFormat,"a corrupted HEIC fails real decoding instead of being renamed JPEG");
   const arrayBuffer=Blob.prototype.arrayBuffer;
   try {
     Object.defineProperty(Blob.prototype,"arrayBuffer",{value:undefined,configurable:true,writable:true});
@@ -182,7 +246,20 @@ const run = async () => {
     assert((await prepareImageBlobForUpload(compatible.blob))===compatible.blob,"FileReader pipeline works without Blob.arrayBuffer on older mobile browsers");
     URL.revokeObjectURL(compatible.previewUrl);
   } finally {Object.defineProperty(Blob.prototype,"arrayBuffer",{value:arrayBuffer,configurable:true,writable:true});}
-  await runImageSelectionChecks(assert, portrait);
+  const OriginalWorker=globalThis.Worker;
+  let workerStarted:(()=>void)|undefined,terminated=0;
+  const started=new Promise<void>(resolve=>{workerStarted=resolve;});
+  try {
+    globalThis.Worker=class extends OriginalWorker {
+      constructor(url:URL|string,options?:WorkerOptions){super(url,options);workerStarted!();}
+      terminate(){terminated++;super.terminate();}
+    };
+    const cancel=new AbortController();
+    const decoding=preprocessImageFile(realHeic!,{signal:cancel.signal}).catch(error=>error);
+    await started;cancel.abort();
+    assert((await decoding).name==="AbortError"&&terminated===1,"cancelling a real HEIC decode terminates its worker and returns an abort instead of stale pixels");
+  } finally {globalThis.Worker=OriginalWorker;}
+  await runImageSelectionChecks(assert, portrait, realHeic!);
   renderImagePickerPreview(assert);
 
 };

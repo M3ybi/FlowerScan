@@ -38,10 +38,10 @@ export const ImageSourcePicker = ({ title, help, cameraLabel, galleryLabel, canc
         <span className="image-upload-icon"><ImagePlus size={22} aria-hidden="true" /></span>
         <span className="image-upload-copy"><strong>{title}</strong><small>{help}</small></span>
       </button>
-      {/* Opaque provider exports keep Chrome on the external camera/Files
-          chooser instead of its media-only picker. Actual image bytes are
-          still validated, decoded and normalized before any upload. */}
-      <input ref={inputRef} type="file" hidden accept="image/*,application/octet-stream"
+      {/* Request compatible Photos exports, JPEG first. Opaque provider exports
+          retain Chrome's external camera/Files chooser. The hint is not trusted:
+          original HEIC/HEIF and stale MIME metadata still pass through decoding. */}
+      <input ref={inputRef} type="file" hidden accept="image/jpeg,image/png,image/webp,application/octet-stream"
         aria-label={title} onChange={(event) => { void receive(event.currentTarget); }} />
     </div>
   );

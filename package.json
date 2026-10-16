@@ -12,6 +12,7 @@
     "test:edge-images": "node --test tests/edge-image-diagnosis.test.mjs",
     "test:add-plant-image": "node --test tests/add-plant-image.test.mjs",
     "test:image-browser": "node scripts/test-image-processing-browser.mjs",
+    "test:image-webkit": "node scripts/test-image-processing-browser.mjs --webkit",
     "test:image-storage": "node scripts/test-database-audit.mjs --images",
     "test:database-audit": "node scripts/test-database-audit.mjs",
     "test:invitation-center-browser": "node scripts/test-invitation-center-browser.mjs",
@@ -83,6 +84,7 @@
     "@revenuecat/purchases-js": "^1.67.1",
     "@supabase/supabase-js": "^2.106.2",
     "jspdf": "^4.2.1",
+    "libheif-js": "1.23.5",
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
@@ -96,6 +98,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.0.0",
+    "playwright": "1.61.1",
     "supabase": "^2.119.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.1"

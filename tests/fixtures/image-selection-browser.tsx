@@ -9,8 +9,9 @@ import { PlantActionModal, PlantFormStatus, PlantImagePreview } from "../../src/
 import { LoadingButton } from "../../src/components/LoadingButton";
 import { createTranslator } from "../../src/lib/i18n";
 import { ImageUploadError, logImageProcessingFailure } from "../../src/lib/imageUploadErrors";
+import { validateProcessedImageDataUrl } from "../../src/lib/imageUploadConfig";
 
-export const runImageSelectionChecks = async (assert: (value: unknown, message: string) => void, jpeg: Blob) => {
+export const runImageSelectionChecks = async (assert: (value: unknown, message: string) => void, jpeg: Blob, heic: Blob) => {
   const host = document.createElement("div"); document.body.appendChild(host);
   let root = createRoot(host);
   let state: ReturnType<typeof useImageSelection>;
@@ -30,6 +31,9 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
   globalThis.fetch = async (input, init) => {
     if (String(input).startsWith("data:")) return originalFetch(input, init);
     if (mode === "hold") await new Promise<void>((resolve) => held.push(resolve));
+    const payload=JSON.parse(String(init?.body)) as {imageDataUrl?:unknown};
+    const processed=validateProcessedImageDataUrl(payload.imageDataUrl);
+    if("code" in processed)return Response.json({code:processed.code},{status:processed.status});
     return mode === "reject" ? Response.json({code:"IMAGE_SERVICE_UNAVAILABLE"},{status:503}) : Response.json({validation:safe});
   };
   const dataUrl = await new Promise<string>((resolve) => {const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.readAsDataURL(jpeg);});
@@ -52,7 +56,7 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
   };
   const render = (enabled=true,scope="home-a") => flushSync(()=>root.render(<Harness enabled={enabled} scope={scope}/>));
   const wait = async (condition:()=>unknown) => {
-    for(let attempt=0;attempt<400;attempt++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,5));}
+    for(let attempt=0;attempt<6000;attempt++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,5));}
     throw new Error("Image selection did not settle");
   };
   const choose = (_source:"camera"|"gallery") => {
@@ -62,6 +66,7 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
   };
   const webFile = (source:"camera"|"gallery",file:File) => {
     const input=host.querySelector<HTMLInputElement>('input[type=file]')!;
+    assert(input.accept==="image/jpeg,image/png,image/webp,application/octet-stream","native browser chooser requests JPEG-first compatible Photos exports and opaque Files access");
     input.addEventListener("click",event=>event.preventDefault(),{once:true});
     choose(source);
     const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;
@@ -93,12 +98,16 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
     webFile("gallery",new File([jpeg],"retry.jpg",{type:"image/jpeg"}));
     await wait(()=>!state!.isProcessing&&state!.image!==previous);
     assert(state!.image?.name==="retry.jpg","selection retries after a failure without a stale lock");
-    const originalStream=File.prototype.stream, debug=console.debug;
+    const originalStream=File.prototype.stream, originalRead=FileReader.prototype.readAsArrayBuffer, debug=console.debug;
     const logs: unknown[][]=[];
     const beforeReadFailure=state!.image;
     try {
       console.debug=(...args)=>{logs.push(args);};
       File.prototype.stream=function(){throw new DOMException("private-provider-url-and-token", "NotReadableError");};
+      FileReader.prototype.readAsArrayBuffer=function(blob){
+        if(blob instanceof File)throw new DOMException("private-provider-url-and-token","NotReadableError");
+        return originalRead.call(this,blob);
+      };
       webFile("gallery",new File([jpeg],"private-photo-name.jpg",{type:"image/jpeg"}));
       await wait(()=>!state!.isProcessing);
       assert(state!.image===beforeReadFailure&&statuses.at(-1)!.includes("Stiahni"),"provider read failure preserves the prior photo and shows the localized read error");
@@ -108,7 +117,7 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
       }),"development diagnostic identifies the actual read stage, runtime, MIME, size and safe browser error name");
       logImageProcessingFailure("input-check",new ImageUploadError("INVALID_IMAGE"),{runtime:"web",inputMime:"private-mime-value",originalBytes:NaN});
       assert(!JSON.stringify(logs).includes("private-")&&!JSON.stringify(logs).includes("data:image"),"image diagnostics exclude provider messages, filenames, unexpected MIME strings and image contents");
-    } finally {File.prototype.stream=originalStream;console.debug=debug;}
+    } finally {File.prototype.stream=originalStream;FileReader.prototype.readAsArrayBuffer=originalRead;console.debug=debug;}
     webFile("gallery",new File([jpeg],"after-read-failure.jpg",{type:"image/jpeg"}));
     await wait(()=>!state!.isProcessing&&state!.image!==beforeReadFailure);
     assert(state!.image?.name==="after-read-failure.jpg","the next photo succeeds immediately after a provider read failure");
@@ -121,6 +130,16 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
       assert(state!.image===beforeAllocationFailure&&statuses.at(-1)!.includes("spracovať")&&!statuses.at(-1)!.includes("Stiahni"),
         "an unexpected snapshot allocation failure is a processing error rather than a misleading gallery-read error");
     } finally {globalThis.Blob=originalBlob;}
+    webFile("gallery",new File([heic],"heic-first.heic",{type:"application/octet-stream"}));
+    await wait(()=>!state!.isProcessing&&state!.image?.name==="heic-first.jpg");
+    const firstHeic=state!.image;
+    assert(firstHeic?.mimeType==="image/jpeg","a real iPhone HEIC reaches the shared preview after strict server validation");
+    webFile("gallery",new File([new Uint8Array([0,0,0,20,102,116,121,112,104,101,105,99,0,0,0,0,109,105,102,49])],"broken.heic",{type:"image/heic"}));
+    await wait(()=>!state!.isProcessing);
+    assert(state!.image===firstHeic&&statuses.at(-1)!.includes("IMAGE_DECODE_FAILED"),"a failed second HEIC selection retains the first photo and identifies the conversion stage");
+    webFile("gallery",new File([heic],"heic-retry.heic",{type:"image/jpeg"}));
+    await wait(()=>!state!.isProcessing&&state!.image?.name==="heic-retry.jpg");
+    assert(state!.image!==firstHeic,"HEIC retry succeeds without reopening the form or retaining a decoder lock");
     flushSync(()=>state!.clear());
     render(false);await wait(()=>!state!.isProcessing);render(true);
     webFile("gallery",new File([jpeg],"second-plant.jpg",{type:"image/jpeg"}));

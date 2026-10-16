@@ -1,5 +1,7 @@
 # Shared plant modals and provider-safe photo reads
 
+This records the `8c6b8d2` change. Later HEIC conversion, MIME compatibility, read fallback, canonical JPEG normalization and opt-in device diagnostics are documented in [the current iOS/Android compatibility report](image-compatibility-ios-android-2026-10-16.md).
+
 ## Evidence and root-cause limits
 
 The latest report confirms that Add Plant fails after selection through the phone's Files app. A gallery-only explanation is therefore insufficient. The screenshot does not include a browser exception, original photo or device trace. Its read-error text was also used for unexpected exceptions by `useImageSelection`, so the screenshot alone cannot identify the failing operation.

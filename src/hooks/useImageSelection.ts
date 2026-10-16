@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { captureImage, detectImageRuntime } from "../lib/imageCaptureService.js";
 import type { ImageCaptureSource, ImagePickerLabels, NormalizedImage } from "../lib/imageCaptureService.js";
-import { ImageUploadError, imageErrorMessage, isImageSelectionCancelled, logImageProcessingFailure } from "../lib/imageUploadErrors.js";
+import { ImageUploadError, imageErrorMessage, imageDiagnosticReference, isImageSelectionCancelled, logImageProcessingFailure } from "../lib/imageUploadErrors.js";
 import { validatePlantImageForUpload } from "../utils/imageUploadValidation.js";
 import type { PlantieLanguage } from "../lib/onboarding.js";
 
@@ -79,10 +79,13 @@ export const useImageSelection = (options: Options) => {
     } catch (error) {
       if (!current()) return;
       if (isImageSelectionCancelled(error)) { reportStatus(previousStatus); return; }
-      logImageProcessingFailure(error instanceof ImageUploadError ? error.stage ?? stage : stage, error,
+      const failure = error instanceof ImageUploadError ? error
+        : new ImageUploadError(stage === "safety-validation" ? "IMAGE_SERVICE_UNAVAILABLE" : "IMAGE_COMPRESSION_FAILED", 400, error);
+      failure.stage ??= stage;
+      failure.detectedMime ??= candidate?.mimeType;
+      logImageProcessingFailure(failure.stage, failure,
         { runtime: detectImageRuntime(), inputMime: file?.type, originalBytes: file?.size });
-      reportStatus(imageErrorMessage(error instanceof ImageUploadError ? error
-        : new ImageUploadError(stage === "safety-validation" ? "IMAGE_SERVICE_UNAVAILABLE" : "IMAGE_COMPRESSION_FAILED"), latest.current.language)!);
+      reportStatus(imageErrorMessage(failure, latest.current.language)! + imageDiagnosticReference(failure));
     } finally {
       if (candidate) URL.revokeObjectURL(candidate.previewUrl);
       // An older result must never clear the spinner or lock of a newer operation.

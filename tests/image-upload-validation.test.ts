@@ -1,6 +1,6 @@
 import { jpegFixtureBytes, jpegFixtureAtSize, fixtureDataUrl } from "./fixtures/imagePayload.js";
 import { imageUploadConfig, validateProcessedImageDataUrl } from "../src/lib/imageUploadConfig.js";
-import { ImageUploadError, imageErrorFromResponse, imageErrorMessage, isImageSelectionCancelled } from "../src/lib/imageUploadErrors.js";
+import { ImageUploadError, imageErrorFromResponse, imageErrorMessage, imageDiagnosticReference, isImageSelectionCancelled, logImageProcessingFailure } from "../src/lib/imageUploadErrors.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseValidatedJpeg } from "../src/lib/validatedImageInput.js";
@@ -44,13 +44,37 @@ test("validated storage parser rejects malformed, oversized and mislabeled bytes
 });
 
 test("selection read/decode/permission errors localize in all supported app languages", () => {
-  for (const code of ["IMAGE_SELECTION_FAILED", "IMAGE_READ_FAILED", "IMAGE_DECODE_FAILED", "CAMERA_PERMISSION_DENIED"] as const) {
+  for (const code of ["IMAGE_SELECTION_FAILED", "IMAGE_READ_FAILED", "IMAGE_DECODE_FAILED", "IMAGE_DECODE_LIMIT", "CAMERA_PERMISSION_DENIED"] as const) {
     const messages = ["en", "sk", "de", "fr", "es"].map(language=>imageErrorMessage(new ImageUploadError(code),language));
     assert.equal(new Set(messages).size, 5);
     assert.ok(messages.every(message=>message && !message.includes(code)));
   }
   assert.equal(isImageSelectionCancelled(new Error("User cancelled photos app")),true);
   assert.equal(isImageSelectionCancelled(new Error("User denied access to camera")),false);
+});
+
+test("opt-in device diagnostics expose stage and safe categories without provider messages or photo metadata", () => {
+  const location = Object.getOwnPropertyDescriptor(globalThis,"location"), debug = console.debug;
+  const records: unknown[][] = [];
+  const error = new ImageUploadError("IMAGE_DECODE_FAILED",400,new TypeError("private-provider-url"));
+  error.stage = "heic-convert"; error.detectedMime = "image/heic";
+  try {
+    Object.defineProperty(globalThis,"location",{configurable:true,value:{search:""}});
+    console.debug=(...args)=>{records.push(args);};
+    logImageProcessingFailure("heic-convert",error,{runtime:"web",inputMime:"image/heic",originalBytes:1024});
+    assert.equal(records.length,0);
+    assert.equal(imageDiagnosticReference(error),"");
+    Object.defineProperty(globalThis,"location",{configurable:true,value:{search:"?imageDebug=1"}});
+    logImageProcessingFailure("heic-convert",error,{runtime:"web",inputMime:"private-mime",originalBytes:1024});
+    assert.match(imageDiagnosticReference(error),/heic-convert\/IMAGE_DECODE_FAILED/);
+    const record = records[0][1] as Record<string,unknown>;
+    assert.equal(record.detectedMime,"image/heic"); assert.equal(record.inputMime,"unknown"); assert.equal(record.name,"TypeError");
+    assert.equal(record.originalBytes,1024); assert.equal(record.stage,"heic-convert");
+    assert.equal(JSON.stringify(records).includes("private"),false);
+  } finally {
+    console.debug=debug;
+    if(location)Object.defineProperty(globalThis,"location",location);else Reflect.deleteProperty(globalThis,"location");
+  }
 });
 import {
   imageUploadRejectionMessage,

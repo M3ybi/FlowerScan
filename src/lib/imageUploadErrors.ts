@@ -1,9 +1,10 @@
 export type ImageErrorCode = "ORIGINAL_IMAGE_TOO_LARGE" | "IMAGE_TOO_LARGE" | "UNSUPPORTED_IMAGE_FORMAT" |
   "INVALID_IMAGE" | "IMAGE_COMPRESSION_FAILED" | "IMAGE_VALIDATION_FAILED" | "IMAGE_UPLOAD_FAILED" |
   "AUTHENTICATION_REQUIRED" | "HOUSEHOLD_ACCESS_DENIED" | "IMAGE_NETWORK_TIMEOUT" | "IMAGE_NETWORK_FAILED" | "IMAGE_SERVICE_UNAVAILABLE" |
-  "IMAGE_SELECTION_FAILED" | "IMAGE_READ_FAILED" | "IMAGE_DECODE_FAILED" | "CAMERA_PERMISSION_DENIED";
+  "IMAGE_SELECTION_FAILED" | "IMAGE_READ_FAILED" | "IMAGE_DECODE_FAILED" | "IMAGE_DECODE_LIMIT" | "CAMERA_PERMISSION_DENIED";
 
 const english: Record<ImageErrorCode, string> = {
+  IMAGE_DECODE_LIMIT: "This HEIC photo needs too much decoding memory. Choose a resized JPEG or PNG export.",
   IMAGE_SELECTION_FAILED: "The photo picker could not open. Close it and try choosing a photo again.",
   IMAGE_READ_FAILED: "The selected photo could not be read. Download it to your device or choose another photo.",
   IMAGE_DECODE_FAILED: "The photo could not be decoded. Choose another photo.",
@@ -22,6 +23,7 @@ const english: Record<ImageErrorCode, string> = {
   IMAGE_SERVICE_UNAVAILABLE: "Image processing is temporarily unavailable. Please try again.",
 };
 const slovak: Record<ImageErrorCode, string> = {
+  IMAGE_DECODE_LIMIT: "Táto HEIC fotka potrebuje priveľa pamäte na spracovanie. Vyber zmenšenú verziu vo formáte JPEG alebo PNG.",
   IMAGE_SELECTION_FAILED: "Výber fotografií sa nepodarilo otvoriť. Zavri ho a skús vybrať fotku znova.",
   IMAGE_READ_FAILED: "Vybranú fotografiu sa nepodarilo načítať. Stiahni ju do zariadenia alebo vyber inú fotografiu.",
   IMAGE_DECODE_FAILED: "Fotografiu sa nepodarilo načítať. Skús inú fotografiu.",
@@ -42,6 +44,7 @@ const slovak: Record<ImageErrorCode, string> = {
 
 export class ImageUploadError extends Error {
   stage?: string;
+  detectedMime?: string;
   constructor(public readonly code: ImageErrorCode, public readonly status = 400, public readonly cause?: unknown) {
     super(english[code]);
     this.name = "ImageUploadError";
@@ -54,8 +57,22 @@ export const isImageSelectionCancelled = (error: unknown) => {
   return name === "AbortError" || code === "USER_CANCELLED" || /^(user cancelled|user canceled|no image picked)/i.test(message);
 };
 
-export const logImageProcessingFailure = (stage: string, error: unknown, context?: { runtime: "web" | "android" | "ios"; inputMime?: string; originalBytes?: number }) => {
-  if (!(import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) return;
+export const isImageDiagnosticEnabled = () => Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV)
+  || (typeof location !== "undefined" && new URLSearchParams(location.search).get("imageDebug") === "1");
+
+const imageBrowserCategory = () => {
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) {
+    return /CriOS/.test(ua) ? "ios-chrome" : /Version\/.+Safari\//.test(ua) ? "ios-safari" : "ios-browser";
+  }
+  if (/Android/.test(ua)) return /Chrome\//.test(ua) ? "android-chromium" : "android-browser";
+  return /Chrome\//.test(ua) ? "desktop-chromium" : /AppleWebKit/.test(ua) ? "desktop-webkit" : "other";
+};
+export const imageDiagnosticReference = (error: ImageUploadError) =>
+  isImageDiagnosticEnabled() ? ` [${error.stage ?? "selection"}/${error.code}]` : "";
+
+export const logImageProcessingFailure = (stage: string, error: unknown, context?: { runtime: "web" | "android" | "ios"; inputMime?: string; detectedMime?: string; originalBytes?: number }) => {
+  if (!isImageDiagnosticEnabled()) return;
   // Never log files, URLs, names, provider messages, credentials or image bytes.
   const technicalError = error instanceof ImageUploadError ? error.cause : error;
   const name = technicalError instanceof Error && ["NotReadableError", "InvalidStateError", "SecurityError", "EncodingError", "AbortError", "TypeError", "RangeError", "NotSupportedError", "TimeoutError"].includes(technicalError.name)
@@ -63,13 +80,16 @@ export const logImageProcessingFailure = (stage: string, error: unknown, context
   const mime = context?.inputMime;
   const inputMime = mime && ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence", "application/octet-stream"].includes(mime) ? mime : "unknown";
   const size = context?.originalBytes;
-  console.debug("[plantie:image]", { stage, name, runtime: context?.runtime, inputMime,
+  const detected = context?.detectedMime ?? (error instanceof ImageUploadError ? error.detectedMime : undefined);
+  const detectedMime = detected && ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/avif"].includes(detected) ? detected : "unknown";
+  console.debug("[plantie:image]", { stage, name, runtime: context?.runtime, browser: imageBrowserCategory(), inputMime, detectedMime,
     originalBytes: typeof size === "number" && Number.isSafeInteger(size) && size >= 0 ? size : undefined,
     code: error instanceof ImageUploadError ? error.code : undefined });
 };
 const localized: Record<string, Record<ImageErrorCode, string>> = {
   en: english, sk: slovak,
   de: {
+    IMAGE_DECODE_LIMIT: "Dieses HEIC-Foto benötigt zu viel Speicher. Wähle einen verkleinerten JPEG- oder PNG-Export.",
     IMAGE_SELECTION_FAILED: "Die Fotoauswahl konnte nicht geöffnet werden. Schließe sie und versuche es erneut.",
     ORIGINAL_IMAGE_TOO_LARGE: "Das Originalfoto ist größer als 15 MB. Wähle ein kleineres Foto.",
     IMAGE_TOO_LARGE: "Das bearbeitete Foto ist größer als 2 MB. Wähle ein anderes Foto.",
@@ -88,6 +108,7 @@ const localized: Record<string, Record<ImageErrorCode, string>> = {
     IMAGE_SERVICE_UNAVAILABLE: "Die Fotoverarbeitung ist vorübergehend nicht verfügbar. Versuche es erneut.",
   },
   fr: {
+    IMAGE_DECODE_LIMIT: "Cette photo HEIC nécessite trop de mémoire. Choisissez un export JPEG ou PNG réduit.",
     IMAGE_SELECTION_FAILED: "Impossible d’ouvrir le sélecteur de photos. Fermez-le et réessayez.",
     ORIGINAL_IMAGE_TOO_LARGE: "La photo originale dépasse 15 Mo. Choisissez une photo plus petite.",
     IMAGE_TOO_LARGE: "La photo traitée dépasse 2 Mo. Choisissez une autre photo.",
@@ -106,6 +127,7 @@ const localized: Record<string, Record<ImageErrorCode, string>> = {
     IMAGE_SERVICE_UNAVAILABLE: "Le traitement des photos est temporairement indisponible. Réessayez.",
   },
   es: {
+    IMAGE_DECODE_LIMIT: "Esta foto HEIC necesita demasiada memoria. Elige una versión JPEG o PNG de menor resolución.",
     IMAGE_SELECTION_FAILED: "No se pudo abrir el selector de fotos. Ciérralo e inténtalo de nuevo.",
     ORIGINAL_IMAGE_TOO_LARGE: "La foto original supera los 15 MB. Elige una foto más pequeña.",
     IMAGE_TOO_LARGE: "La foto procesada supera los 2 MB. Elige otra foto.",

@@ -2,6 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { detectImageMimeType, imageUploadConfig, jpegDimensions } from "./imageUploadConfig.js";
 import { ImageUploadError, isImageSelectionCancelled, logImageProcessingFailure } from "./imageUploadErrors.js";
 import { withRequestTimeout } from "./requestTimeout.js";
+import { detectDeviceImageMimeType, stripEncodedJpegMetadata } from "./imageFormats.js";
 
 export type ImageCaptureSource = "camera" | "gallery" | "prompt";
 export type ImagePickerLabels = { camera: string; gallery: string; cancel: string };
@@ -59,7 +60,7 @@ const checkCancelled = (signal?: AbortSignal) => {
   if (signal?.aborted) throw new DOMException("Image selection cancelled", "AbortError");
 };
 
-const readBlob = (blob: Blob, kind: "bytes" | "dataUrl", signal?: AbortSignal): Promise<ArrayBuffer | string> => {
+const readBlob = (blob: Blob, kind: "bytes" | "dataUrl", signal?: AbortSignal, maxBytes = Infinity): Promise<ArrayBuffer | string> => {
   checkCancelled(signal);
   if (typeof FileReader === "undefined") return blob.arrayBuffer();
   return new Promise((resolve, reject) => {
@@ -67,12 +68,15 @@ const readBlob = (blob: Blob, kind: "bytes" | "dataUrl", signal?: AbortSignal): 
     const abort = () => reader.abort();
     const finish = (error?: unknown) => {
       signal?.removeEventListener("abort", abort);
-      reader.onload = reader.onerror = reader.onabort = null;
+      reader.onload = reader.onerror = reader.onabort = reader.onprogress = null;
       if (error) reject(error); else resolve(reader.result as ArrayBuffer | string);
     };
     reader.onerror = () => finish(reader.error ?? new Error("File read failed"));
     reader.onabort = () => finish(new DOMException("Image selection cancelled", "AbortError"));
     reader.onload = () => finish();
+    reader.onprogress = event => {
+      if (event.loaded > maxBytes) { finish(new ImageUploadError("ORIGINAL_IMAGE_TOO_LARGE", 413)); reader.abort(); }
+    };
     signal?.addEventListener("abort", abort, { once: true });
     try { kind === "bytes" ? reader.readAsArrayBuffer(blob) : reader.readAsDataURL(blob); }
     catch (error) { finish(error); }
@@ -98,6 +102,7 @@ const readImageBytes = async (blob: Blob, signal?: AbortSignal, stage = "file-re
 };
 
 const readProviderFile = async (file: File, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array> => {
+  let receivedBytes = 0;
   try {
     // File.size/slice/lastModified can snapshot inconsistent Android provider
     // metadata (crbug.com/40123366). Stream first, bounding actual bytes instead.
@@ -114,9 +119,11 @@ const readProviderFile = async (file: File, maxBytes: number, signal?: AbortSign
           checkCancelled(requestSignal);
           if (done) break;
           length += value.byteLength;
+          receivedBytes = length;
           if (length > maxBytes) throw new ImageUploadError("ORIGINAL_IMAGE_TOO_LARGE", 413);
           chunks.push(value);
         }
+        if (!length) throw new DOMException("Empty provider stream", "NotReadableError");
         const bytes = new Uint8Array(length);
         let offset = 0;
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
@@ -130,6 +137,21 @@ const readProviderFile = async (file: File, maxBytes: number, signal?: AbortSign
   } catch (error) {
     checkCancelled(signal);
     if (error instanceof ImageUploadError) throw error;
+    // Retry once through an independent API only if the stream yielded no
+    // bytes. Never accept partial bytes or retry cancelled/oversized reads.
+    if (!receivedBytes && typeof FileReader !== "undefined" && !(error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name))) {
+      if (file.size > maxBytes) throw new ImageUploadError("ORIGINAL_IMAGE_TOO_LARGE", 413);
+      logImageProcessingFailure("file-stream-fallback", error, { runtime: detectImageRuntime(), inputMime: file.type, originalBytes: file.size });
+      try {
+        const bytes = new Uint8Array(await withRequestTimeout(requestSignal => readBlob(file, "bytes", requestSignal, maxBytes), 30_000, signal) as ArrayBuffer);
+        validateImageInput({ size: bytes.byteLength, type: "image/jpeg" }, maxBytes);
+        return bytes;
+      } catch (fallbackError) {
+        checkCancelled(signal);
+        if (fallbackError instanceof ImageUploadError) throw fallbackError;
+        throw new ImageUploadError("IMAGE_READ_FAILED", 400, fallbackError);
+      }
+    }
     throw new ImageUploadError("IMAGE_READ_FAILED", 400, error);
   }
 };
@@ -144,17 +166,6 @@ const blobToDataUrl = async (blob: Blob, signal?: AbortSignal): Promise<string> 
     checkCancelled(signal);
     throw new ImageUploadError("IMAGE_READ_FAILED", 400, error);
   }
-};
-
-const deviceImageType = (bytes: Uint8Array) => {
-  if (bytes.length < 16 || String.fromCharCode(...bytes.slice(4, 8)) !== "ftyp") return null;
-  const length = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0);
-  if (length < 16 || length > bytes.length) return null;
-  const brands = [String.fromCharCode(...bytes.slice(8, 12))];
-  for (let offset = 16; offset + 4 <= Math.min(length, 64); offset += 4) brands.push(String.fromCharCode(...bytes.slice(offset, offset + 4)));
-  if (brands.some((brand) => ["heic", "heix", "hevc", "hevx"].includes(brand))) return "image/heic";
-  if (!brands.some((brand) => ["avif", "avis"].includes(brand)) && brands.some((brand) => ["mif1", "msf1"].includes(brand))) return "image/heif";
-  return null;
 };
 
 const dataUrlToBlob = async (dataUrl: string) => {
@@ -178,8 +189,8 @@ const withNativePicker = async <T>(open: () => Promise<T>, signal?: AbortSignal)
   } finally { release(); }
 };
 
-const prepareImageEncoder = async (file: Blob, bytes: Uint8Array, maxDimension: number, signal?: AbortSignal): Promise<ImageEncoder> => {
-  let source: ImageBitmap | HTMLImageElement | undefined;
+const prepareImageEncoder = async (file: Blob, bytes: Uint8Array, maxDimension: number, signal?: AbortSignal, setStage?: (stage: string) => void): Promise<ImageEncoder> => {
+  let source: ImageBitmap | HTMLImageElement | HTMLCanvasElement | undefined;
   let sourceUrl: string | null = null;
   try {
     if (typeof createImageBitmap === "function") {
@@ -201,32 +212,57 @@ const prepareImageEncoder = async (file: Blob, bytes: Uint8Array, maxDimension: 
       sourceUrl = URL.createObjectURL(file);
       const image = new Image();
       image.src = sourceUrl;
-      await image.decode();
       source = image;
+      await image.decode();
+    }
+    if (!("naturalWidth" in source ? source.naturalWidth && source.naturalHeight : source.width && source.height)) {
+      throw new ImageUploadError("IMAGE_DECODE_FAILED");
     }
   } catch (error) {
+    if (source) {
+      if ("close" in source) source.close();
+      else if ("src" in source) source.src = "";
+    }
+    source = undefined;
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    sourceUrl = null;
     checkCancelled(signal);
-    throw new ImageUploadError(deviceImageType(bytes) ? "UNSUPPORTED_IMAGE_FORMAT" : "IMAGE_DECODE_FAILED", 400, error);
+    if (!file.type.startsWith("image/hei")) throw new ImageUploadError("IMAGE_DECODE_FAILED", 400, error);
+    setStage?.("heic-convert");
+    const { decodeHeicPixels } = await import("./heicDecoder.js");
+    const pixels = await decodeHeicPixels(bytes, signal);
+    checkCancelled(signal);
+    // The worker is terminated before allocating a main-thread rendering surface.
+    // Only one full-resolution software decode is ever retained.
+    const canvas = document.createElement("canvas");
+    canvas.width = pixels.width; canvas.height = pixels.height;
+    const context = canvas.getContext("2d");
+    if (!context) { canvas.width = canvas.height = 0; throw new ImageUploadError("IMAGE_DECODE_FAILED"); }
+    try { context.putImageData(pixels, 0, 0); }
+    catch (error) { canvas.width = canvas.height = 0; throw new ImageUploadError("IMAGE_DECODE_FAILED", 400, error); }
+    source = canvas;
   }
   const decodedSource = source;
+  const decodedWidth = "naturalWidth" in decodedSource ? decodedSource.naturalWidth : decodedSource.width;
+  const decodedHeight = "naturalHeight" in decodedSource ? decodedSource.naturalHeight : decodedSource.height;
   const dispose = () => {
     if ("close" in decodedSource) decodedSource.close();
-    else decodedSource.src = "";
+    else if ("src" in decodedSource) decodedSource.src = "";
+    else decodedSource.width = decodedSource.height = 0;
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
   };
   if (signal?.aborted) { dispose(); checkCancelled(signal); }
-  if (!decodedSource.width || !decodedSource.height) { dispose(); throw new ImageUploadError("INVALID_IMAGE"); }
+  if (!decodedWidth || !decodedHeight) { dispose(); throw new ImageUploadError("IMAGE_DECODE_FAILED"); }
   return {
     dispose,
     encode: async (maxDimension, quality) => {
       checkCancelled(signal);
       // The decoded source is retained across bounded attempts. Only the final
       // encoded JPEG is read as base64; canvas.toDataURL would encode it twice.
-      const ratio = Math.min(1, maxDimension / Math.max(decodedSource.width, decodedSource.height));
+      const ratio = Math.min(1, maxDimension / Math.max(decodedWidth, decodedHeight));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(decodedSource.width * ratio));
-      canvas.height = Math.max(1, Math.round(decodedSource.height * ratio));
+      canvas.width = Math.max(1, Math.round(decodedWidth * ratio));
+      canvas.height = Math.max(1, Math.round(decodedHeight * ratio));
       try {
         const context = canvas.getContext("2d");
         if (!context) throw new ImageUploadError("IMAGE_COMPRESSION_FAILED");
@@ -247,14 +283,9 @@ const prepareImageEncoder = async (file: Blob, bytes: Uint8Array, maxDimension: 
 const preprocessImageFileInternal = async (
   file: Blob & { name?: string },
   options: ImagePreprocessOptions,
-  setStage: (stage: string) => void,
+  setStage: (stage: string, detectedMime?: string) => void,
 ): Promise<Pick<NormalizedImage, "blob" | "dataUrl" | "mimeType" | "name" | "previewUrl" | "sizeBytes">> => {
   checkCancelled(options.signal);
-  const claimedType = file.type === "image/jpg" ? "image/jpeg" : file.type;
-  const isGenericType = !claimedType || claimedType === "application/octet-stream";
-  const isDeviceType = ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(claimedType);
-  const validationType = isGenericType || isDeviceType ? "image/jpeg" : claimedType;
-  if (!allowedImageTypes.has(validationType)) throw new ImageUploadError("UNSUPPORTED_IMAGE_FORMAT", 415);
   const maxInputBytes = Math.min(options.maxInputBytes ?? defaultMaxImageBytes, defaultMaxImageBytes);
   if (!Number.isFinite(maxInputBytes) || maxInputBytes < 1) throw new ImageUploadError("INVALID_IMAGE");
   // Read the provider-backed File once. Decoders and fallback attempts use an
@@ -263,22 +294,19 @@ const preprocessImageFileInternal = async (
   const providerStream = typeof File !== "undefined" && file instanceof File && typeof file.stream === "function";
   // Older browsers retain the bounded FileReader path. Owned/native Blobs have
   // stable size metadata and do not need the provider-specific stream path.
-  if (!providerStream) validateImageInput({ size: file.size, type: validationType }, maxInputBytes);
+  if (!providerStream) validateImageInput({ size: file.size, type: "image/jpeg" }, maxInputBytes);
   const bytes = providerStream ? await readProviderFile(file, maxInputBytes, options.signal) : await readImageBytes(file, options.signal);
-  validateImageInput({ size: bytes.byteLength, type: validationType }, maxInputBytes);
+  validateImageInput({ size: bytes.byteLength, type: "image/jpeg" }, maxInputBytes);
   setStage("format-check");
-  const detectedType = detectImageMimeType(bytes) ?? deviceImageType(bytes);
-  if (!detectedType) throw new ImageUploadError("INVALID_IMAGE");
-  if (!isGenericType && detectedType !== claimedType && !(isDeviceType && detectedType.startsWith("image/hei"))) throw new ImageUploadError("UNSUPPORTED_IMAGE_FORMAT", 415);
-  setStage("snapshot-create");
+  const detectedType = detectImageMimeType(bytes) ?? detectDeviceImageMimeType(bytes);
+  setStage("format-check", detectedType ?? "unknown");
+  if (!detectedType || (!allowedImageTypes.has(detectedType) && !detectedType.startsWith("image/hei"))) throw new ImageUploadError("UNSUPPORTED_IMAGE_FORMAT", 415);
+  setStage("snapshot-create", detectedType);
   const snapshot = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: detectedType });
   const maxDimension = Math.min(options.maxDimension ?? imageUploadConfig.maxDimension, imageUploadConfig.maxDimension);
   if (!Number.isFinite(maxDimension) || maxDimension < 1) throw new ImageUploadError("IMAGE_COMPRESSION_FAILED");
   setStage("image-decode");
-  const encoder = options.transformImage ? null : await prepareImageEncoder(snapshot, bytes, maxDimension, options.signal);
-  const existingJpeg = jpegDimensions(bytes);
-  const alreadyOptimized = !options.transformImage && snapshot.size <= imageUploadConfig.maxProcessedBytes
-    && existingJpeg && !existingJpeg.hasPrivateMetadata && Math.max(existingJpeg.width, existingJpeg.height) <= maxDimension;
+  const encoder = options.transformImage ? null : await prepareImageEncoder(snapshot, bytes, maxDimension, options.signal, setStage);
   try {
     for (const attempt of imageUploadConfig.compressionAttempts) {
       setStage("jpeg-encode");
@@ -287,14 +315,19 @@ const preprocessImageFileInternal = async (
         Math.min(options.outputQuality ?? imageUploadConfig.initialQuality, attempt.quality));
       if (!Number.isFinite(quality)) throw new ImageUploadError("IMAGE_COMPRESSION_FAILED");
       const dimension = Math.max(1, Math.round(maxDimension * attempt.scale));
-      const blob = alreadyOptimized ? snapshot : options.transformImage
+      // Even small JPEG originals pass through decoded pixels. A valid header
+      // alone does not make a provider export canonical encoder output.
+      let blob = options.transformImage
         ? (await options.transformImage(snapshot, dimension, quality)).blob
         : await encoder!.encode(dimension, quality);
       if (blob.size > imageUploadConfig.maxProcessedBytes) continue;
       if (blob.type !== imageUploadConfig.outputMimeType || blob.size === 0) throw new ImageUploadError("IMAGE_COMPRESSION_FAILED");
       setStage("output-validate");
-      const dimensions = jpegDimensions(await readImageBytes(blob, options.signal, "output-validate"));
-      if (!dimensions || Math.max(dimensions.width, dimensions.height) > maxDimension) throw new ImageUploadError("INVALID_IMAGE");
+      const output = await readImageBytes(blob, options.signal, "output-validate");
+      const canonical = stripEncodedJpegMetadata(output);
+      const dimensions = jpegDimensions(canonical);
+      if (!dimensions || dimensions.hasPrivateMetadata || Math.max(dimensions.width, dimensions.height) > maxDimension) throw new ImageUploadError("INVALID_IMAGE");
+      if (canonical !== output) blob = new Blob([canonical as Uint8Array<ArrayBuffer>], { type: imageUploadConfig.outputMimeType });
       setStage("output-read");
       const dataUrl = await (options.dataUrlFromBlob ? options.dataUrlFromBlob(blob) : blobToDataUrl(blob, options.signal));
       checkCancelled(options.signal);
@@ -314,12 +347,15 @@ const preprocessImageFileInternal = async (
 
 export const preprocessImageFile = async (file: Blob & { name?: string }, options: ImagePreprocessOptions = {}) => {
   let stage = "input-check";
-  try { return await preprocessImageFileInternal(file, options, value => { stage = value; }); }
+  let detectedMime: string | undefined;
+  try { return await preprocessImageFileInternal(file, options, (value, mime) => { stage = value; if (mime) detectedMime = mime; }); }
   catch (error) {
     checkCancelled(options.signal);
     if (isImageSelectionCancelled(error)) throw error;
-    const failure = error instanceof ImageUploadError ? error : new ImageUploadError("IMAGE_COMPRESSION_FAILED", 400, error);
+    const failure = error instanceof ImageUploadError ? error
+      : new ImageUploadError(stage === "heic-convert" || stage === "image-decode" ? "IMAGE_DECODE_FAILED" : "IMAGE_COMPRESSION_FAILED", 400, error);
     failure.stage = stage;
+    failure.detectedMime = detectedMime;
     logImageProcessingFailure(stage, failure, { runtime: detectImageRuntime(), inputMime: file.type, originalBytes: file.size });
     throw failure;
   }

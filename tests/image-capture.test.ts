@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { withRequestTimeout } from "../src/lib/requestTimeout.js";
 import { ImageUploadError } from "../src/lib/imageUploadErrors.js";
+import { detectDeviceImageMimeType, stripEncodedJpegMetadata } from "../src/lib/imageFormats.js";
+import { validateProcessedImageDataUrl } from "../src/lib/imageUploadConfig.js";
 
 test("request timeout aborts stalled work and releases its timer", async (context) => {
   context.mock.timers.enable({ apis: ["setTimeout"] });
@@ -58,6 +60,34 @@ const options = {
   dataUrlFromBlob: async (blob: Blob) => fixtureDataUrl(new Uint8Array(await blob.arrayBuffer())),
 };
 
+test("HEIF detection accepts bounded padding and extended ftyp boxes and distinguishes AVIF", () => {
+  const heic = new Uint8Array([0,0,0,20,102,116,121,112,104,101,105,99,0,0,0,0,109,105,102,49]);
+  assert.equal(detectDeviceImageMimeType(heic), "image/heic");
+  const padded = new Uint8Array(heic.length + 8);
+  padded.set([0,0,0,8,102,114,101,101]); padded.set(heic, 8);
+  assert.equal(detectDeviceImageMimeType(padded), "image/heic");
+  const extended = new Uint8Array(heic.length + 8);
+  extended.set([0,0,0,1,102,116,121,112,0,0,0,0,0,0,0,28]); extended.set(heic.subarray(8), 16);
+  assert.equal(detectDeviceImageMimeType(extended), "image/heic");
+  const avif = heic.slice(); avif.set([97,118,105,102], 8);
+  assert.equal(detectDeviceImageMimeType(avif), "image/avif");
+  assert.equal(detectDeviceImageMimeType(heic.subarray(0,16)), null);
+});
+
+test("fresh JPEG metadata is removed without changing encoded image data or weakening server checks", () => {
+  const bytes = new Uint8Array(jpegFixtureBytes.length + 18);
+  bytes.set(jpegFixtureBytes.subarray(0,2));
+  bytes.set([255,225,0,4,0,0,255,237,0,4,0,0,255,254,0,4,0,0],2);
+  bytes.set(jpegFixtureBytes.subarray(2),20);
+  assert.equal("code" in validateProcessedImageDataUrl(fixtureDataUrl(bytes)), true);
+  const canonical = stripEncodedJpegMetadata(bytes);
+  assert.deepEqual(canonical, jpegFixtureBytes);
+  assert.equal("code" in validateProcessedImageDataUrl(fixtureDataUrl(canonical)), false);
+  const corrupted = bytes.slice(); corrupted[4] = 255; corrupted[5] = 255;
+  assert.equal(stripEncodedJpegMetadata(corrupted), corrupted);
+  assert.equal("code" in validateProcessedImageDataUrl(fixtureDataUrl(corrupted)), true);
+});
+
 test("a second gallery file read failure is classified instead of escaping as a generic error", async () => {
   await preprocessImageFile(jpeg, { ...options, transformImage: async () => ({ blob: jpeg, dataUrl: "unused" }) });
   const unreadable = new Blob([jpegFixtureBytes], { type: "image/jpeg" });
@@ -83,8 +113,8 @@ test("a transient gallery read retries once, then decoders use only the owned sn
   assert.equal(result.mimeType, "image/jpeg");
 });
 
-test("generic gallery MIME types are sniffed while supported mismatches remain rejected", async () => {
-  for (const type of ["", "application/octet-stream", "image/jpg"]) {
+test("actual supported bytes are sniffed independently of gallery MIME metadata", async () => {
+  for (const type of ["", "application/octet-stream", "image/jpg", "image/png", "image/heic", "application/pdf"]) {
     const result = await preprocessImageFile(new Blob([jpegFixtureBytes], { type }), { ...options,
       transformImage: async (snapshot) => { assert.equal(snapshot.type, "image/jpeg"); return { blob: jpeg, dataUrl: "unused" }; },
     });
@@ -144,11 +174,11 @@ test("1 MiB and 8 MiB JPEG originals and 14.9 MiB PNG reach the codec and produc
   }
 });
 
-test("oversized original and MIME mismatch are rejected before decoding", async () => {
+test("oversized originals and unsupported actual bytes are rejected before decoding", async () => {
   let calls = 0;
   const transformImage = async () => { calls++; return { blob: jpeg, dataUrl: "unused" }; };
   await assert.rejects(() => preprocessImageFile(new Blob([new Uint8Array(15 * 1024 * 1024 + 1)], { type: "image/jpeg" }), { ...options, transformImage }), { code: "ORIGINAL_IMAGE_TOO_LARGE" });
-  await assert.rejects(() => preprocessImageFile(new Blob([jpegFixtureBytes], { type: "image/png" }), { ...options, transformImage }), { code: "UNSUPPORTED_IMAGE_FORMAT" });
+  await assert.rejects(() => preprocessImageFile(new Blob([new Uint8Array([37,80,68,70])], { type: "image/jpeg" }), { ...options, transformImage }), { code: "UNSUPPORTED_IMAGE_FORMAT" });
   assert.equal(calls, 0);
 });
 

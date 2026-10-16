@@ -10,6 +10,7 @@ export const imageUploadConfig = {
   supportedInputMimeTypes: ["image/jpeg", "image/jpg", "image/png", "image/webp"],
   outputMimeType: "image/jpeg",
   maxDimension: 1600,
+  maxSoftwareDecodePixels: 16_777_216,
   initialQuality,
   minQuality,
   // Each attempt encodes the original decoded bitmap, never a prior JPEG.
