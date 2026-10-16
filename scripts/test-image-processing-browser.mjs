@@ -12,7 +12,7 @@ const candidates = process.env.PLANTIE_TEST_BROWSER ? [process.env.PLANTIE_TEST_
 let browser;
 for (const candidate of candidates) { try { await access(candidate); browser=candidate; break; } catch { /* Try the next installed browser. */ } }
 assert.ok(browser,"Set PLANTIE_TEST_BROWSER to an installed Chromium browser.");
-await build({entryPoints:["tests/fixtures/image-processing-browser.ts"],outfile:path.join(artifacts,"fixture.js"),bundle:true,platform:"browser",format:"iife",logLevel:"warning"});
+await build({entryPoints:["tests/fixtures/image-processing-browser.ts"],outfile:path.join(artifacts,"fixture.js"),bundle:true,platform:"browser",format:"iife",define:{"import.meta.env":JSON.stringify({VITE_BACKEND_PROVIDER:"netlify"})},logLevel:"warning"});
 const html = path.join(artifacts,"fixture.html");
 await writeFile(html,'<!doctype html><html><body><pre id="results">pending</pre><script src="fixture.js"></script></body></html>');
 const profile = await mkdtemp(path.join(artifacts,"isolated-profile-"));

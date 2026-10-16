@@ -68,12 +68,15 @@ const dataUrlToBlob = async (dataUrl: string) => {
 type ImageEncoder = { encode: (maxDimension: number, quality: number) => Promise<Blob>; dispose: () => void };
 
 const prepareImageEncoder = async (file: Blob): Promise<ImageEncoder> => {
-  let source: ImageBitmap | HTMLImageElement;
+  let source: ImageBitmap | HTMLImageElement | undefined;
   let sourceUrl: string | null = null;
   try {
     if (typeof createImageBitmap === "function") {
-      source = await createImageBitmap(file, { imageOrientation: "from-image" });
-    } else {
+      try {
+        source = await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch { /* Some mobile decoders reject images that HTMLImageElement supports. */ }
+    }
+    if (!source) {
       sourceUrl = URL.createObjectURL(file);
       const image = new Image();
       image.src = sourceUrl;
@@ -84,26 +87,27 @@ const prepareImageEncoder = async (file: Blob): Promise<ImageEncoder> => {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     throw new ImageUploadError("INVALID_IMAGE");
   }
+  const decodedSource = source;
   const dispose = () => {
-    if ("close" in source) source.close();
+    if ("close" in decodedSource) decodedSource.close();
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
   };
-  if (!source.width || !source.height) { dispose(); throw new ImageUploadError("INVALID_IMAGE"); }
+  if (!decodedSource.width || !decodedSource.height) { dispose(); throw new ImageUploadError("INVALID_IMAGE"); }
   return {
     dispose,
     encode: async (maxDimension, quality) => {
       // The decoded source is retained across bounded attempts. Only the final
       // encoded JPEG is read as base64; canvas.toDataURL would encode it twice.
-      const ratio = Math.min(1, maxDimension / Math.max(source.width, source.height));
+      const ratio = Math.min(1, maxDimension / Math.max(decodedSource.width, decodedSource.height));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(source.width * ratio));
-      canvas.height = Math.max(1, Math.round(source.height * ratio));
+      canvas.width = Math.max(1, Math.round(decodedSource.width * ratio));
+      canvas.height = Math.max(1, Math.round(decodedSource.height * ratio));
       try {
         const context = canvas.getContext("2d");
         if (!context) throw new ImageUploadError("IMAGE_COMPRESSION_FAILED");
         context.fillStyle = "#fff";
         context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        context.drawImage(decodedSource, 0, 0, canvas.width, canvas.height);
         return await new Promise<Blob>((resolve, reject) => canvas.toBlob(
           (blob) => blob ? resolve(blob) : reject(new ImageUploadError("IMAGE_COMPRESSION_FAILED")),
           imageUploadConfig.outputMimeType, quality,

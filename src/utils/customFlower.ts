@@ -1,4 +1,5 @@
 import { ImageUploadError, imageErrorFromResponse } from "../lib/imageUploadErrors.js";
+import { withRequestTimeout } from "../lib/requestTimeout.js";
 import { preprocessImageFile } from "../lib/imageCaptureService.js";
 import { imageUploadConfig } from "../lib/imageUploadConfig.js";
 import type { Flower } from "../data/flowers";
@@ -34,7 +35,7 @@ export const resizeImageFileToDataUrl = async (file: File, maxSize = imageUpload
 };
 
 export const imageSourceToDataUrl = async (imageSource: string): Promise<string> => {
-  const response = await fetch(imageSource, { signal: AbortSignal.timeout(30_000) }).catch(async (error: unknown) => {
+  const response = await withRequestTimeout((signal) => fetch(imageSource, { signal }), 30_000).catch(async (error: unknown) => {
     throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_NETWORK_FAILED", 502);
   });
   if (!response.ok) throw new Error("The plant image could not be loaded for AI generation.");

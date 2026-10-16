@@ -114,14 +114,14 @@ Deno.serve(async (request) => {
         instructions: buildAiLanguageInstruction(body.language),
         input: [{
           content: [
-            { text: "Diagnose the houseplant problem from the affected part shown in the photo. Return only JSON matching the schema. Be cautious: lower confidence and state uncertainty when the photo or symptoms are unclear. Do not state a definitive diagnosis without visual evidence.", type: "input_text" },
+            { text: "Diagnose the houseplant problem from the affected part shown in the photo. Return only JSON matching the schema. Keep the response concise: at most 5 short observed symptoms, 5 short recommended steps and 3 sentences of reasoning. Be cautious: lower confidence and state uncertainty when the photo or symptoms are unclear. Do not state a definitive diagnosis without visual evidence.", type: "input_text" },
             { text: `Plant: ${plantName}`, type: "input_text" },
             ...(symptomNotes ? [{ text: `User notes: ${symptomNotes}`, type: "input_text" }] : []),
             { detail: "high", image_url: imageDataUrl, type: "input_image" },
           ],
           role: "user",
         }],
-        max_output_tokens: 1200,
+        max_output_tokens: 2400,
         model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
         text: { format: { name: "plant_problem_diagnosis", schema: diagnosisSchema, strict: true, type: "json_schema" } },
       }),
@@ -152,7 +152,17 @@ Deno.serve(async (request) => {
   }
 
   try {
-    const diagnosis = parseDiagnosis(extractOutputText(await response.json()));
+    const payload = await response.json();
+    if (payload.status === "incomplete" || payload.status === "failed") {
+      console.error("Diagnosis provider returned no complete result", { status: payload.status });
+      if (reservationId) {
+        await serviceClient.rpc("release_ai_analyze_reservation", {
+          analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
+        }).catch(() => undefined);
+      }
+      return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503), body.language);
+    }
+    const diagnosis = parseDiagnosis(extractOutputText(payload));
     if (!diagnosis) {
       if (reservationId) {
         await serviceClient.rpc("release_ai_analyze_reservation", {

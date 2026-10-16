@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js";
+import { withRequestTimeout } from "./requestTimeout.js";
 import type { DiagnosisConfirmation, DiagnosisRiskLevel, PlantDiagnosisDraft } from "../utils/diagnostics.js";
 import {
   createDiagnosticImagePath,
@@ -401,16 +402,17 @@ const uploadValidatedImage = async ({
   kind: "diagnostic" | "plant";
 }) => {
   const normalizedBlob = await prepareImageBlobForUpload(imageBlob);
-  const { data, error } = await getClient().functions.invoke("upload-validated-image", {
+  const imageDataUrl = await blobToDataUrl(normalizedBlob);
+  const { data, error } = await withRequestTimeout((signal) => getClient().functions.invoke("upload-validated-image", {
     body: {
       householdId,
-      imageDataUrl: await blobToDataUrl(normalizedBlob),
+      imageDataUrl,
       imageId,
       language: typeof globalThis.localStorage === "undefined" ? null : readStoredLanguage(globalThis.localStorage),
       kind,
     },
-    signal: AbortSignal.timeout(60_000),
-  }).catch(async (error: unknown) => {
+    signal,
+  }), 60_000).catch(async (error: unknown) => {
     throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_NETWORK_FAILED", 502);
   });
 

@@ -159,6 +159,15 @@ test("validation, care and diagnosis all accept the normalized 2 MiB transport c
 });
 
 const diagnosisBody = { householdId, plantName: "Fixture plant", imageDataUrl, language: "en" };
+test("incomplete provider diagnoses release quota and return a safe service error", async () => {
+  const { invoke, calls } = await loadHandler("plant-diagnosis-ai", { fetch: async () => Response.json({
+    status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output_text: '{"diagnosis_title":',
+  }) });
+  const response = await invoke(diagnosisBody);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "IMAGE_SERVICE_UNAVAILABLE");
+  assert.deepEqual(calls, ["user:reserve_ai_analyze_usage", "service:release_ai_analyze_reservation"]);
+});
 test("diagnosis network rejection releases quota through the trusted service", async () => {
   const { invoke, calls } = await loadHandler("plant-diagnosis-ai", { fetch: async () => { throw new Error("Network unavailable"); } });
   assert.equal((await invoke(diagnosisBody)).status, 502);

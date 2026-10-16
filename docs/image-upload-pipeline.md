@@ -121,7 +121,7 @@ Not executed: real phone camera/gallery/HEIC imports, actual affected-user sessi
 
 ## Deployment
 
-These changes are implemented locally and have **not** been deployed.
+The three pending migrations and four image Edge Functions were deployed to the linked production project on 2026-10-16 during the follow-up investigation below. The following commands describe the required rollout order for future releases.
 
 1. Deploy the four image Edge Functions with the shared helper and source configuration included:
    ```powershell
@@ -136,3 +136,20 @@ These changes are implemented locally and have **not** been deployed.
 4. Existing larger stored images remain readable; the bucket limit affects new writes. Older clients that bypass normalization must be updated. Verify the final flow with isolated test plants and photos on a real Android device and desktop/mobile browsers.
 
 No new runtime configuration values are required. Limits are controlled by the shared contract and the new bucket migration. Native HEIC/device-specific conversion depends on the platform Camera implementation; unsupported/unconvertible formats fail clearly rather than being renamed into JPEG. Native original-size validation applies to the imported JPEG returned by Capacitor, which does not expose the original unconverted asset's byte count through this API.
+
+## Follow-up: mobile web photo failures, 2026-10-16
+
+The affected user's screenshots show no preview after photo selection. She reports that every photo fails. A read-only production check confirmed active household membership and Premium; account permissions were not changed. The web release contained the new image limit while production still had the older image functions and none of the three matching database migrations.
+
+Two browser regressions were reproduced before fixing them:
+
+- With `AbortSignal.timeout` unavailable, the actual image-validation request path threw `TypeError` before reaching the mocked HTTP boundary. Image validation, upload and care-photo retrieval now use an `AbortController` timer with cleanup, preserving cancellation on older mobile browsers.
+- With `createImageBitmap` present but rejecting a valid image, processing returned `INVALID_IMAGE` without trying the HTML decoder. Processing now attempts the existing HTML decoder after a bitmap failure, retaining metadata stripping and JPEG normalization.
+
+These are confirmed compatibility defects; the screenshots alone do not prove which one occurred on her device. No original failing photo, device browser version or affected-user session was available.
+
+Production validation used disposable Auth accounts without sending emails and an isolated Premium household with a non-owner active member. Real AI safety validation, a full 2 MiB plant upload, a diagnosis-photo upload, authorized private Storage downloads and care generation succeeded. All temporary objects, households and accounts were removed through supported APIs. No existing user content or permissions were modified.
+
+The first live diagnosis request returned invalid JSON. The diagnosis prompt now requests bounded concise output and allows 2400 output tokens rather than 1200. Explicitly incomplete/failed provider responses return a safe service error and release reservations. Output truncation was a suspected cause, not confirmed from provider diagnostics. After deploying this adjustment, the complete live smoke test passed again: validation, both uploads and private reads, care generation and diagnosis all returned HTTP 200. Cleanup of all synthetic objects and records succeeded.
+
+Verification: `npm run check` passed after the browser fixes (547 automated test executions, typecheck and build); the additional diagnosis regression brings the targeted Edge suite to 15 passing tests. All 26 Chromium image checks and both rollback-only database suites passed. New timer tests verify cancellation and cleanup after success/failure. Real Android browser verification by the affected user remains necessary.

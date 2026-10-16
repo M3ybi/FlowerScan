@@ -2,6 +2,29 @@ import { imageUploadConfig } from "../src/lib/imageUploadConfig.js";
 import { jpegFixtureBytes, jpegFixtureAtSize, fixtureDataUrl } from "./fixtures/imagePayload.js";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withRequestTimeout } from "../src/lib/requestTimeout.js";
+
+test("request timeout aborts stalled work and releases its timer", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  let signal: AbortSignal | undefined;
+  const request = withRequestTimeout((value) => {
+    signal = value;
+    return new Promise((_, reject) => value.addEventListener("abort", () => reject(value.reason), { once: true }));
+  }, 60_000);
+  assert.equal(signal?.aborted, false);
+  context.mock.timers.tick(60_000);
+  await assert.rejects(request, { name: "TimeoutError" });
+  assert.equal(signal?.aborted, true);
+});
+
+test("request timeout never aborts completed work, including rejected operations", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const signals: AbortSignal[] = [];
+  assert.equal(await withRequestTimeout(async (signal) => { signals.push(signal); return "complete"; }, 60_000), "complete");
+  await assert.rejects(withRequestTimeout(async (signal) => { signals.push(signal); throw new Error("fixture rejection"); }, 60_000), /fixture rejection/);
+  context.mock.timers.tick(60_000);
+  assert.ok(signals.every((signal) => !signal.aborted));
+});
 import {
   createPrivateImageSignedUrl,
   detectImageRuntime,

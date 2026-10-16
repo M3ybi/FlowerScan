@@ -1,5 +1,6 @@
 import { preprocessImageFile, prepareImageBlobForUpload, captureImage } from "../../src/lib/imageCaptureService";
 import { Capacitor } from "@capacitor/core";
+import { callBackendFunction } from "../../src/lib/backendConfig";
 import { imageUploadConfig, jpegDimensions } from "../../src/lib/imageUploadConfig";
 
 const checks: string[] = [];
@@ -16,6 +17,20 @@ const canvas = (width: number, height: number) => {
 const inspect = async (blob: Blob) => jpegDimensions(new Uint8Array(await blob.arrayBuffer()))!;
 
 const run = async () => {
+  const timeout = AbortSignal.timeout;
+  const originalFetch = globalThis.fetch;
+  try {
+    Object.defineProperty(AbortSignal,"timeout",{value:undefined,configurable:true,writable:true});
+    globalThis.fetch = async (_input, init) => {
+      assert(init?.signal instanceof AbortSignal, "image validation retains request cancellation on older browsers");
+      return Response.json({ reachedServer: true });
+    };
+    const result = await callBackendFunction<{reachedServer:boolean}>({ functionName:"validate-plant-image", netlifyPath:"/fixture-image-validation", body:{} });
+    assert(result.reachedServer, "image validation reaches the server without AbortSignal.timeout");
+  } finally {
+    Object.defineProperty(AbortSignal,"timeout",{value:timeout,configurable:true,writable:true});
+    globalThis.fetch = originalFetch;
+  }
   const small = canvas(40,20);
   const getPlatform = Capacitor.getPlatform;
   try {
@@ -83,6 +98,12 @@ const run = async () => {
     Object.defineProperty(globalThis,"createImageBitmap",{value:undefined,configurable:true,writable:true});
     const fallback = await preprocessImageFile(portrait);
     assert((await inspect(fallback.blob)).height === 40, "HTML image fallback preserves portrait orientation");
+    URL.revokeObjectURL(fallback.previewUrl);
+  } finally { Object.defineProperty(globalThis,"createImageBitmap",{value:createBitmap,configurable:true,writable:true}); }
+  try {
+    Object.defineProperty(globalThis,"createImageBitmap",{value:async () => { throw new DOMException("Decoder unavailable", "NotSupportedError"); },configurable:true,writable:true});
+    const fallback = await preprocessImageFile(portrait);
+    assert((await inspect(fallback.blob)).height === 40, "HTML decoder recovers when ImageBitmap exists but rejects the photo");
     URL.revokeObjectURL(fallback.previewUrl);
   } finally { Object.defineProperty(globalThis,"createImageBitmap",{value:createBitmap,configurable:true,writable:true}); }
 };
