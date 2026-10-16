@@ -1,5 +1,7 @@
 # Consecutive image selection and shared picker
 
+This records the earlier `c9718e3` implementation. The inline Camera/Gallery menu and FileReader-first provider handling were subsequently replaced; see [the current modal and provider-read report](plant-action-modals-2026-10-16.md).
+
 ## Findings and evidence
 
 The reported sequence is one successful plant creation followed by a generic photo-processing failure on the next gallery selection. The original failing photo and affected Android browser session were unavailable, so the exact device/provider exception cannot be asserted as fact.

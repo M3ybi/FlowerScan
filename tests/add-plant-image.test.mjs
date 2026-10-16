@@ -18,9 +18,16 @@ test("Add Plant and Diagnosis both mount the shared picker and selection hook", 
   assert.equal(pickers.length, 2);
   assert.ok(pickers.some(picker => picker.includes("onSelect={newImageSelection.select}")));
   assert.ok(pickers.some(picker => picker.includes("onSelect={handleDiagnosisImageChange}")));
-  assert.match(text, /await diagnosisImageSelection\.select\(source, file\)/);
+  assert.match(text, /await diagnosisImageSelection\.select\(source, file, pickerLabels\)/);
   assert.equal((text.match(/= useImageSelection\(/g) ?? []).length, 2);
   assert.doesNotMatch(text, /captureImage\(|newImageCaptureRef|diagnosisCaptureRef/);
+});
+
+test("both plant workflows use the same modal, preview and status components", () => {
+  assert.equal((text.match(/<PlantActionModal /g) ?? []).length, 2);
+  assert.equal((text.match(/<PlantImagePreview /g) ?? []).length, 2);
+  assert.equal((text.match(/<PlantFormStatus>/g) ?? []).length, 2);
+  assert.doesNotMatch(text, /Premium: unlimited plants/);
 });
 
 test("plant submission refuses an in-flight selection and resets the form only after saving", () => {

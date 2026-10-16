@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { captureImage, detectImageRuntime } from "../lib/imageCaptureService.js";
-import type { ImageCaptureSource, NormalizedImage } from "../lib/imageCaptureService.js";
+import type { ImageCaptureSource, ImagePickerLabels, NormalizedImage } from "../lib/imageCaptureService.js";
 import { ImageUploadError, imageErrorMessage, isImageSelectionCancelled, logImageProcessingFailure } from "../lib/imageUploadErrors.js";
 import { validatePlantImageForUpload } from "../utils/imageUploadValidation.js";
 import type { PlantieLanguage } from "../lib/onboarding.js";
@@ -50,7 +50,7 @@ export const useImageSelection = (options: Options) => {
   useEffect(() => { clear(); }, [options.scopeKey, clear]);
   useEffect(() => { if (!options.enabled) cancel(); }, [options.enabled, cancel]);
 
-  const select = useCallback(async (source: ImageCaptureSource, file?: File) => {
+  const select = useCallback(async (source: ImageCaptureSource, file?: File, pickerLabels?: ImagePickerLabels) => {
     const started = latest.current;
     if (!mounted.current || !started.enabled || operation.current || (!file && detectImageRuntime() === "web")) return;
     const controller = new AbortController();
@@ -58,13 +58,15 @@ export const useImageSelection = (options: Options) => {
     const current = () => mounted.current && operation.current === controller && !controller.signal.aborted
       && latest.current.enabled && latest.current.scopeKey === started.scopeKey;
     let candidate: NormalizedImage | null = null;
+    let stage = "processing";
     const previousStatus = status.current;
     const reportStatus = (message: string) => { status.current = message; latest.current.onStatus(message); };
     setIsProcessing(true);
     reportStatus(started.copy.processing);
     try {
-      candidate = await captureImage({ source, file, signal: controller.signal });
+      candidate = await captureImage({ source, file, signal: controller.signal, pickerLabels });
       if (!current()) return;
+      stage = "safety-validation";
       reportStatus(latest.current.copy.validating);
       await validatePlantImageForUpload(candidate.dataUrl, latest.current.language, controller.signal);
       if (!current()) return;
@@ -77,8 +79,10 @@ export const useImageSelection = (options: Options) => {
     } catch (error) {
       if (!current()) return;
       if (isImageSelectionCancelled(error)) { reportStatus(previousStatus); return; }
-      logImageProcessingFailure("selection", error);
-      reportStatus(imageErrorMessage(error instanceof ImageUploadError ? error : new ImageUploadError("IMAGE_READ_FAILED"), latest.current.language)!);
+      logImageProcessingFailure(error instanceof ImageUploadError ? error.stage ?? stage : stage, error,
+        { runtime: detectImageRuntime(), inputMime: file?.type, originalBytes: file?.size });
+      reportStatus(imageErrorMessage(error instanceof ImageUploadError ? error
+        : new ImageUploadError(stage === "safety-validation" ? "IMAGE_SERVICE_UNAVAILABLE" : "IMAGE_COMPRESSION_FAILED"), latest.current.language)!);
     } finally {
       if (candidate) URL.revokeObjectURL(candidate.previewUrl);
       // An older result must never clear the spinner or lock of a newer operation.

@@ -44,7 +44,7 @@ test("validated storage parser rejects malformed, oversized and mislabeled bytes
 });
 
 test("selection read/decode/permission errors localize in all supported app languages", () => {
-  for (const code of ["IMAGE_READ_FAILED", "IMAGE_DECODE_FAILED", "CAMERA_PERMISSION_DENIED"] as const) {
+  for (const code of ["IMAGE_SELECTION_FAILED", "IMAGE_READ_FAILED", "IMAGE_DECODE_FAILED", "CAMERA_PERMISSION_DENIED"] as const) {
     const messages = ["en", "sk", "de", "fr", "es"].map(language=>imageErrorMessage(new ImageUploadError(code),language));
     assert.equal(new Set(messages).size, 5);
     assert.ok(messages.every(message=>message && !message.includes(code)));

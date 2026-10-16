@@ -3,6 +3,7 @@ import { jpegFixtureBytes, jpegFixtureAtSize, fixtureDataUrl } from "./fixtures/
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withRequestTimeout } from "../src/lib/requestTimeout.js";
+import { ImageUploadError } from "../src/lib/imageUploadErrors.js";
 
 test("request timeout aborts stalled work and releases its timer", async (context) => {
   context.mock.timers.enable({ apis: ["setTimeout"] });
@@ -94,6 +95,26 @@ test("generic gallery MIME types are sniffed while supported mismatches remain r
 test("an aborted selection stops before reading or decoding another file", async () => {
   const controller = new AbortController(); controller.abort();
   await assert.rejects(() => preprocessImageFile(jpeg, { signal: controller.signal }), { name: "AbortError" });
+});
+
+test("a stalled provider stream times out, cancels and releases the reader", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } }, { highWaterMark: 0 });
+  const file = new File([], "provider.jpg", { type: "image/jpeg" });
+  Object.defineProperty(file, "stream", { value: () => stream });
+  const pending = preprocessImageFile(file, options);
+  context.mock.timers.tick(30_000);
+  await assert.rejects(pending, (error: unknown) => {
+    assert.ok(error instanceof ImageUploadError);
+    assert.equal(error.code, "IMAGE_READ_FAILED");
+    assert.equal(error.stage, "file-read");
+    assert.ok(error.cause instanceof DOMException);
+    assert.equal(error.cause.name, "TimeoutError");
+    return true;
+  });
+  assert.equal(cancelled, true);
+  assert.equal(stream.locked, false);
 });
 
 test("original type and 15 MiB boundaries are enforced", () => {

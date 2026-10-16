@@ -3192,6 +3192,32 @@ textarea:focus-visible {
   margin-top: 18px;
 }
 
+.plant-action-backdrop {
+  bottom: auto;
+  padding: max(14px, var(--safe-area-top)) max(14px, var(--safe-area-right)) max(14px, var(--safe-area-bottom)) max(14px, var(--safe-area-left));
+}
+
+.plant-action-backdrop > .plant-action-modal {
+  max-height: 100%;
+  min-width: 0;
+  overscroll-behavior: contain;
+  scroll-padding: 16px;
+}
+
+.plant-action-modal > .section-title {
+  min-height: 44px;
+  padding-right: 42px;
+}
+
+.plant-action-modal .modal-close { width: 44px; height: 44px; }
+.plant-action-modal .plant-action-description { margin: 8px 0 16px; color: var(--muted); line-height: 1.5; }
+.plant-action-modal .field { min-width: 0; }
+.plant-action-modal :is(input, textarea, button) { scroll-margin: 16px; }
+.plant-action-modal :is(button, input, textarea):focus-visible { outline: 3px solid rgba(47, 123, 91, 0.55); outline-offset: 3px; }
+.plant-action-modal > .primary-action, .plant-action-modal form > .primary-action { width: 100%; min-height: 48px; }
+.plant-action-modal .plant-form-status { margin: 16px 0 0; overflow-wrap: anywhere; }
+.plant-action-modal .plant-image-preview { width: min(100%, 426px); aspect-ratio: 4 / 3; max-height: none; margin-inline: auto; object-fit: contain; background: rgba(18, 34, 27, 0.05); }
+
 .image-source-picker {
   min-width: 0;
 }
@@ -3224,18 +3250,6 @@ textarea:focus-visible {
     border-color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
-}
-
-.image-capture-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.image-capture-actions .ghost-action {
-  min-height: 42px;
-  border-radius: 12px;
 }
 
 .image-source-picker + .diagnosis-preview,
@@ -3481,6 +3495,8 @@ textarea:focus-visible {
   box-shadow: 0 12px 26px rgba(121, 77, 32, 0.12);
 }
 
+.image-upload:disabled { opacity: 0.62; cursor: not-allowed; }
+
 .image-upload-icon {
   display: inline-flex;
   width: 34px;
@@ -3649,10 +3665,10 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
-.add-plant-form {
+.add-plant-form.modal-form {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
   align-items: end;
 }
 
@@ -3660,39 +3676,8 @@ textarea:focus-visible {
   margin-top: 0;
 }
 
-.add-plant-form button {
-  display: inline-flex;
-  min-height: 54px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 16px;
-  padding: 0 16px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent),
-    linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
-  cursor: pointer;
-  font-weight: 900;
-  box-shadow: 0 12px 24px rgba(121, 77, 32, 0.16);
-  transition:
-    transform 140ms ease,
-    box-shadow 140ms ease,
-    opacity 140ms ease;
-}
-
 .modal-form .field input[type="text"] {
   min-height: 54px;
-}
-
-.add-plant-form button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(121, 77, 32, 0.2);
-}
-
-.add-plant-form button:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
 }
 
 .report-panel-header,

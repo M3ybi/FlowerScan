@@ -62,13 +62,57 @@ const run = async () => {
     assert(image.sizeBytes < imageUploadConfig.preferredProcessedBytes, "ordinary photo reaches preferred size under 1 MiB");
   } finally { URL.revokeObjectURL(image.previewUrl); }
   const png = await encode(small,"image/png");
+  const providerFile=new File([png],"provider.png",{type:"image/png"});
+  const readAsArrayBuffer=FileReader.prototype.readAsArrayBuffer;
+  let metadataReads=0;
+  Object.defineProperty(providerFile,"size",{get(){metadataReads++;return png.size;}});
+  Object.defineProperty(providerFile,"stream",{value(){
+    if(metadataReads)throw new DOMException("Provider snapshot changed after metadata access","NotReadableError");
+    return Blob.prototype.stream.call(providerFile);
+  }});
+  try {
+    FileReader.prototype.readAsArrayBuffer=function(blob){
+      if(blob===providerFile&&metadataReads)throw new DOMException("Provider snapshot changed after metadata access","NotReadableError");
+      return readAsArrayBuffer.call(this,blob);
+    };
+    const fromProvider=await preprocessImageFile(providerFile);
+    assert(metadataReads===0&&fromProvider.mimeType==="image/jpeg","provider-backed File is read without touching snapshot size metadata first");
+    URL.revokeObjectURL(fromProvider.previewUrl);
+  } finally {FileReader.prototype.readAsArrayBuffer=readAsArrayBuffer;}
+  let pulled=0, cancelled=0;
+  const tooLargeProvider=new File([],"large-provider.jpg",{type:"image/jpeg"});
+  Object.defineProperty(tooLargeProvider,"stream",{value:()=>new ReadableStream<Uint8Array>({
+    pull(controller){pulled++;controller.enqueue(new Uint8Array(8*1024*1024));},
+    cancel(){cancelled++;},
+  },{highWaterMark:0})});
+  let oversizedStream=false;
+  try {await preprocessImageFile(tooLargeProvider);}catch(error){oversizedStream=(error as {code?:string}).code==="ORIGINAL_IMAGE_TOO_LARGE";}
+  assert(oversizedStream&&pulled===2&&cancelled===1,"provider stream stops and cancels at the actual 15 MiB boundary without buffering the rest");
+  const pendingProvider=new File([],"pending-provider.jpg",{type:"image/jpeg"});
+  let streamStarted=false,streamCancelled=false;
+  Object.defineProperty(pendingProvider,"stream",{value:()=>{
+    streamStarted=true;
+    return new ReadableStream<Uint8Array>({cancel(){streamCancelled=true;}},{highWaterMark:0});
+  }});
+  const controller=new AbortController();
+  const pendingRead=preprocessImageFile(pendingProvider,{signal:controller.signal}).catch(error=>error);
+  assert(streamStarted,"provider streaming begins synchronously during the selection operation");
+  controller.abort();
+  assert((await pendingRead).name==="AbortError"&&streamCancelled,"closing cancels an in-flight provider stream and releases its reader");
+  const fileStream=File.prototype.stream;
+  try {
+    Object.defineProperty(File.prototype,"stream",{configurable:true,writable:true,value:undefined});
+    const oldBrowser=await preprocessImageFile(new File([png],"legacy-provider.png",{type:"image/png"}));
+    assert(oldBrowser.mimeType==="image/jpeg","browsers without Blob.stream retain the bounded FileReader compatibility path");
+    URL.revokeObjectURL(oldBrowser.previewUrl);
+  } finally {Object.defineProperty(File.prototype,"stream",{configurable:true,writable:true,value:fileStream});}
   const phoneCanvas=canvas(6000,4000);
   const phonePhoto=await encode(phoneCanvas,"image/jpeg");phoneCanvas.width=phoneCanvas.height=0;
   const phoneImage=await preprocessImageFile(phonePhoto);
   const phoneDimensions=await inspect(phoneImage.blob);
   assert(phoneDimensions.width===1600&&phoneDimensions.height===1067,"24 megapixel phone image decodes to bounded dimensions and preserves aspect ratio");
   URL.revokeObjectURL(phoneImage.previewUrl);
-  const paddedPng = new Blob([png,new Uint8Array(15 * 1024 * 1024 - png.size)], { type: "image/png" });
+  const paddedPng = new File([png,new Uint8Array(15 * 1024 * 1024 - png.size)], "boundary.png", { type: "image/png" });
   const converted = await preprocessImageFile(paddedPng);
   assert((await inspect(converted.blob)).width === 40, "15 MiB PNG decodes and converts at the original-size boundary");
   URL.revokeObjectURL(converted.previewUrl);

@@ -11,10 +11,10 @@ const candidates = process.env.PLANTIE_TEST_BROWSER ? [process.env.PLANTIE_TEST_
 let browser;
 for (const candidate of candidates) { try { await access(candidate); browser=candidate; break; } catch { /* Try the next installed browser. */ } }
 assert.ok(browser,"Set PLANTIE_TEST_BROWSER to an installed Chromium browser.");
-await build({entryPoints:["tests/fixtures/image-processing-browser.ts"],outfile:path.join(artifacts,"fixture.js"),bundle:true,platform:"browser",format:"iife",jsx:"automatic",define:{"import.meta.env":JSON.stringify({VITE_BACKEND_PROVIDER:"netlify"})},plugins:[{
+await build({entryPoints:["tests/fixtures/image-processing-browser.ts"],outfile:path.join(artifacts,"fixture.js"),bundle:true,platform:"browser",format:"iife",jsx:"automatic",define:{"import.meta.env":JSON.stringify({DEV:true,VITE_BACKEND_PROVIDER:"netlify"})},plugins:[{
   name:"native-camera-test-boundary", setup(builder) {
     builder.onResolve({filter:/^@capacitor\/camera$/},()=>({path:"native-camera",namespace:"fixture"}));
-    builder.onLoad({filter:/.*/,namespace:"fixture"},()=>({contents:`export const CameraResultType={Uri:"uri"}; export const CameraSource={Camera:"CAMERA",Photos:"PHOTOS"}; export const Camera={getPhoto:options=>globalThis.__imageNativeBoundary(options)};`}));
+    builder.onLoad({filter:/.*/,namespace:"fixture"},()=>({contents:`export const CameraResultType={Uri:"uri"}; export const CameraSource={Camera:"CAMERA",Photos:"PHOTOS",Prompt:"PROMPT"}; export const Camera={getPhoto:options=>globalThis.__imageNativeBoundary(options)};`}));
   },
 }],logLevel:"warning"});
 const html = path.join(artifacts,"fixture.html");

@@ -5,6 +5,10 @@ import { Capacitor } from "@capacitor/core";
 import { ImageSourcePicker } from "../../src/components/ImageSourcePicker";
 import { useImageSelection } from "../../src/hooks/useImageSelection";
 import { captureImage } from "../../src/lib/imageCaptureService";
+import { PlantActionModal, PlantFormStatus, PlantImagePreview } from "../../src/components/PlantActionModal";
+import { LoadingButton } from "../../src/components/LoadingButton";
+import { createTranslator } from "../../src/lib/i18n";
+import { ImageUploadError, logImageProcessingFailure } from "../../src/lib/imageUploadErrors";
 
 export const runImageSelectionChecks = async (assert: (value: unknown, message: string) => void, jpeg: Blob) => {
   const host = document.createElement("div"); document.body.appendChild(host);
@@ -43,7 +47,7 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
       copy:{processing:"processing",validating:"validating",ready:"ready"}});
     return <><input aria-label="plant name" value={name} onChange={event=>setName(event.currentTarget.value)} />
       {enabled ? <ImageSourcePicker title="Add photo" help="JPEG, PNG, WebP / 15 MB" cameraLabel="Take photo" galleryLabel="Gallery"
-        busy={state.isProcessing} onSelect={state.select} onCancel={state.cancel} /> : null}
+        cancelLabel="Cancel" busy={state.isProcessing} onSelect={state.select} onCancel={state.cancel} /> : null}
       <p data-status>{status}</p>{state.image ? <img src={state.image.previewUrl} alt="preview"/> : null}</>;
   };
   const render = (enabled=true,scope="home-a") => flushSync(()=>root.render(<Harness enabled={enabled} scope={scope}/>));
@@ -51,18 +55,18 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
     for(let attempt=0;attempt<400;attempt++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,5));}
     throw new Error("Image selection did not settle");
   };
-  const choose = (source:"camera"|"gallery") => {
+  const choose = (_source:"camera"|"gallery") => {
     flushSync(()=>host.querySelector<HTMLButtonElement>(".image-upload")!.click());
-    const buttons=host.querySelectorAll<HTMLButtonElement>(".image-capture-actions button");
-    assert(buttons.length===2,"shared picker offers camera and gallery");
-    flushSync(()=>buttons[source==="camera"?0:1].click());
+    assert(host.querySelectorAll("input[type=file]").length===1&&host.querySelectorAll(".image-capture-actions").length===0,
+      "shared picker opens one platform chooser without custom source buttons");
   };
   const webFile = (source:"camera"|"gallery",file:File) => {
-    const input=host.querySelector<HTMLInputElement>(`input[type=file]${source==="camera"?"[capture]":":not([capture])"}`)!;
+    const input=host.querySelector<HTMLInputElement>('input[type=file]')!;
     input.addEventListener("click",event=>event.preventDefault(),{once:true});
     choose(source);
     const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;
     flushSync(()=>input.dispatchEvent(new Event("change",{bubbles:true})));
+    assert(!input.disabled,"provider input stays enabled while the photo is read");
     return input;
   };
   try {
@@ -89,6 +93,34 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
     webFile("gallery",new File([jpeg],"retry.jpg",{type:"image/jpeg"}));
     await wait(()=>!state!.isProcessing&&state!.image!==previous);
     assert(state!.image?.name==="retry.jpg","selection retries after a failure without a stale lock");
+    const originalStream=File.prototype.stream, debug=console.debug;
+    const logs: unknown[][]=[];
+    const beforeReadFailure=state!.image;
+    try {
+      console.debug=(...args)=>{logs.push(args);};
+      File.prototype.stream=function(){throw new DOMException("private-provider-url-and-token", "NotReadableError");};
+      webFile("gallery",new File([jpeg],"private-photo-name.jpg",{type:"image/jpeg"}));
+      await wait(()=>!state!.isProcessing);
+      assert(state!.image===beforeReadFailure&&statuses.at(-1)!.includes("Stiahni"),"provider read failure preserves the prior photo and shows the localized read error");
+      assert(logs.some(entry=>{
+        const details=entry[1] as Record<string,unknown>;
+        return details.stage==="file-read"&&details.name==="NotReadableError"&&details.runtime==="web"&&details.inputMime==="image/jpeg"&&details.originalBytes===jpeg.size;
+      }),"development diagnostic identifies the actual read stage, runtime, MIME, size and safe browser error name");
+      logImageProcessingFailure("input-check",new ImageUploadError("INVALID_IMAGE"),{runtime:"web",inputMime:"private-mime-value",originalBytes:NaN});
+      assert(!JSON.stringify(logs).includes("private-")&&!JSON.stringify(logs).includes("data:image"),"image diagnostics exclude provider messages, filenames, unexpected MIME strings and image contents");
+    } finally {File.prototype.stream=originalStream;console.debug=debug;}
+    webFile("gallery",new File([jpeg],"after-read-failure.jpg",{type:"image/jpeg"}));
+    await wait(()=>!state!.isProcessing&&state!.image!==beforeReadFailure);
+    assert(state!.image?.name==="after-read-failure.jpg","the next photo succeeds immediately after a provider read failure");
+    const originalBlob=globalThis.Blob;
+    const beforeAllocationFailure=state!.image;
+    try {
+      globalThis.Blob=new Proxy(originalBlob,{construct(){throw new RangeError("Allocation failed");}});
+      webFile("gallery",new File([jpeg],"allocation.jpg",{type:"image/jpeg"}));
+      await wait(()=>!state!.isProcessing);
+      assert(state!.image===beforeAllocationFailure&&statuses.at(-1)!.includes("spracovať")&&!statuses.at(-1)!.includes("Stiahni"),
+        "an unexpected snapshot allocation failure is a processing error rather than a misleading gallery-read error");
+    } finally {globalThis.Blob=originalBlob;}
     flushSync(()=>state!.clear());
     render(false);await wait(()=>!state!.isProcessing);render(true);
     webFile("gallery",new File([jpeg],"second-plant.jpg",{type:"image/jpeg"}));
@@ -128,7 +160,7 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
     for(const source of ["gallery","gallery","camera","camera","gallery"] as const){
       const before=state!.image;
       choose(source);await wait(()=>!state!.isProcessing&&state!.image!==before);
-      assert(nativeSources.at(-1)===(source==="camera"?"CAMERA":"PHOTOS"),`Android ${source} uses the Capacitor camera boundary`);
+      assert(nativeSources.at(-1)==="PROMPT",`Android ${source} choice uses Capacitor's native camera/gallery prompt`);
     }
     cancelNative=true;const beforeCancel=state!.image;choose("gallery");await wait(()=>!state!.isProcessing);
     assert(state!.image===beforeCancel,"native cancellation preserves the selected image");
@@ -186,16 +218,85 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
 export const renderImagePickerPreview = (assert: (value: unknown, message: string) => void) => {
   const host=document.createElement("div");document.body.appendChild(host);
   const root=createRoot(host);
-  flushSync(()=>root.render(<div className="modal-backdrop"><section className="plant-modal">
-    <div className="section-title"><h2>Pridať novú rastlinu</h2></div>
-    <div className="field"><span>Názov rastliny</span><input value="Monstera" readOnly/></div>
-    <div className="field"><span>Obrázok rastliny</span>
-      <ImageSourcePicker title="Vybrať fotku" help="JPG, PNG, WEBP max 15 MB" cameraLabel="Odfotiť" galleryLabel="Galéria"
-        onSelect={async()=>{}} onCancel={()=>{}}/>
-    </div>
-  </section></div>));
-  flushSync(()=>host.querySelector<HTMLButtonElement>(".image-upload")!.click());
-  const modal=host.querySelector<HTMLElement>(".plant-modal")!;
-  assert(modal.scrollWidth<=modal.clientWidth,"shared picker fits the mobile modal without horizontal overflow");
-  assert(host.querySelectorAll(".image-capture-actions button").length===2,"mobile picker presents both localized source choices");
+  const opener=document.createElement("button");opener.textContent="Open";document.body.appendChild(opener);opener.focus();
+  const previousOverflow=document.body.style.overflow;
+  let closes=0;
+  const preview=document.createElement("canvas");preview.width=40;preview.height=20;
+  preview.getContext("2d")!.fillRect(0,0,40,20);
+  const previewUrl=preview.toDataURL("image/jpeg");
+  const render=(workflow:"add"|"diagnosis",language:"en"|"sk",busy=false,withPreview=false)=>{
+    const t=createTranslator(language);
+    const picker=<ImageSourcePicker title={t(workflow==="add"?"plantForm.choosePhoto":"diagnosis.photoPrompt")}
+      help={t("plantForm.photoHelp")} cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")} cancelLabel={t("action.cancel")}
+      onSelect={async()=>{}} onCancel={()=>{}}/>;
+    flushSync(()=>root.render(<PlantActionModal id="fixture" title={t(workflow==="add"?"plantForm.title":"detail.diagnosisAction")}
+      description={t(workflow==="add"?"plantForm.body":"diagnosis.modalBody")} icon={null} closeLabel={t("action.close")}
+      busy={busy} onClose={()=>{closes++;}}>
+      {workflow==="add"?<form className="add-plant-form modal-form" onSubmit={event=>event.preventDefault()}>
+        <label className="field"><span>{t("plantForm.name")}</span><input value="Monstera" readOnly/></label>
+        <div className="field"><span>{t("plantForm.image")}</span>{picker}
+          {withPreview?<PlantImagePreview src={previewUrl} alt={t("plantForm.previewAlt")}/>:null}</div>
+        <LoadingButton className="primary-action" type="submit">{t("dashboard.addPlant")}</LoadingButton>
+      </form>:<><label className="field"><span>{t("diagnosis.symptoms")}</span><textarea rows={3}/></label>{picker}
+        {withPreview?<PlantImagePreview src={previewUrl} alt={t("diagnosis.previewAlt")}/>:null}
+        <LoadingButton className="primary-action diagnosis-run-button">{t("diagnosis.analyzing")}</LoadingButton></>}
+      <PlantFormStatus>{withPreview?t("plantForm.photoReady"):""}</PlantFormStatus>
+    </PlantActionModal>));
+  };
+  let pickerStyle="";
+  for(const workflow of ["add","diagnosis"] as const)for(const language of ["en","sk"] as const){
+    render(workflow,language,false,true);
+    const modal=host.querySelector<HTMLElement>(".plant-action-modal")!;
+    const photo=host.querySelector<HTMLButtonElement>(".image-upload")!;
+    const primary=host.querySelector<HTMLButtonElement>(".primary-action")!;
+    const style=getComputedStyle(photo);
+    assert(style.display==="grid"&&style.borderStyle==="dashed"&&style.backgroundImage!==getComputedStyle(primary).backgroundImage,
+      `${workflow}/${language} photo control keeps the diagnosis picker styling inside its real workflow`);
+    const signature=JSON.stringify([style.backgroundImage,style.padding,style.borderRadius,style.height]);
+    if(pickerStyle)assert(signature===pickerStyle,`${workflow}/${language} photo picker matches the shared baseline`);
+    pickerStyle=signature;
+    assert(modal.scrollWidth<=modal.clientWidth&&document.documentElement.scrollWidth<=window.innerWidth,
+      `${workflow}/${language} modal fits mobile without horizontal overflow`);
+    const bounds=modal.getBoundingClientRect();
+    assert(bounds.top>=0&&bounds.bottom<=window.innerHeight,`${workflow}/${language} modal remains inside the viewport`);
+    assert(document.body.style.overflow==="hidden","opening a plant modal locks background scrolling");
+    assert(host.querySelectorAll(".image-upload").length===1&&host.querySelectorAll(".image-capture-actions").length===0,
+      `${workflow}/${language} has one photo control without a nested source menu`);
+    assert(host.querySelector('[role="status"]')?.textContent===createTranslator(language)("plantForm.photoReady"),
+      `${workflow}/${language} status is localized and announced`);
+    assert(host.querySelector<HTMLButtonElement>(".modal-close")!.getBoundingClientRect().width>=44,"modal close target is at least 44px");
+    const image=host.querySelector<HTMLElement>(".plant-image-preview")!.getBoundingClientRect();
+    assert(Math.abs(image.width/image.height-4/3)<0.01&&getComputedStyle(host.querySelector<HTMLElement>(".plant-image-preview")!).objectFit==="contain",
+      `${workflow}/${language} preview has the same uncropped 4:3 frame`);
+    primary.focus();document.dispatchEvent(new KeyboardEvent("keydown",{key:"Tab",bubbles:true,cancelable:true}));
+    assert(document.activeElement===host.querySelector(".modal-close"),"Tab wraps focus within the shared modal");
+  }
+  render("add","sk",true);
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}));
+  assert(closes===0&&host.querySelector<HTMLButtonElement>(".modal-close")!.disabled,"saving prevents accidental modal dismissal");
+  render("add","sk");
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}));
+  host.querySelector<HTMLButtonElement>(".modal-close")!.click();
+  assert(closes===2,"Escape and the shared close button request dismissal when idle");
+  const viewport=window.visualViewport!;
+  const originalHeight=Object.getOwnPropertyDescriptor(viewport,"height");
+  try {
+    render("add","sk",false,true);
+    Object.defineProperty(viewport,"height",{configurable:true,value:360});viewport.dispatchEvent(new Event("resize"));
+    const backdrop=host.querySelector<HTMLElement>(".plant-action-backdrop")!;
+    const modal=host.querySelector<HTMLElement>(".plant-action-modal")!;
+    assert(backdrop.style.height==="360px"&&modal.getBoundingClientRect().height<=332,"keyboard-sized visual viewport bounds the modal and leaves its content scrollable");
+    modal.scrollTop=modal.scrollHeight;
+    const action=host.querySelector<HTMLElement>(".primary-action")!.getBoundingClientRect();
+    assert(action.top>=modal.getBoundingClientRect().top&&action.bottom<=modal.getBoundingClientRect().bottom,
+      "primary action can be reached by scrolling while the keyboard-sized viewport is open");
+  } finally {
+    if(originalHeight)Object.defineProperty(viewport,"height",originalHeight);else Reflect.deleteProperty(viewport,"height");
+    viewport.dispatchEvent(new Event("resize"));
+  }
+  flushSync(()=>root.render(null));
+  assert(document.body.style.overflow===previousOverflow&&document.activeElement===opener,"closing restores background scrolling and opener focus");
+  render("add","sk");
+  assert(document.body.style.overflow==="hidden","reopening installs fresh modal interactions");
+  opener.remove();
 };

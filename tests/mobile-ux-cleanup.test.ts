@@ -89,7 +89,7 @@ test("AI diagnosis actions are disabled when household access is unavailable", (
   assert.match(detailRoute, /<ImageSourcePicker/);
   assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed \|\| isDiagnosing\} busy=\{isCapturingDiagnosisImage\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\}/);
-  assert.match(detailRoute, /disabled=\{!diagnosisImageDataUrl \|\| isDiagnosing \|\| !diagnosisAccess\.allowed\}/);
+  assert.match(detailRoute, /disabled=\{!diagnosisImageDataUrl \|\| isDiagnosing \|\| isCapturingDiagnosisImage \|\| !diagnosisAccess\.allowed\}/);
   assert.doesNotMatch(detailRoute, /diagnosis\.premiumUnlimited/);
 });
 

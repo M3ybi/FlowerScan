@@ -95,6 +95,8 @@ import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import { useSubscriptionState } from "./hooks/useSubscriptionState";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
 import { ImageSourcePicker } from "./components/ImageSourcePicker";
+import { PlantActionModal, PlantFormStatus, PlantImagePreview } from "./components/PlantActionModal";
+import type { ImageCaptureSource, ImagePickerLabels } from "./lib/imageCaptureService";
 import { useImageSelection } from "./hooks/useImageSelection";
 import { createTranslator, translate } from "./lib/i18n";
 import {
@@ -429,11 +431,6 @@ export const App = () => {
   );
   const currentHouseholdPlanUsage = subscription.householdPlanUsage;
   const plantLimitReached = currentHouseholdPlanUsage?.plantsRemaining === 0;
-  const plantLimitLabel = currentHouseholdPlanUsage
-    ? currentHouseholdPlanUsage.isPremium
-      ? "Premium: unlimited plants"
-      : `${currentHouseholdPlanUsage.plantsRemaining ?? 0} / ${currentHouseholdPlanUsage.plantsLimit ?? 10} plants remaining on the free plan`
-    : "";
   const freeAiDiagnosisMonthlyLimit = PLAN_LIMITS.free.monthlyPlantUnwellAiAnalyzes ?? 10;
   const resolveCurrentAiDiagnosisAccess = () =>
     resolveAiDiagnosisAccess({
@@ -2373,7 +2370,7 @@ export const App = () => {
   };
 
   const closeDiagnosisModal = () => {
-    if (isDiagnosing || isCapturingDiagnosisImage) {
+    if (isDiagnosing || isSavingDiagnosis) {
       return;
     }
 
@@ -2381,19 +2378,19 @@ export const App = () => {
     setIsDiagnosisModalOpen(false);
   };
 
-  const handleDiagnosisImageChange = async (source: "camera" | "gallery", file?: File) => {
+  const handleDiagnosisImageChange = async (source: ImageCaptureSource, file?: File, pickerLabels?: ImagePickerLabels) => {
     if (!isHouseholdOperationCurrent() || isDiagnosing) return;
     const access = resolveCurrentAiDiagnosisAccess();
     if (!access.allowed) {
       setDiagnosisStatus(aiDiagnosisAccessMessage(access));
       return;
     }
-    await diagnosisImageSelection.select(source, file);
+    await diagnosisImageSelection.select(source, file, pickerLabels);
   };
 
   const runPlantDiagnosis = async (flower: Flower) => {
     if (!isHouseholdOperationCurrent()) return;
-    if (!diagnosisImageDataUrl || isDiagnosing) {
+    if (!diagnosisImageDataUrl || isDiagnosing || diagnosisImageSelection.isBusy()) {
       return;
     }
 
@@ -3598,16 +3595,9 @@ export const App = () => {
         ) : null}
 
         {isDiagnosisModalOpen ? (
-          <div className="modal-backdrop" role="presentation">
-            <section className="diagnosis-modal" role="dialog" aria-modal="true" aria-labelledby="diagnosis-modal-title">
-              <button className="modal-close" type="button" onClick={closeDiagnosisModal} aria-label={t("action.close")}>
-                <X size={20} aria-hidden="true" />
-              </button>
-              <div className="section-title">
-                <Camera size={20} aria-hidden="true" />
-                <h2 id="diagnosis-modal-title">{t("detail.diagnosisAction")}</h2>
-              </div>
-              <p>{t("diagnosis.modalBody")}</p>
+          <PlantActionModal id="diagnosis-modal" title={t("detail.diagnosisAction")} description={t("diagnosis.modalBody")}
+            icon={<Camera size={20} aria-hidden="true" />} closeLabel={t("action.close")}
+            busy={isDiagnosing || isSavingDiagnosis} onClose={closeDiagnosisModal}>
               {diagnosisUsageLabel ? <p className="care-preview-status">{diagnosisUsageLabel}</p> : null}
               {diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
 
@@ -3624,19 +3614,19 @@ export const App = () => {
 
               <ImageSourcePicker
                 title={t("diagnosis.photoPrompt")} help={t("diagnosis.photoHelp")}
-                cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")}
+                cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")} cancelLabel={t("action.cancel")}
                 disabled={!diagnosisAccess.allowed || isDiagnosing} busy={isCapturingDiagnosisImage}
                 onSelect={handleDiagnosisImageChange}
                 onCancel={diagnosisImageSelection.cancel}
               />
 
-              {diagnosisImageDataUrl ? <img className="diagnosis-preview" src={diagnosisImagePreviewUrl || diagnosisImageDataUrl} alt={t("diagnosis.previewAlt")} /> : null}
-              {diagnosisStatus ? <p className="care-preview-status">{diagnosisStatus}</p> : null}
+              {diagnosisImageDataUrl ? <PlantImagePreview src={diagnosisImagePreviewUrl || diagnosisImageDataUrl} alt={t("diagnosis.previewAlt")} /> : null}
+              <PlantFormStatus>{diagnosisStatus}</PlantFormStatus>
 
               <LoadingButton
                 className="primary-action diagnosis-run-button"
                 type="button"
-                disabled={!diagnosisImageDataUrl || isDiagnosing || !diagnosisAccess.allowed}
+                disabled={!diagnosisImageDataUrl || isDiagnosing || isCapturingDiagnosisImage || !diagnosisAccess.allowed}
                 onClick={() => runPlantDiagnosis(flower)}
                 isLoading={isDiagnosing}
                 loadingLabel={t("diagnosis.analyzing")}
@@ -3713,8 +3703,7 @@ export const App = () => {
                   </div>
                 </div>
               ) : null}
-            </section>
-          </div>
+          </PlantActionModal>
         ) : null}
 
         {diagnosisUpgradeReason ? (
@@ -4238,17 +4227,8 @@ export const App = () => {
       {renderHouseholdSheet()}
 
       {isAddPlantModalOpen ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="plant-modal" role="dialog" aria-modal="true" aria-labelledby="add-plant-title">
-            <button className="modal-close" type="button" onClick={closeAddPlantModal} aria-label={t("action.close")}>
-              <X size={20} aria-hidden="true" />
-            </button>
-            <div className="section-title">
-              <Plus size={18} aria-hidden="true" />
-              <h2 id="add-plant-title">{t("plantForm.title")}</h2>
-            </div>
-            <p>{t("plantForm.body")}</p>
-            {plantLimitLabel ? <p className="care-preview-status">{plantLimitLabel}</p> : null}
+        <PlantActionModal id="add-plant" title={t("plantForm.title")} description={t("plantForm.body")}
+          icon={<Plus size={20} aria-hidden="true" />} closeLabel={t("action.close")} busy={isAddingPlant} onClose={closeAddPlantModal}>
             <form className="add-plant-form modal-form" onSubmit={handleAddCustomFlower}>
               <label className="field">
                 <span>{t("plantForm.name")}</span>
@@ -4263,23 +4243,22 @@ export const App = () => {
               <div className="field">
                 <span>{t("plantForm.image")}</span>
                 <ImageSourcePicker
-                  title={newPlantImage?.name ?? t("plantForm.choosePhoto")}
+                  title={t("plantForm.choosePhoto")}
                   help={newPlantImage ? t("plantForm.photoReady") : t("plantForm.photoHelp")}
-                  cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")}
+                  cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")} cancelLabel={t("action.cancel")}
                   disabled={isAddingPlant} busy={isCapturingNewPlantImage}
                   onSelect={newImageSelection.select}
                   onCancel={newImageSelection.cancel}
                 />
-                {newPlantImage ? <img className="diagnosis-preview" src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
+                {newPlantImage ? <PlantImagePreview src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
               </div>
-              <LoadingButton type="submit" disabled={plantLimitReached || isCapturingNewPlantImage} isLoading={isAddingPlant} loadingLabel={t("plantForm.adding")}>
+              <LoadingButton className="primary-action" type="submit" disabled={plantLimitReached || isCapturingNewPlantImage} isLoading={isAddingPlant} loadingLabel={t("plantForm.adding")}>
                 <Plus size={18} aria-hidden="true" />
                 {t("dashboard.addPlant")}
               </LoadingButton>
             </form>
-            {newPlantStatus ? <div className="report-status">{newPlantStatus}</div> : null}
-          </section>
-        </div>
+            <PlantFormStatus>{newPlantStatus}</PlantFormStatus>
+        </PlantActionModal>
       ) : null}
 
       {isNewOnboardingHousehold && customFlowers.length === 0 ? (
