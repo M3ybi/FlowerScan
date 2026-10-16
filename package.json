@@ -10,6 +10,7 @@
     "build:test-store": "npm run typecheck && vite build --mode test",
     "test": "node scripts/run-tests.mjs",
     "test:edge-images": "node --test tests/edge-image-diagnosis.test.mjs",
+    "test:add-plant-image": "node --test tests/add-plant-image.test.mjs",
     "test:image-browser": "node scripts/test-image-processing-browser.mjs",
     "test:image-storage": "node scripts/test-database-audit.mjs --images",
     "test:database-audit": "node scripts/test-database-audit.mjs",

@@ -1,9 +1,14 @@
 import { preprocessImageFile, prepareImageBlobForUpload, captureImage } from "../../src/lib/imageCaptureService";
 import { Capacitor } from "@capacitor/core";
 import { callBackendFunction } from "../../src/lib/backendConfig";
+import { validatePlantImageForUpload } from "../../src/utils/imageUploadValidation";
+import type { NormalizedImage } from "../../src/lib/imageCaptureService";
+import { imageErrorMessage } from "../../src/lib/imageUploadErrors";
 import { imageUploadConfig, jpegDimensions } from "../../src/lib/imageUploadConfig";
 
 const checks: string[] = [];
+declare const __PRODUCTION_ADD_PLANT_PHOTO_HTML__: string;
+declare const __PRODUCTION_ADD_PLANT_CAPTURE_CODE__: string;
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); checks.push(message); };
 const encode = (canvas: HTMLCanvasElement, type: string) => new Promise<Blob>((resolve, reject) =>
   canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Fixture encode failed")), type, 0.95));
@@ -17,6 +22,17 @@ const canvas = (width: number, height: number) => {
 const inspect = async (blob: Blob) => jpegDimensions(new Uint8Array(await blob.arrayBuffer()))!;
 
 const run = async () => {
+  const photoField = document.createElement("div");
+  photoField.innerHTML = __PRODUCTION_ADD_PLANT_PHOTO_HTML__;
+  document.body.appendChild(photoField);
+  let pickerActivations = 0;
+  photoField.querySelector<HTMLInputElement>('input[type="file"]')!.addEventListener("click", (event) => {
+    event.preventDefault(); // Count activations without opening an OS picker.
+    pickerActivations++;
+  });
+  photoField.querySelector<HTMLElement>(".image-upload-copy strong")!.click();
+  assert(pickerActivations === 1, "add-plant photo label activates the browser picker exactly once");
+  photoField.remove();
   const timeout = AbortSignal.timeout;
   const originalFetch = globalThis.fetch;
   try {
@@ -106,6 +122,45 @@ const run = async () => {
     assert((await inspect(fallback.blob)).height === 40, "HTML decoder recovers when ImageBitmap exists but rejects the photo");
     URL.revokeObjectURL(fallback.previewUrl);
   } finally { Object.defineProperty(globalThis,"createImageBitmap",{value:createBitmap,configurable:true,writable:true}); }
+  // Execute the production add-plant selection handlers with real browser
+  // Files/decoding. Only the external validation HTTP response is substituted.
+  const picker = document.createElement("input"); picker.type = "file"; document.body.appendChild(picker);
+  let selected: NormalizedImage | null = null;
+  const statuses: string[] = [];
+  let releaseValidation: (() => void) | undefined;
+  const fetchBeforePicker = globalThis.fetch;
+  const production = new Function("context", `${__PRODUCTION_ADD_PLANT_CAPTURE_CODE__}; return createFixture(context);`)({
+    isHouseholdOperationCurrent: () => true, newImageCaptureRef: {current:null}, isAddingPlant:false, isNativeImageRuntime:false,
+    captureImage, validatePlantImageForUpload, selectedLanguage:"sk", newPlantImage:null, imageErrorMessage, t:(key:string)=>key,
+    setNewPlantImage: (image:NormalizedImage) => { selected=image; }, setNewPlantStatus:(status:string)=>statuses.push(status),
+    setIsCapturingNewPlantImage: (busy:boolean) => { picker.disabled=busy; },
+  }) as { capture:(source:string,file?:File)=>Promise<void>; change:(event:{currentTarget:HTMLInputElement})=>void };
+  const waitFor = async (condition:()=>unknown) => {
+    for(let attempt=0;attempt<200;attempt++){ if(condition())return; await new Promise(resolve=>setTimeout(resolve,10)); }
+    throw new Error("Add-plant browser flow did not finish");
+  };
+  try {
+    globalThis.fetch=async()=>{
+      await new Promise<void>(resolve=>{releaseValidation=resolve;});
+      return Response.json({validation:{containsPlant:true,plantConfidence:1,hasSensitiveBackground:false,hasExplicitOrUnsafeContent:false,
+        hasRestrictedFootageOrPrivateContent:false,shouldAllowUpload:true,failureReasons:[],safeUserMessage:"Allowed"}});
+    };
+    const transfer=new DataTransfer();transfer.items.add(new File([portrait],"plant.jpg",{type:"image/jpeg"}));picker.files=transfer.files;
+    production.change({currentTarget:picker});
+    await waitFor(()=>releaseValidation);
+    assert(picker.files?.length===1 && picker.disabled, "add-plant retains the gallery File throughout decoding and validation");
+    releaseValidation!();
+    await waitFor(()=>!picker.disabled);
+    assert(selected!==null && statuses.at(-1)==="image.ready", "actual add-plant handlers produce a ready JPEG preview from a browser selection");
+    assert(picker.value==="", "add-plant resets the file input only after successful processing");
+    const previousStatusCount=statuses.length;
+    production.change({currentTarget:picker});
+    await production.capture("gallery");
+    assert(statuses.length===previousStatusCount && selected!==null, "empty add-plant selection events preserve the ready photo without processing errors");
+  } finally {
+    globalThis.fetch=fetchBeforePicker;picker.remove();
+    if(selected)URL.revokeObjectURL((selected as NormalizedImage).previewUrl);
+  }
 };
 void run().then(() => {
   document.getElementById("results")!.textContent = JSON.stringify({ checks, failures: [] });

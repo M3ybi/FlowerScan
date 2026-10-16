@@ -2404,6 +2404,7 @@ export const App = () => {
     if (newImageCaptureRef.current || isAddingPlant) {
       return;
     }
+    if (!file && !isNativeImageRuntime) return;
 
     const capture = Symbol("image-capture");
     newImageCaptureRef.current = capture;
@@ -4402,7 +4403,7 @@ export const App = () => {
                   onChange={(event) => setNewPlantName(event.target.value)}
                 />
               </label>
-              <label className="field">
+              <div className="field">
                 <span>{t("plantForm.image")}</span>
                 <label className="image-upload">
                   <input
@@ -4410,8 +4411,12 @@ export const App = () => {
                     accept="image/jpeg,image/png,image/webp"
                     disabled={isCapturingNewPlantImage || isAddingPlant}
                     onChange={(event) => {
-                      void handleNewPlantImageCapture("gallery", event.target.files?.[0]);
-                      event.target.value = "";
+                      const input = event.currentTarget;
+                      const file = input.files?.[0];
+                      if (!file) return;
+                      void handleNewPlantImageCapture("gallery", file).finally(() => {
+                        input.value = "";
+                      });
                     }}
                   />
                   <span className="image-upload-icon">
@@ -4449,7 +4454,7 @@ export const App = () => {
                   </div>
                 ) : null}
                 {newPlantImage ? <img className="diagnosis-preview" src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
-              </label>
+              </div>
               <LoadingButton type="submit" disabled={plantLimitReached || isCapturingNewPlantImage} isLoading={isAddingPlant} loadingLabel={t("plantForm.adding")}>
                 <Plus size={18} aria-hidden="true" />
                 {t("dashboard.addPlant")}
