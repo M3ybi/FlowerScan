@@ -1,3 +1,4 @@
+import { maxImageDataUrlLength } from "../../../src/lib/imageUploadConfig.js";
 import { getStore } from "@netlify/blobs";
 import { randomBytes } from "node:crypto";
 import type { StoredPlantDiagnostic } from "./diagnostics";
@@ -317,6 +318,7 @@ const sanitizeFlower = (value: unknown): StoredFlower | null => {
     typeof flower.likelyName !== "string" ||
     typeof flower.identificationNote !== "string" ||
     typeof flower.image !== "string" ||
+    flower.image.length > maxImageDataUrlLength ||
     typeof flower.shortCare !== "string" ||
     typeof flower.light !== "string" ||
     typeof flower.watering !== "string" ||
@@ -335,7 +337,7 @@ const sanitizeFlower = (value: unknown): StoredFlower | null => {
     id: flower.id.slice(0, 120),
     identification,
     identificationNote: flower.identificationNote.slice(0, 300),
-    image: flower.image.slice(0, 1_500_000),
+    image: flower.image,
     likelyName: flower.likelyName.slice(0, 140),
     light: flower.light.slice(0, 300),
     shortCare: flower.shortCare.slice(0, 300),

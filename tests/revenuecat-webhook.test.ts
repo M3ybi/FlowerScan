@@ -321,6 +321,20 @@ test("refund deactivates premium", async () => {
   assert.equal(state.entitlements.get(userId)?.is_premium, false);
 });
 
+test("billing issue preserves the provider grace period beyond the paid expiration", async () => {
+  const { client, state } = createMockSupabase();
+  const graceEnd = Date.parse("2026-07-08T00:00:00Z");
+  await processRevenueCatWebhookEvent(client, baseEvent({ type: "BILLING_ISSUE", gracePeriodExpirationAtMs: graceEnd }));
+  assert.equal([...state.subscriptions.values()][0]?.current_period_end, new Date(graceEnd).toISOString());
+});
+
+test("support refund distinguishes immediate revocation from retained paid access", () => {
+  assert.equal(mapRevenueCatStatus(baseEvent({ type: "CANCELLATION", cancelReason: "CUSTOMER_SUPPORT",
+    eventOccurredAtMs: Date.parse("2026-07-02T00:00:00Z") })), "refunded");
+  assert.equal(mapRevenueCatStatus(baseEvent({ type: "CANCELLATION", cancelReason: "CUSTOMER_SUPPORT",
+    eventOccurredAtMs: Date.parse("2026-06-02T00:00:00Z") })), "cancelled");
+});
+
 test("duplicate event id is idempotent", async () => {
   const { client, state } = createMockSupabase();
   const first = await processRevenueCatWebhookEvent(client, baseEvent({ eventId: "dupe" }));

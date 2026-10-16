@@ -35,8 +35,8 @@ test("async actions share accessible loading button and logic-level duplicate gu
   assert.match(appSource, /const handleAcceptInvitation = .*joinInviteOnceRef\.current/);
   assert.match(appSource, /if \(signingOutRef\.current\) \{/);
   assert.match(appSource, /finally \{\s*signingOutRef\.current = false;/);
-  assert.match(appSource, /if \(isAddingPlant\) \{/);
-  assert.match(appSource, /if \(isCapturingNewPlantImage \|\| isAddingPlant\) \{/);
+  assert.match(appSource, /if \(plantSubmissionRef\.current\) \{/);
+  assert.match(appSource, /if \(newImageCaptureRef\.current \|\| isAddingPlant\) \{/);
   assert.match(appSource, /finally \{\s*if \(isHouseholdOperationCurrent\(\)\) setIsCreatingInvite\(false\);/);
   assert.match(appSource, /finally \{\s*setIsJoiningInvite\(false\);/);
   assert.match(appSource, /finally \{\s*if \(isHouseholdOperationCurrent\(\)\) setPendingQuickRecordKey\(""\);/);

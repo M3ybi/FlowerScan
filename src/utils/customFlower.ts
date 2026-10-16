@@ -1,3 +1,6 @@
+import { ImageUploadError, imageErrorFromResponse } from "../lib/imageUploadErrors.js";
+import { preprocessImageFile } from "../lib/imageCaptureService.js";
+import { imageUploadConfig } from "../lib/imageUploadConfig.js";
 import type { Flower } from "../data/flowers";
 import { callBackendFunction } from "../lib/backendConfig.js";
 import type { PlantieLanguage } from "../lib/onboarding.js";
@@ -25,61 +28,18 @@ export type GenerateCareOptions = {
 
 export const createCustomFlowerId = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-export const resizeImageFileToDataUrl = (file: File, maxSize = 900): Promise<string> =>
-  new Promise((resolve, reject) => {
-    if (!file.type.startsWith("image/")) {
-      reject(new Error("The selected file is not an image."));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("The image could not be loaded."));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error("The image could not be processed."));
-      image.onload = () => {
-        const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
-        const width = Math.max(1, Math.round(image.width * ratio));
-        const height = Math.max(1, Math.round(image.height * ratio));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const context = canvas.getContext("2d");
-        if (!context) {
-          reject(new Error("The image could not be processed."));
-          return;
-        }
-
-        context.drawImage(image, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
-      };
-      image.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
+export const resizeImageFileToDataUrl = async (file: File, maxSize = imageUploadConfig.maxDimension): Promise<string> => {
+  const image = await preprocessImageFile(file, { maxDimension: maxSize });
+  try { return image.dataUrl; } finally { URL.revokeObjectURL(image.previewUrl); }
+};
 
 export const imageSourceToDataUrl = async (imageSource: string): Promise<string> => {
-  if (imageSource.startsWith("data:image/")) {
-    return imageSource;
-  }
-
-  const response = await fetch(imageSource);
-  if (!response.ok) {
-    throw new Error("The plant image could not be loaded for AI generation.");
-  }
-
-  const blob = await response.blob();
-  if (!blob.type.startsWith("image/")) {
-    throw new Error("The plant source is not an image.");
-  }
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("The plant image could not be processed."));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(blob);
+  const response = await fetch(imageSource, { signal: AbortSignal.timeout(30_000) }).catch(async (error: unknown) => {
+    throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_NETWORK_FAILED", 502);
   });
+  if (!response.ok) throw new Error("The plant image could not be loaded for AI generation.");
+  const image = await preprocessImageFile(await response.blob());
+  try { return image.dataUrl; } finally { URL.revokeObjectURL(image.previewUrl); }
 };
 
 export const fetchGeneratedCare = async (
@@ -103,6 +63,7 @@ export const fetchGeneratedCare = async (
       netlifyPath: "/.netlify/functions/plant-care-ai",
     });
   } catch (error) {
+    if (error instanceof ImageUploadError) throw error;
     throw new Error(error instanceof Error ? error.message : "AI care guidance could not be generated.");
   }
 

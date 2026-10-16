@@ -1,3 +1,4 @@
+import { imageErrorMessage } from "./lib/imageUploadErrors";
 import {
   ArrowLeft,
   ArrowRight,
@@ -116,6 +117,7 @@ import {
 import type { SupabaseReadThroughState } from "./lib/supabaseReadThrough";
 import {
   createSupabaseDiagnosis,
+  PlantImageUploadError,
   detectSupabaseWriteMode,
   runRequiredSupabaseWrite,
   runSupabaseWrite,
@@ -129,7 +131,6 @@ import {
   createHouseholdInvite,
   getHouseholdInviteToken,
   getHouseholdPlantById,
-  getHouseholdPlantByLegacyId,
   getPlantImageSignedUrl,
   acceptHouseholdInvitation,
   declineHouseholdInvitation,
@@ -148,7 +149,6 @@ import { resolveAiDiagnosisAccess } from "./lib/aiDiagnosisAccess";
 import type { AiDiagnosisAccessResult } from "./lib/aiDiagnosisAccess";
 import {
   assertCanAddPlant,
-  recordCareTipGeneration,
 } from "./lib/householdPlanService";
 import { freeQrLabelLimit, PLAN_LIMITS } from "./lib/householdPlanRules";
 import { canInviteHouseholdMember, usedHouseholdSlots as countUsedHouseholdSlots } from "./lib/householdMembershipRules";
@@ -185,7 +185,7 @@ import {
   sanitizeDiagnosticNote,
   sanitizeDiagnosticEntries,
 } from "./utils/diagnostics";
-import { imageUploadRejectionMessage, validatePlantImageForUpload } from "./utils/imageUploadValidation";
+import { validatePlantImageForUpload } from "./utils/imageUploadValidation";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
 import { callBackendFunction, isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
 import { normalizeDiagnosisConfidenceLevel } from "./lib/diagnosisConfidence";
@@ -358,6 +358,10 @@ export const App = () => {
   const [newPlantImage, setNewPlantImage] = useState<NormalizedImage | null>(null);
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
+  const plantSubmissionRef = useRef<symbol | null>(null);
+  const pendingPlantIdRef = useRef<string | null>(null);
+  const newImageCaptureRef = useRef<symbol | null>(null);
+  const diagnosisCaptureRef = useRef<symbol | null>(null);
   const [isCapturingNewPlantImage, setIsCapturingNewPlantImage] = useState(false);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
   const [plantPage, setPlantPage] = useState(1);
@@ -525,6 +529,10 @@ export const App = () => {
 
   const resetHouseholdOperations = () => {
     setIsAddingPlant(false);
+    plantSubmissionRef.current = null;
+    pendingPlantIdRef.current = null;
+    newImageCaptureRef.current = null;
+    diagnosisCaptureRef.current = null;
     setIsCapturingNewPlantImage(false);
     setIsGeneratingCarePreview(false);
     setIsDiagnosing(false);
@@ -1699,22 +1707,26 @@ export const App = () => {
   };
 
   const addFlower = async (flower: Flower) => {
-    if (!isHouseholdOperationCurrent()) return;
+    if (!isHouseholdOperationCurrent()) return false;
     if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
-      await writeSupabaseFirst(
-        () => upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower),
-        () => addCustomFlower(flower),
-      );
-      return;
+      const saved = await upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower);
+      if (!isHouseholdOperationCurrent()) return false;
+      const displayFlower = flower;
+      setSupabaseReadState((current) => current ? {
+        ...current,
+        allFlowers: [displayFlower, ...current.allFlowers.filter((item) => item.id !== flower.id)],
+        customFlowers: [displayFlower, ...current.customFlowers.filter((item) => item.id !== flower.id)],
+        supabasePlantIdsByLegacyId: { ...current.supabasePlantIdsByLegacyId, [flower.id]: saved.id },
+      } : current);
+      // Creation is committed. A later refresh failure must not invite a duplicate retry.
+      await refreshSupabaseReadState().catch(() => {
+        if (isHouseholdOperationCurrent()) setSupabaseReadError(true);
+      });
+      return true;
     }
-
-    if (isSupabaseOnlyDataMode) {
-      setSupabaseReadError(true);
-      setNewPlantStatus(t("sync.customPlantUnavailable"));
-      return;
-    }
-
+    if (isSupabaseOnlyDataMode) throw new Error(t("sync.customPlantUnavailable"));
     addCustomFlower(flower);
+    return true;
   };
 
   const removeFlowerById = async (flowerId: string) => {
@@ -2205,7 +2217,7 @@ export const App = () => {
   const handleAddCustomFlower = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isHouseholdOperationCurrent()) return;
-    if (isAddingPlant) {
+    if (plantSubmissionRef.current) {
       return;
     }
 
@@ -2216,6 +2228,9 @@ export const App = () => {
       return;
     }
 
+    const submission = Symbol("plant-submission");
+    plantSubmissionRef.current = submission;
+    let savingPlant = false;
     setIsAddingPlant(true);
     setNewPlantStatus(t("image.validatingSafety"));
 
@@ -2240,33 +2255,32 @@ export const App = () => {
       const customFlower: Flower = {
         ...careProfile,
         displayName: aiDisplayName || plantName,
-        id: createCustomFlowerId(),
+        id: pendingPlantIdRef.current ?? (pendingPlantIdRef.current = createCustomFlowerId()),
         identification: identificationConfidence,
         image: imageDataUrl,
         source: "custom",
       };
 
-      await addFlower(customFlower);
+      savingPlant = true;
+      setNewPlantStatus(t("image.uploading"));
+      if (!await addFlower(customFlower)) return;
       if (!isHouseholdOperationCurrent()) return;
       if (activeSupabaseHouseholdId) {
-        const createdPlant = await getHouseholdPlantByLegacyId(activeSupabaseHouseholdId, customFlower.id);
-        if (!isHouseholdOperationCurrent()) return;
-        if (createdPlant) {
-          await recordCareTipGeneration(activeSupabaseHouseholdId, createdPlant.id, "initial_plant_add");
-        }
         await refreshHouseholdPlanUsage().catch(() => null);
       }
       if (!isHouseholdOperationCurrent()) return;
       setNewPlantStatus(t("plantForm.added", { plant: customFlower.displayName }));
+      pendingPlantIdRef.current = null;
       setNewPlantName("");
       URL.revokeObjectURL(newPlantImage.previewUrl);
       setNewPlantImage(null);
       setIsAddPlantModalOpen(false);
     } catch (error) {
       if (!isHouseholdOperationCurrent()) return;
-      const reason = error instanceof Error ? error.message : t("plantForm.addFailed");
-      setNewPlantStatus(reason === imageUploadRejectionMessage ? reason : t("plantForm.aiFailed", { reason }));
+      setNewPlantStatus(imageErrorMessage(error, selectedLanguage) ?? (error instanceof PlantImageUploadError ? t("plantForm.uploadFailed")
+        : savingPlant ? t("plantForm.saveFailed") : t("plantForm.aiFailed", { reason: "" })));
     } finally {
+      if (plantSubmissionRef.current === submission) plantSubmissionRef.current = null;
       if (isHouseholdOperationCurrent()) setIsAddingPlant(false);
     }
   };
@@ -2313,7 +2327,7 @@ export const App = () => {
     } catch (error) {
       if (!isHouseholdOperationCurrent()) return;
       const reason = error instanceof Error ? error.message : t("detail.aiCareFailed");
-      setCarePreviewStatus(t("detail.aiGenerationFailed", { reason }));
+      setCarePreviewStatus(imageErrorMessage(error, selectedLanguage) ?? t("detail.aiGenerationFailed", { reason }));
     } finally {
       if (isHouseholdOperationCurrent()) setIsGeneratingCarePreview(false);
     }
@@ -2387,10 +2401,12 @@ export const App = () => {
 
   const handleNewPlantImageCapture = async (source: "camera" | "gallery", file?: File) => {
     if (!isHouseholdOperationCurrent()) return;
-    if (isCapturingNewPlantImage || isAddingPlant) {
+    if (newImageCaptureRef.current || isAddingPlant) {
       return;
     }
 
+    const capture = Symbol("image-capture");
+    newImageCaptureRef.current = capture;
     let capturedImage: NormalizedImage | null = null;
     try {
       setIsCapturingNewPlantImage(true);
@@ -2417,16 +2433,16 @@ export const App = () => {
         URL.revokeObjectURL(capturedImage.previewUrl);
       }
       if (!isHouseholdOperationCurrent()) return;
-      setNewPlantImage(null);
-      setNewPlantStatus(error instanceof Error ? error.message : t("image.processFailed"));
+      setNewPlantStatus(imageErrorMessage(error, selectedLanguage) ?? t("image.processFailed"));
     } finally {
+      if (newImageCaptureRef.current === capture) newImageCaptureRef.current = null;
       if (isHouseholdOperationCurrent()) setIsCapturingNewPlantImage(false);
     }
   };
 
   const handleDiagnosisImageChange = async (source: "camera" | "gallery", file?: File) => {
     if (!isHouseholdOperationCurrent()) return;
-    if (isCapturingDiagnosisImage || isDiagnosing) {
+    if (diagnosisCaptureRef.current || isDiagnosing) {
       return;
     }
 
@@ -2436,15 +2452,16 @@ export const App = () => {
       return;
     }
 
-    if (!file && source === "gallery") {
+    if (!file && source === "gallery" && !isNativeImageRuntime) {
       return;
     }
 
+    const capture = Symbol("image-capture");
+    diagnosisCaptureRef.current = capture;
     let capturedImage: NormalizedImage | null = null;
     try {
       setIsCapturingDiagnosisImage(true);
       setDiagnosisStatus(t("image.processing"));
-      setDiagnosisDraft(null);
       const image = await captureImage({ file, source });
       capturedImage = image;
       if (!isHouseholdOperationCurrent()) {
@@ -2460,6 +2477,7 @@ export const App = () => {
       if (diagnosisImagePreviewUrl) {
         URL.revokeObjectURL(diagnosisImagePreviewUrl);
       }
+      setDiagnosisDraft(null);
       setDiagnosisImageDataUrl(image.dataUrl);
       setDiagnosisImagePreviewUrl(image.previewUrl);
       setDiagnosisStatus(t("diagnosis.imageReady"));
@@ -2468,13 +2486,9 @@ export const App = () => {
         URL.revokeObjectURL(capturedImage.previewUrl);
       }
       if (!isHouseholdOperationCurrent()) return;
-      if (diagnosisImagePreviewUrl) {
-        URL.revokeObjectURL(diagnosisImagePreviewUrl);
-      }
-      setDiagnosisImageDataUrl("");
-      setDiagnosisImagePreviewUrl("");
-      setDiagnosisStatus(error instanceof Error ? error.message : t("image.processFailed"));
+      setDiagnosisStatus(imageErrorMessage(error, selectedLanguage) ?? t("image.processFailed"));
     } finally {
+      if (diagnosisCaptureRef.current === capture) diagnosisCaptureRef.current = null;
       if (isHouseholdOperationCurrent()) setIsCapturingDiagnosisImage(false);
     }
   };
@@ -2525,7 +2539,7 @@ export const App = () => {
     } catch (error) {
       if (!isHouseholdOperationCurrent()) return;
       setDiagnosisDraft(null);
-      setDiagnosisStatus(error instanceof Error ? error.message : t("diagnosis.failed"));
+      setDiagnosisStatus(imageErrorMessage(error, selectedLanguage) ?? t("diagnosis.failed"));
     } finally {
       if (isHouseholdOperationCurrent()) setIsDiagnosing(false);
     }

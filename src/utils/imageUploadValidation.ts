@@ -1,3 +1,4 @@
+import { ImageUploadError } from "../lib/imageUploadErrors.js";
 import { callBackendFunction } from "../lib/backendConfig.js";
 import type { PlantieLanguage } from "../lib/onboarding.js";
 import {
@@ -17,9 +18,9 @@ export const validatePlantImageForUpload = async (imageDataUrl: string, language
     });
 
     if (!isImageUploadValidationPayload(data.validation) || !isImageUploadAllowed(data.validation)) {
-      throw new Error(imageUploadRejectionMessage);
+      throw new ImageUploadError("IMAGE_VALIDATION_FAILED", 422);
     }
-  } catch {
-    throw new Error(imageUploadRejectionMessage);
+  } catch (error) {
+    throw error instanceof ImageUploadError ? error : new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   }
 };

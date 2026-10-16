@@ -6,7 +6,8 @@ import {
   diagnosticImagesBucket,
   plantImagesBucket,
 } from "./imageStoragePaths.js";
-import { createPrivateImageSignedUrl } from "./imageCaptureService.js";
+import { createPrivateImageSignedUrl, prepareImageBlobForUpload, imageBlobToDataUrl } from "./imageCaptureService.js";
+import { imageErrorFromResponse, ImageUploadError } from "./imageUploadErrors.js";
 import { validateHouseholdName } from "./householdNameValidation.js";
 import { readStoredLanguage } from "./onboarding.js";
 import { normalizeDiagnosisConfidenceLevel, type DiagnosisConfidenceLevel } from "./diagnosisConfidence.js";
@@ -386,14 +387,7 @@ const assertImageUploadValidation = (validation?: ImageUploadValidation) => {
   }
 };
 
-const blobToDataUrl = async (blob: Blob) => {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += 1) {
-    binary += String.fromCharCode(bytes[index]);
-  }
-  return `data:${blob.type || "image/jpeg"};base64,${btoa(binary)}`;
-};
+const blobToDataUrl = imageBlobToDataUrl;
 
 const uploadValidatedImage = async ({
   householdId,
@@ -406,18 +400,22 @@ const uploadValidatedImage = async ({
   imageId: string;
   kind: "diagnostic" | "plant";
 }) => {
+  const normalizedBlob = await prepareImageBlobForUpload(imageBlob);
   const { data, error } = await getClient().functions.invoke("upload-validated-image", {
     body: {
       householdId,
-      imageDataUrl: await blobToDataUrl(imageBlob),
+      imageDataUrl: await blobToDataUrl(normalizedBlob),
       imageId,
       language: typeof globalThis.localStorage === "undefined" ? null : readStoredLanguage(globalThis.localStorage),
       kind,
     },
+    signal: AbortSignal.timeout(60_000),
+  }).catch(async (error: unknown) => {
+    throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_NETWORK_FAILED", 502);
   });
 
   if (error) {
-    throw error;
+    throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_UPLOAD_FAILED", 502);
   }
 
   if (!data || typeof (data as { path?: unknown }).path !== "string") {
@@ -1032,139 +1030,26 @@ export const sendHouseholdInviteEmail = async (inviteId: string): Promise<Househ
 };
 
 export const createHouseholdPlant = async (input: CreateHouseholdPlantInput) => {
-  const client = getClient();
-  const { data: plant, error: plantError } = await client
-    .from("plants")
-    .insert(plantInputToInsert(input))
-    .select(householdPlantSelect)
-    .single<DbPlant>();
-
-  if (plantError) {
-    throw plantError;
-  }
-
-  const carePills = input.carePills ?? [];
-  const careTips = input.careTips ?? [];
-
-  try {
-    if (carePills.length > 0) {
-      const { error } = await client.from("plant_care_pills").insert(
-        carePills.map((pill, index) => ({
-          label: pill.label,
-          plant_id: plant.id,
-          position: index,
-          tone: pill.tone,
-          value: pill.value,
-        })),
-      );
-
-      if (error) {
-        throw error;
-      }
-    }
-
-    if (careTips.length > 0) {
-      const { error } = await client.from("plant_care_tips").insert(
-        careTips.map((tip, index) => ({
-          plant_id: plant.id,
-          position: index,
-          tip,
-        })),
-      );
-
-      if (error) {
-        throw error;
-      }
-    }
-  } catch (error) {
-    await client.from("plants").delete().eq("id", plant.id);
-    throw error;
-  }
-
-  const { data: createdPlant, error: reloadError } = await client
-    .from("plants")
-    .select(householdPlantSelect)
-    .eq("id", plant.id)
-    .single<DbPlant>();
-
-  if (reloadError) {
-    throw reloadError;
-  }
-
-  return mapHouseholdPlant(createdPlant);
+  const { data, error } = await getClient().rpc("create_household_plant", {
+    plant_input: plantInputToInsert(input),
+    care_pills: input.carePills ?? [],
+    care_tips: input.careTips ?? [],
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Plant creation returned no record.");
+  return mapHouseholdPlant(data as DbPlant);
 };
 
 export const updateHouseholdPlant = async (id: string, patch: UpdateHouseholdPlantPatch) => {
-  const client = getClient();
-  const { data, error } = await client
-    .from("plants")
-    .update(plantPatchToUpdate(patch))
-    .eq("id", id)
-    .select(householdPlantSelect)
-    .single<DbPlant>();
-
-  if (error) {
-    throw error;
-  }
-
-  if (patch.carePills !== undefined || patch.careTips !== undefined) {
-    const [{ error: pillDeleteError }, { error: tipDeleteError }] = await Promise.all([
-      patch.carePills !== undefined
-        ? client.from("plant_care_pills").delete().eq("plant_id", id)
-        : Promise.resolve({ error: null }),
-      patch.careTips !== undefined
-        ? client.from("plant_care_tips").delete().eq("plant_id", id)
-        : Promise.resolve({ error: null }),
-    ]);
-
-    if (pillDeleteError || tipDeleteError) {
-      throw pillDeleteError ?? tipDeleteError;
-    }
-
-    if (patch.carePills && patch.carePills.length > 0) {
-      const { error: pillInsertError } = await client.from("plant_care_pills").insert(
-        patch.carePills.map((pill, index) => ({
-          label: pill.label,
-          plant_id: id,
-          position: index,
-          tone: pill.tone,
-          value: pill.value,
-        })),
-      );
-
-      if (pillInsertError) {
-        throw pillInsertError;
-      }
-    }
-
-    if (patch.careTips && patch.careTips.length > 0) {
-      const { error: tipInsertError } = await client.from("plant_care_tips").insert(
-        patch.careTips.map((tip, index) => ({
-          plant_id: id,
-          position: index,
-          tip,
-        })),
-      );
-
-      if (tipInsertError) {
-        throw tipInsertError;
-      }
-    }
-
-    const { data: reloaded, error: reloadError } = await client
-      .from("plants")
-      .select(householdPlantSelect)
-      .eq("id", id)
-      .single<DbPlant>();
-
-    if (reloadError) {
-      throw reloadError;
-    }
-
-    return mapHouseholdPlant(reloaded);
-  }
-
-  return mapHouseholdPlant(data);
+  const { data, error } = await getClient().rpc("update_household_plant", {
+    target_plant_id: id,
+    plant_patch: plantPatchToUpdate(patch),
+    care_pills: patch.carePills ?? null,
+    care_tips: patch.careTips ?? null,
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Plant update returned no record.");
+  return mapHouseholdPlant(data as DbPlant);
 };
 
 export const updateHouseholdLegacyToken = async (householdId: string, legacyPublicToken: string | null) => {
@@ -1243,6 +1128,17 @@ export const uploadPlantImage = async (householdId: string, plantId: string, ima
   return uploadValidatedImage({ householdId, imageBlob, imageId: plantId, kind: "plant" });
 };
 
+export const deleteUploadedImage = async (kind: "plant" | "diagnostic", path: string) => {
+  const table = kind === "plant" ? "plants" : "plant_diagnostics";
+  const { data: referenced, error: referenceError } = await getClient().from(table)
+    .select("id").eq("image_path", path).limit(1).maybeSingle();
+  if (referenceError) throw referenceError;
+  if (referenced) return;
+  const bucket = kind === "plant" ? plantImagesBucket : diagnosticImagesBucket;
+  const { error } = await getClient().storage.from(bucket).remove([path]);
+  if (error) throw error;
+};
+
 export const updateHouseholdReportSettings = async (householdId: string, patch: UpdateHouseholdReportSettingsPatch) => {
   const { data, error } = await getClient()
     .from("household_report_settings")
@@ -1318,83 +1214,34 @@ export const getPlantDiagnostics = async (plantId: string) => {
   return data.map(mapPlantDiagnostic);
 };
 
+export const getPlantDiagnosticByLegacyId = async (plantId: string, legacyId: string) => {
+  const { data, error } = await getClient().from("plant_diagnostics")
+    .select(plantDiagnosticSelect).eq("plant_id", plantId).eq("legacy_id", legacyId).maybeSingle<DbPlantDiagnostic>();
+  if (error) throw error;
+  return data ? mapPlantDiagnostic(data) : null;
+};
+
 export const createPlantDiagnostic = async (input: CreatePlantDiagnosticInput) => {
-  const client = getClient();
-  const { data: plant, error: plantError } = await client
-    .from("plants")
-    .select("id, household_id")
-    .eq("id", input.plantId)
-    .single<Pick<DbPlant, "household_id" | "id">>();
-
-  if (plantError) {
-    throw plantError;
-  }
-
-  const { data: diagnostic, error: diagnosticError } = await client
-    .from("plant_diagnostics")
-    .insert({
+  const { data, error } = await getClient().rpc("create_plant_diagnostic", {
+    diagnostic_input: {
       confidence: input.confidence,
       confidence_label: toDbConfidenceLabel(input.confidenceLabel),
       diagnosis_title: input.diagnosisTitle,
       disclaimer: input.disclaimer,
-      household_id: plant.household_id,
       image_path: input.imagePath ?? null,
       legacy_id: input.legacyId ?? null,
-      plant_id: plant.id,
+      plant_id: input.plantId,
       reasoning_summary: input.reasoningSummary,
       risk_level: input.riskLevel,
       user_confirmation: input.userConfirmation,
       user_note: input.userNote ?? "",
-    })
-    .select(plantDiagnosticSelect)
-    .single<DbPlantDiagnostic>();
-
-  if (diagnosticError) {
-    throw diagnosticError;
-  }
-
-  try {
-    if (input.observedSymptoms.length > 0) {
-      const { error } = await client.from("diagnostic_observed_symptoms").insert(
-        input.observedSymptoms.map((symptom, position) => ({
-          diagnostic_id: diagnostic.id,
-          position,
-          symptom,
-        })),
-      );
-      if (error) {
-        throw error;
-      }
-    }
-
-    if (input.recommendedSteps.length > 0) {
-      const { error } = await client.from("diagnostic_recommended_steps").insert(
-        input.recommendedSteps.map((step, position) => ({
-          diagnostic_id: diagnostic.id,
-          position,
-          step,
-        })),
-      );
-      if (error) {
-        throw error;
-      }
-    }
-  } catch (error) {
-    await client.from("plant_diagnostics").delete().eq("id", diagnostic.id);
-    throw error;
-  }
-
-  const { data: reloaded, error: reloadError } = await client
-    .from("plant_diagnostics")
-    .select(plantDiagnosticSelect)
-    .eq("id", diagnostic.id)
-    .single<DbPlantDiagnostic>();
-
-  if (reloadError) {
-    throw reloadError;
-  }
-
-  return mapPlantDiagnostic(reloaded);
+    },
+    observed_symptoms: input.observedSymptoms,
+    recommended_steps: input.recommendedSteps,
+  });
+  if (error) throw error;
+  if (!data) throw new Error("Diagnosis creation returned no record.");
+  return mapPlantDiagnostic(data as DbPlantDiagnostic);
 };
 
 export const updatePlantDiagnostic = async (id: string, patch: UpdatePlantDiagnosticPatch) => {

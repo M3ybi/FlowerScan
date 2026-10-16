@@ -1,3 +1,4 @@
+import { maxImageDataUrlLength } from "../src/lib/imageUploadConfig.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeDiagnostics } from "../netlify/functions/_shared/diagnostics.js";
@@ -49,10 +50,9 @@ test("unsupported image type is rejected", () => {
   assert.deepEqual(sanitizeDiagnostics([{ ...validDiagnostic, imageDataUrl: "data:text/plain;base64,abc" }]), []);
 });
 
-test("oversized image data is truncated defensively", () => {
-  const largeImage = `data:image/jpeg;base64,${"a".repeat(1_600_000)}`;
-  const [diagnostic] = sanitizeDiagnostics([{ ...validDiagnostic, imageDataUrl: largeImage }]);
-  assert.ok(diagnostic.imageDataUrl.length <= 1_500_000);
+test("oversized history images are rejected without truncating their base64", () => {
+  const largeImage = `data:image/jpeg;base64,${"a".repeat(maxImageDataUrlLength)}`;
+  assert.deepEqual(sanitizeDiagnostics([{ ...validDiagnostic, imageDataUrl: largeImage }]), []);
 });
 
 test("failed AI API call shape is not treated as diagnosis", () => {

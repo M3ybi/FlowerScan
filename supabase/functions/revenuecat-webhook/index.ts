@@ -1,3 +1,4 @@
+import { getRevenueCatAccessExpiration, isRevenueCatRefundRevocation } from "../../../src/lib/revenueCatWebhookRules.ts";
 ﻿import { createServiceClient } from "../_shared/auth.ts";
 import { json } from "../_shared/cors.ts";
 const premiumEntitlementId = "premium";
@@ -20,6 +21,8 @@ type RevenueCatEvent = {
   eventId: string;
   eventOccurredAtMs: number | null;
   expirationAtMs: number | null;
+  gracePeriodExpirationAtMs?: number | null;
+  cancelReason?: string;
   originalTransactionId: string;
   periodType: string;
   price: number | null;
@@ -68,6 +71,8 @@ const parsePayload = async (request: Request): Promise<RevenueCatEvent | null> =
       eventId: stringValue(event.id),
       eventOccurredAtMs: nullableTimestamp(event.event_timestamp_ms),
       expirationAtMs: nullableTimestamp(event.expiration_at_ms),
+      gracePeriodExpirationAtMs: nullableTimestamp(event.grace_period_expiration_at_ms),
+      cancelReason: stringValue(event.cancel_reason),
       originalTransactionId: stringValue(event.original_transaction_id),
       periodType: stringValue(event.period_type),
       price: nullableNumber(event.price),
@@ -93,6 +98,7 @@ const mapPlatform = (store: string) => {
 };
 
 const mapStatus = (event: RevenueCatEvent) => {
+  if (isRevenueCatRefundRevocation(event)) return "refunded";
   if (activeEventTypes.has(event.type)) return "active";
   if (event.type === "BILLING_ISSUE") return "grace_period";
   if (event.type === "CANCELLATION") return "cancelled";
@@ -150,7 +156,7 @@ Deno.serve(async (request) => {
     if (!status || !plan || !stateChangingEventTypes.has(event.type) ||
         (!isHouseholdCustomer && !isKnownLegacyUser) || event.entitlementId !== premiumEntitlementId ||
         (!event.originalTransactionId && !event.transactionId) ||
-        (status !== "expired" && status !== "refunded" && !event.expirationAtMs)) {
+        (status !== "expired" && status !== "refunded" && !getRevenueCatAccessExpiration(event))) {
       // PRODUCT_CHANGE records the pending change; an effective purchase/renewal updates access.
       const { error } = await client.from("subscription_events").insert({
         event_id: event.eventId, event_type: event.type, platform: mapPlatform(event.store),
@@ -163,7 +169,7 @@ Deno.serve(async (request) => {
       customer_id: event.appUserId, provider_event_id: event.eventId, provider_event_type: event.type,
       event_plan_key: plan.planKey, event_status: status, event_billing_period: plan.billingPeriod,
       event_provider: mapPlatform(event.store), original_transaction_id: event.originalTransactionId || event.transactionId,
-      period_start: msToIso(event.purchasedAtMs), period_end: msToIso(event.expirationAtMs),
+      period_start: msToIso(event.purchasedAtMs), period_end: msToIso(getRevenueCatAccessExpiration(event)),
       event_occurred_at: msToIso(event.eventOccurredAtMs ?? Date.now()), event_metadata: createSanitizedPayload(event),
       event_transaction_id: event.transactionId || null,
     });

@@ -30,8 +30,8 @@ type DbEntitlement = {
 
 const freeEntitlement: Entitlement = {
   aiDiagnosisEnabled: false,
-  aiScansMonthlyLimit: 10,
-  aiScansRemaining: 10,
+  aiScansMonthlyLimit: 5,
+  aiScansRemaining: 5,
   aiScansUsed: 0,
   cloudBackupEnabled: false,
   householdSharingEnabled: false,

@@ -1,3 +1,6 @@
+import { imageUploadConfig } from "./imageUploadConfig.js";
+import { ImageUploadError } from "./imageUploadErrors.js";
+import { getRetryImageId } from "./imageStoragePaths.js";
 import type { Flower } from "../data/flowers.js";
 import { sanitizeDiagnosticNote } from "../utils/diagnostics.js";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft } from "../utils/diagnostics.js";
@@ -6,7 +9,9 @@ import type { LegacyFlowerRecord } from "./legacyMigrationRules.js";
 import {
   createHouseholdPlant,
   createPlantDiagnostic,
+  deleteUploadedImage,
   getHouseholdPlantById,
+  getPlantDiagnosticByLegacyId,
   getHouseholdPlantByLegacyId,
   getPlantCatalogByLegacyId,
   imageUploadValidationToken,
@@ -37,10 +42,27 @@ export type SupabaseWriteResult<T> =
   | { mode: "supabase"; value: T }
   | { error: unknown; mode: "fallback" };
 
+export class PlantImageUploadError extends Error {
+  constructor(error: unknown) {
+    super(error instanceof Error ? error.message : "Image upload failed.");
+    this.name = "PlantImageUploadError";
+  }
+}
+
+const requirePlantImageUpload = async (operation: () => Promise<string>) => {
+  try {
+    return await operation();
+  } catch (error) {
+    throw error instanceof ImageUploadError ? error : new PlantImageUploadError(error);
+  }
+};
+
 export type SupabaseWriteDependencies = {
   createHouseholdPlant: typeof createHouseholdPlant;
   createPlantDiagnostic: typeof createPlantDiagnostic;
+  deleteUploadedImage: typeof deleteUploadedImage;
   getHouseholdPlantById: typeof getHouseholdPlantById;
+  getPlantDiagnosticByLegacyId: typeof getPlantDiagnosticByLegacyId;
   getHouseholdPlantByLegacyId: typeof getHouseholdPlantByLegacyId;
   getPlantCatalogByLegacyId: typeof getPlantCatalogByLegacyId;
   toBlob: (dataUrl: string) => Promise<Blob>;
@@ -60,7 +82,9 @@ const dataUrlToBlob = async (dataUrl: string) => {
 export const defaultSupabaseWriteDependencies: SupabaseWriteDependencies = {
   createHouseholdPlant,
   createPlantDiagnostic,
+  deleteUploadedImage,
   getHouseholdPlantById,
+  getPlantDiagnosticByLegacyId,
   getHouseholdPlantByLegacyId,
   getPlantCatalogByLegacyId,
   toBlob: dataUrlToBlob,
@@ -116,8 +140,8 @@ const maybeCreatePlantImageBlob = async (flower: Flower, deps: SupabaseWriteDepe
   }
 
   const blob = await deps.toBlob(flower.image);
-  if (blob.size > 8 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(blob.type)) {
-    return null;
+  if (blob.size > imageUploadConfig.maxOriginalBytes || !(imageUploadConfig.supportedInputMimeTypes as readonly string[]).includes(blob.type)) {
+    throw new Error("Plant image is too large or has an unsupported format.");
   }
 
   return blob;
@@ -135,30 +159,53 @@ export const upsertSupabasePlantFromFlower = async (
   const uploadValidation = { validationToken: imageUploadValidationToken };
 
   if (existing) {
-    const imagePath = imageBlob ? await deps.uploadPlantImage(householdId, existing.id, imageBlob, uploadValidation) : existing.imagePath;
-    return deps.updateHouseholdPlant(existing.id, {
-      carePills: input.carePills,
-      careTips: input.careTips,
-      displayName: input.displayName,
-      identification: input.identification,
-      identificationNote: input.identificationNote,
-      imagePath,
-      isRemoved: false,
-      light: input.light,
-      likelyName: input.likelyName,
-      notificationsEnabled: input.notificationsEnabled,
-      shortCare: input.shortCare,
-      soil: input.soil,
-      source: input.source,
-      watering: input.watering,
-      wateringIntervalDays: input.wateringIntervalDays,
-    });
+    const imageId = imageBlob ? await getRetryImageId(householdId, flower.id, imageBlob) : null;
+    const imagePath = imageBlob ? await requirePlantImageUpload(() => deps.uploadPlantImage(householdId, imageId!, imageBlob, uploadValidation)) : existing.imagePath;
+    try {
+      const saved = await deps.updateHouseholdPlant(existing.id, {
+        carePills: input.carePills,
+        careTips: input.careTips,
+        displayName: input.displayName,
+        identification: input.identification,
+        identificationNote: input.identificationNote,
+        imagePath,
+        isRemoved: false,
+        light: input.light,
+        likelyName: input.likelyName,
+        notificationsEnabled: input.notificationsEnabled,
+        shortCare: input.shortCare,
+        soil: input.soil,
+        source: input.source,
+        watering: input.watering,
+        wateringIntervalDays: input.wateringIntervalDays,
+      });
+      if (imageBlob && existing.imagePath && existing.imagePath !== imagePath) {
+        await deps.deleteUploadedImage("plant", existing.imagePath).catch(() => undefined);
+      }
+      return saved;
+    } catch (error) {
+      if (imageBlob && imagePath) {
+        const committed = await deps.getHouseholdPlantById(existing.id);
+        if (committed.imagePath === imagePath) return committed;
+        await deps.deleteUploadedImage("plant", imagePath);
+      }
+      throw error;
+    }
   }
 
   if (imageBlob) {
-    const temporaryPlantId = crypto.randomUUID();
-    const imagePath = await deps.uploadPlantImage(householdId, temporaryPlantId, imageBlob, uploadValidation);
-    return deps.createHouseholdPlant(toPlantInput(flower, householdId, catalogPlant, imagePath));
+    const temporaryPlantId = await getRetryImageId(householdId, flower.id, imageBlob);
+    const imagePath = await requirePlantImageUpload(() => deps.uploadPlantImage(householdId, temporaryPlantId, imageBlob, uploadValidation));
+    try {
+      return await deps.createHouseholdPlant(toPlantInput(flower, householdId, catalogPlant, imagePath));
+    } catch (error) {
+      // A lost response may hide a committed insert. Retain its image on retry.
+      const committed = await deps.getHouseholdPlantByLegacyId(householdId, flower.id);
+      if (committed?.imagePath === imagePath) return committed;
+      await deps.deleteUploadedImage("plant", imagePath);
+      if (committed) return committed;
+      throw error;
+    }
   }
 
   const created = await deps.createHouseholdPlant(input);
@@ -214,19 +261,27 @@ export const createSupabaseDiagnosis = async (
 ): Promise<SupabasePlantDiagnostic> => {
   const blob = await deps.toBlob(input.imageDataUrl);
   const plant = await deps.getHouseholdPlantById(input.plantId);
-  const diagnosticId = crypto.randomUUID();
+  const diagnosticId = await getRetryImageId(plant.householdId, input.legacyId, blob);
   const imagePath = await deps.uploadDiagnosticImage(plant.householdId, diagnosticId, blob, {
     validationToken: imageUploadValidationToken,
   });
-  const diagnostic = await deps.createPlantDiagnostic({
-    ...input.diagnosis,
-    imagePath,
-    legacyId: input.legacyId,
-    plantId: input.plantId,
-    userConfirmation: input.userConfirmation,
-    userNote: sanitizeDiagnosticNote(input.userNote),
-  });
-  return diagnostic;
+  try {
+    const diagnostic = await deps.createPlantDiagnostic({
+      ...input.diagnosis,
+      imagePath,
+      legacyId: input.legacyId,
+      plantId: input.plantId,
+      userConfirmation: input.userConfirmation,
+      userNote: sanitizeDiagnosticNote(input.userNote),
+    });
+    return diagnostic;
+  } catch (error) {
+    const committed = await deps.getPlantDiagnosticByLegacyId(input.plantId, input.legacyId);
+    if (committed?.imagePath === imagePath) return committed;
+    await deps.deleteUploadedImage("diagnostic", imagePath);
+    if (committed) return committed;
+    throw error;
+  }
 };
 
 export const updateSupabaseDiagnosis = async (

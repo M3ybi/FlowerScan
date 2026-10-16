@@ -43,7 +43,7 @@ test("Petzvalova migration grants household-level unlimited premium idempotently
 
 test("premium households bypass AI, care-tip, and plant limits", () => {
   const state = freeState({
-    aiAnalyzesUsed: 99,
+    aiAnalyzesUsed: 49,
     careTipGenerationsForPlant: 4,
     careTipRefreshesTodayForPlant: 3,
     isPremium: true,
@@ -57,7 +57,7 @@ test("premium households bypass AI, care-tip, and plant limits", () => {
   assert.doesNotThrow(() => assertCanAddPlant(state));
 });
 
-test("non-premium households can run exactly ten successful plant health analyzes per month", () => {
+test("non-premium households can run exactly five successful plant health analyzes per month", () => {
   let state = freeState();
 
   for (let index = 0; index < PLAN_LIMITS.free.monthlyPlantUnwellAiAnalyzes; index += 1) {
@@ -65,35 +65,35 @@ test("non-premium households can run exactly ten successful plant health analyze
     state = recordAiAnalyzeUsage(state);
   }
 
-  assert.equal(state.aiAnalyzesUsed, 10);
+  assert.equal(state.aiAnalyzesUsed, 5);
   assert.equal(getRemainingPlantUnwellAiAnalyzes(state), 0);
-  assert.throws(() => assertCanRunAiAnalyze(state), /10 plant health AI analyzes/);
+  assert.throws(() => assertCanRunAiAnalyze(state), /5 plant health AI analyzes/);
 });
 
 test("failed plant health analyzes do not consume usage", () => {
-  const before = freeState({ aiAnalyzesUsed: 9 });
+  const before = freeState({ aiAnalyzesUsed: 4 });
 
   assert.doesNotThrow(() => assertCanRunAiAnalyze(before));
   const afterFailure = before;
 
-  assert.equal(afterFailure.aiAnalyzesUsed, 9);
+  assert.equal(afterFailure.aiAnalyzesUsed, 4);
   assert.equal(getRemainingPlantUnwellAiAnalyzes(afterFailure), 1);
 });
 
 test("reserved concurrent plant health analyzes count against remaining capacity", () => {
-  const state = freeState({ aiAnalyzesReserved: 1, aiAnalyzesUsed: 9 });
+  const state = freeState({ aiAnalyzesReserved: 1, aiAnalyzesUsed: 4 });
 
   assert.equal(getRemainingPlantUnwellAiAnalyzes(state), 0);
-  assert.throws(() => assertCanRunAiAnalyze(state), /10 plant health AI analyzes/);
+  assert.throws(() => assertCanRunAiAnalyze(state), /5 plant health AI analyzes/);
 });
 
 test("initial plant care generation and AI care tips do not consume monthly AI analyze usage", () => {
-  let state = freeState({ aiAnalyzesUsed: 7 });
+  let state = freeState({ aiAnalyzesUsed: 2 });
 
   state = recordCareTipGeneration(state, "initial_plant_add");
   state = recordCareTipGeneration(state, "manual_refresh");
 
-  assert.equal(state.aiAnalyzesUsed, 7);
+  assert.equal(state.aiAnalyzesUsed, 2);
   assert.equal(getRemainingPlantUnwellAiAnalyzes(state), 3);
 });
 
@@ -114,18 +114,18 @@ test("adding plants is blocked at the free plan limit and allowed for premium un
   assert.doesNotThrow(() => assertCanAddPlant(freeState({ isPremium: true, plantCount: 10_000 })));
 });
 
-test("monthly usage period resets on the first day at 05:00 local app time", () => {
-  const beforeReset = getMonthlyUsagePeriod(new Date(2026, 6, 1, 4, 59, 59));
-  const afterReset = getMonthlyUsagePeriod(new Date(2026, 6, 1, 5, 0, 0));
+test("monthly usage period resets on the first day at 05:00 UTC across device timezones", () => {
+  const beforeReset = getMonthlyUsagePeriod(new Date("2026-07-01T04:59:59Z"));
+  const afterReset = getMonthlyUsagePeriod(new Date("2026-07-01T05:00:00Z"));
 
-  assert.equal(beforeReset.periodStart.getFullYear(), 2026);
-  assert.equal(beforeReset.periodStart.getMonth(), 5);
-  assert.equal(beforeReset.periodStart.getDate(), 1);
-  assert.equal(beforeReset.periodStart.getHours(), 5);
-  assert.equal(afterReset.periodStart.getFullYear(), 2026);
-  assert.equal(afterReset.periodStart.getMonth(), 6);
-  assert.equal(afterReset.periodStart.getDate(), 1);
-  assert.equal(afterReset.periodStart.getHours(), 5);
+  assert.equal(beforeReset.periodStart.getUTCFullYear(), 2026);
+  assert.equal(beforeReset.periodStart.getUTCMonth(), 5);
+  assert.equal(beforeReset.periodStart.getUTCDate(), 1);
+  assert.equal(beforeReset.periodStart.getUTCHours(), 5);
+  assert.equal(afterReset.periodStart.getUTCFullYear(), 2026);
+  assert.equal(afterReset.periodStart.getUTCMonth(), 6);
+  assert.equal(afterReset.periodStart.getUTCDate(), 1);
+  assert.equal(afterReset.periodStart.getUTCHours(), 5);
 });
 
 test("reset job is idempotent because usage rows are unique by household type and period", () => {

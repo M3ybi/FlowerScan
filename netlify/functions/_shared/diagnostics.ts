@@ -1,3 +1,4 @@
+import { maxImageDataUrlLength } from "../../../src/lib/imageUploadConfig.js";
 export type StoredPlantDiagnostic = {
   id: string;
   plantId: string;
@@ -46,6 +47,7 @@ export const sanitizeDiagnostics = (value: unknown): StoredPlantDiagnostic[] => 
         typeof raw.plantId !== "string" ||
         typeof raw.imageDataUrl !== "string" ||
         !raw.imageDataUrl.startsWith("data:image/") ||
+        raw.imageDataUrl.length > maxImageDataUrlLength ||
         !Number.isFinite(confidence) ||
         observedSymptoms.length === 0 ||
         recommendedSteps.length === 0 ||
@@ -65,7 +67,7 @@ export const sanitizeDiagnostics = (value: unknown): StoredPlantDiagnostic[] => 
         diagnosisTitle: sanitizeText(raw.diagnosisTitle, 140),
         disclaimer: sanitizeText(raw.disclaimer, 240),
         id: raw.id.slice(0, 120),
-        imageDataUrl: raw.imageDataUrl.slice(0, 1_500_000),
+        imageDataUrl: raw.imageDataUrl,
         observedSymptoms,
         plantId: raw.plantId.slice(0, 120),
         reasoningSummary: sanitizeText(raw.reasoningSummary, 800),

@@ -1,3 +1,6 @@
+import { ImageUploadError } from "../lib/imageUploadErrors.js";
+import { preprocessImageFile, validateImageInput } from "../lib/imageCaptureService.js";
+import { imageUploadConfig } from "../lib/imageUploadConfig.js";
 import { callBackendFunction } from "../lib/backendConfig.js";
 import type { PlantieLanguage } from "../lib/onboarding.js";
 import { normalizeDiagnosisConfidenceLevel } from "../lib/diagnosisConfidence.js";
@@ -31,8 +34,8 @@ export type PlantDiagnosticEntry = Omit<PlantDiagnosisDraft, "confidenceLabel"> 
   updatedAt: string;
 };
 
-export const allowedDiagnosticImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-export const maxDiagnosticImageBytes = 8 * 1024 * 1024;
+export const allowedDiagnosticImageTypes = new Set<string>(imageUploadConfig.supportedInputMimeTypes);
+export const maxDiagnosticImageBytes = imageUploadConfig.maxOriginalBytes;
 export const maxDiagnosticNoteLength = 700;
 
 export const createDiagnosticId = () => `diag-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -44,15 +47,7 @@ export const sanitizeDiagnosticNote = (value: string) =>
     .trim()
     .slice(0, maxDiagnosticNoteLength);
 
-export const validateDiagnosticImageFile = (file: File) => {
-  if (!allowedDiagnosticImageTypes.has(file.type)) {
-    throw new Error("Podporovane su iba JPG, PNG alebo WEBP obrazky.");
-  }
-
-  if (file.size > maxDiagnosticImageBytes) {
-    throw new Error("The image is too large. Use a photo up to 8 MB.");
-  }
-};
+export const validateDiagnosticImageFile = (file: File) => validateImageInput(file);
 
 export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[] => {
   if (!Array.isArray(value)) {
@@ -95,41 +90,10 @@ export const sanitizeDiagnosticEntries = (value: unknown): PlantDiagnosticEntry[
     }));
 };
 
-export const resizeDiagnosticImageFileToDataUrl = (file: File, maxSize = 1200): Promise<string> =>
-  new Promise((resolve, reject) => {
-    try {
-      validateDiagnosticImageFile(file);
-    } catch (error) {
-      reject(error);
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Obrázok sa nepodarilo načítať."));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error("Obrázok sa nepodarilo spracovať."));
-      image.onload = () => {
-        const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
-        const width = Math.max(1, Math.round(image.width * ratio));
-        const height = Math.max(1, Math.round(image.height * ratio));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const context = canvas.getContext("2d");
-        if (!context) {
-          reject(new Error("Obrázok sa nepodarilo spracovať."));
-          return;
-        }
-
-        context.drawImage(image, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.84));
-      };
-      image.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
+export const resizeDiagnosticImageFileToDataUrl = async (file: File, maxSize = imageUploadConfig.maxDimension): Promise<string> => {
+  const image = await preprocessImageFile(file, { maxDimension: maxSize });
+  try { return image.dataUrl; } finally { URL.revokeObjectURL(image.previewUrl); }
+};
 
 const normalizeDiagnosis = (value: unknown): PlantDiagnosisDraft | null => {
   if (!value || typeof value !== "object") {
@@ -198,6 +162,7 @@ export const fetchPlantDiagnosis = async (
       netlifyPath: "/.netlify/functions/plant-diagnosis-ai",
     });
   } catch (error) {
+    if (error instanceof ImageUploadError) throw error;
     throw new Error(error instanceof Error && error.message ? error.message : "AI diagnosis failed. Try again with another photo.");
   }
 

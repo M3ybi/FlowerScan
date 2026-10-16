@@ -1,9 +1,7 @@
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
 import { createServiceClient, requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
-
-const rejectionMessage =
-  "Image contains sensitive/explicit information or does not contain a valid plant/tree. Please upload a clear plant image without sensitive background content.";
 
 type ImageKind = "diagnostic" | "plant";
 
@@ -87,18 +85,6 @@ const isAllowed = (payload: ValidationPayload) =>
   payload.shouldAllowUpload === true &&
   payload.failureReasons.length === 0;
 
-const parseDataUrl = (imageDataUrl: string) => {
-  const match = imageDataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,([a-z0-9+/=]+)$/i);
-  if (!match) return null;
-  const contentType = match[1].toLowerCase() === "jpg" ? "image/jpeg" : `image/${match[1].toLowerCase()}`;
-  const binary = atob(match[2]);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return { bytes, contentType };
-};
-
 const validateImage = async (apiKey: string, imageDataUrl: string, userId: string, language: unknown) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
@@ -131,17 +117,18 @@ const validateImage = async (apiKey: string, imageDataUrl: string, userId: strin
 
     if (!response.ok) {
       console.error("Validated image upload AI request failed", { status: response.status, userIdPrefix: `${userId.slice(0, 8)}...` });
-      return null;
+      return await imageProviderFailure(response);
     }
 
     const parsed = JSON.parse(extractOutputText(await response.json())) as unknown;
-    return isValidationPayload(parsed) && isAllowed(parsed) ? parsed : null;
+    if (!isValidationPayload(parsed)) return new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+    return isAllowed(parsed) ? parsed : null;
   } catch (error) {
     console.error("Validated image upload failed closed", {
       name: error instanceof Error ? error.name : "unknown",
       userIdPrefix: `${userId.slice(0, 8)}...`,
     });
-    return null;
+    return error instanceof SyntaxError ? new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503) : imageNetworkError(error);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -152,48 +139,56 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
 
   const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) return json(503, { error: rejectionMessage });
+  if (!apiKey) return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503));
 
   const auth = await requireUser(request.headers.get("authorization") ?? "");
-  if (!auth) return json(401, { error: "Authentication is required." });
+  if (!auth) return imageErrorResponse(new ImageUploadError("AUTHENTICATION_REQUIRED", 401));
 
-  let body: { householdId?: string; imageDataUrl?: string; imageId?: string; kind?: ImageKind; language?: unknown };
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return json(400, { error: rejectionMessage });
+    body = await readImageRequest(request);
+  } catch (error) {
+    return imageErrorResponse(error instanceof ImageUploadError ? error : new ImageUploadError("INVALID_IMAGE"));
   }
 
   const householdId = typeof body.householdId === "string" ? body.householdId : "";
   const imageId = typeof body.imageId === "string" ? body.imageId : "";
   const kind = body.kind;
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
-  const parsedImage = parseDataUrl(imageDataUrl);
-
-  if (!uuidLike.test(householdId) || !uuidLike.test(imageId) || (kind !== "plant" && kind !== "diagnostic") || !parsedImage || imageDataUrl.length > 1_600_000) {
-    return json(400, { error: rejectionMessage });
+  if (!uuidLike.test(householdId) || !uuidLike.test(imageId) || (kind !== "plant" && kind !== "diagnostic")) {
+    return imageErrorResponse(new ImageUploadError("INVALID_IMAGE"), body.language);
   }
-
   const { data: canEdit, error: accessError } = await auth.client.rpc("can_manage_household_content", { target_household_id: householdId });
   if (accessError || !canEdit) {
-    return json(403, { error: "Active household membership is required to upload images." });
+    return imageErrorResponse(new ImageUploadError("HOUSEHOLD_ACCESS_DENIED", 403), body.language);
   }
 
+  let parsedImage: ReturnType<typeof requireProcessedImage>;
+  try { parsedImage = requireProcessedImage(imageDataUrl); }
+  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
+
   const validation = await validateImage(apiKey, imageDataUrl, auth.user.id, body.language);
+  if (validation instanceof ImageUploadError) return imageErrorResponse(validation, body.language);
   if (!validation) {
-    return json(422, { error: rejectionMessage });
+    return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
   }
 
   const bucket = kind === "plant" ? "plant-images" : "diagnostic-images";
   const path = kind === "plant" ? `${householdId}/plants/${imageId}/original.jpg` : `${householdId}/diagnostics/${imageId}/image.jpg`;
-  const { error: uploadError } = await createServiceClient().storage.from(bucket).upload(path, parsedImage.bytes, {
-    contentType: "image/jpeg",
-    upsert: true,
-  });
+  try {
+    const { error: uploadError } = await createServiceClient().storage.from(bucket).upload(path, parsedImage.bytes, {
+      contentType: "image/jpeg",
+      // Older clients reuse a plant ID for replacements. New clients generate a
+      // fresh path and retain the previous photo until their DB update commits.
+      upsert: true,
+    });
 
-  if (uploadError) {
-    console.error("Validated image upload storage write failed", { bucket, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
-    return json(502, { error: "Image upload failed." });
+    if (uploadError) {
+      console.error("Validated image upload storage write failed", { bucket, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
+      return imageErrorResponse(new ImageUploadError("IMAGE_UPLOAD_FAILED", 502), body.language);
+    }
+  } catch (error) {
+    return imageErrorResponse(imageNetworkError(error), body.language);
   }
 
   return json(200, { path });

@@ -18,7 +18,7 @@ export const PLAN_LIMITS: Record<HouseholdPlanKey, PlanLimits> = {
     careTipRefreshPerPlantPerDay: 1,
     initialCareGenerationCountsAsAnalyze: false,
     maxPlants: 10,
-    monthlyPlantUnwellAiAnalyzes: 10,
+    monthlyPlantUnwellAiAnalyzes: 5,
   },
   premium: {
     careTipRefreshPerPlantPerDay: null,
@@ -46,15 +46,15 @@ export const getHouseholdPlanKey = (isPremium: boolean): HouseholdPlanKey => (is
 
 export const isHouseholdPremium = (state: Pick<HouseholdPlanState, "isPremium">) => state.isPremium;
 
-const atLocalResetHour = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1, 5, 0, 0, 0);
+const atUtcResetHour = (date: Date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 5));
 
 export const getMonthlyUsagePeriod = (now = new Date()): UsagePeriod => {
-  const currentMonthReset = atLocalResetHour(now);
+  const currentMonthReset = atUtcResetHour(now);
   const periodStart =
     now.getTime() >= currentMonthReset.getTime()
       ? currentMonthReset
-      : new Date(now.getFullYear(), now.getMonth() - 1, 1, 5, 0, 0, 0);
-  const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 1, 5, 0, 0, 0);
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1, 5));
+  const periodEnd = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 1, 5));
 
   return { periodEnd, periodStart };
 };

@@ -1,3 +1,4 @@
+import { imageErrorFromResponse } from "./imageUploadErrors.js";
 import { supabase } from "./supabase.js";
 
 export type BackendProvider = "supabase" | "netlify";
@@ -58,19 +59,22 @@ export const callBackendFunction = async <T>({
   functionName,
   netlifyPath,
 }: BackendFunctionOptions): Promise<T> => {
+  const imageWorkflow = ["upload-validated-image", "validate-plant-image", "plant-care-ai", "plant-diagnosis-ai"].includes(functionName);
   if (isSupabaseBackend) {
     if (!supabase) {
       if (!allowNetlifyFallback || !isLegacyNetlifyBackendEnabled) {
         throw new Error("Supabase backend is not configured.");
       }
     } else {
-      const { data, error } = await supabase.functions.invoke(functionName, { body });
+      const { data, error } = await supabase.functions.invoke(functionName, { body, ...(imageWorkflow ? { signal: AbortSignal.timeout(60_000) } : {}) }).catch(async (error: unknown) => {
+        throw (imageWorkflow ? await imageErrorFromResponse(error) : null) ?? error;
+      });
       if (!error) {
         return data as T;
       }
 
       if (!allowNetlifyFallback || !isLegacyNetlifyBackendEnabled) {
-        throw new Error((await extractSupabaseFunctionErrorMessage(error)) || "Supabase backend request failed.");
+        throw (imageWorkflow ? await imageErrorFromResponse(error) : null) ?? new Error((await extractSupabaseFunctionErrorMessage(error)) || "Supabase backend request failed.");
       }
     }
   }
@@ -83,10 +87,11 @@ export const callBackendFunction = async <T>({
     body: JSON.stringify(body ?? {}),
     headers: { "Content-Type": "application/json" },
     method: "POST",
-  });
+    ...(imageWorkflow ? { signal: AbortSignal.timeout(60_000) } : {}),
+  }).catch(async (error: unknown) => { throw (imageWorkflow ? await imageErrorFromResponse(error) : null) ?? error; });
 
   if (!response.ok) {
-    throw new Error((await extractResponseErrorMessage(response)) || `Legacy Netlify backend request failed with status ${response.status}.`);
+    throw (imageWorkflow ? await imageErrorFromResponse({ context: response }) : null) ?? new Error((await extractResponseErrorMessage(response)) || `Legacy Netlify backend request failed with status ${response.status}.`);
   }
 
   return (await response.json()) as T;

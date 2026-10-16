@@ -1,3 +1,4 @@
+import { imageUploadConfig } from "./imageUploadConfig.js";
 import type { Flower } from "../data/flowers";
 import { flowers as builtInFlowers } from "../data/flowers";
 import { sanitizeDiagnosticNote } from "../utils/diagnostics";
@@ -105,7 +106,7 @@ const maybeUploadPlantImage = async (householdId: string, plantId: string, flowe
 
   try {
     const blob = await dataUrlToBlob(flower.image);
-    if (blob.size > 8 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(blob.type)) {
+    if (blob.size > imageUploadConfig.maxOriginalBytes || !(imageUploadConfig.supportedInputMimeTypes as readonly string[]).includes(blob.type)) {
       return { imagePath: null, imageFallback: true };
     }
 
@@ -122,7 +123,7 @@ const maybeUploadDiagnosticImage = async (householdId: string, diagnosticId: str
 
   try {
     const blob = await dataUrlToBlob(diagnostic.imageDataUrl);
-    if (blob.size > 8 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(blob.type)) {
+    if (blob.size > imageUploadConfig.maxOriginalBytes || !(imageUploadConfig.supportedInputMimeTypes as readonly string[]).includes(blob.type)) {
       return { imagePath: null, imageFallback: true };
     }
 

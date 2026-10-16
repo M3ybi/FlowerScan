@@ -88,12 +88,12 @@ test("authenticated Supabase diagnosis fails closed while household usage is mis
 test("diagnosis image validation rejects unsafe uploads", () => {
   assert.throws(
     () => validateDiagnosticImageFile(new File(["bad"], "bad.txt", { type: "text/plain" })),
-    /JPG, PNG alebo WEBP/,
+    /JPEG, PNG or WebP/,
   );
 
   assert.throws(
     () => validateDiagnosticImageFile(new File([new Uint8Array(maxDiagnosticImageBytes + 1)], "large.jpg", { type: "image/jpeg" })),
-    /8 MB/,
+    /15 MB/,
   );
 });
 

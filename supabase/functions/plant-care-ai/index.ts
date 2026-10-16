@@ -1,3 +1,4 @@
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
@@ -112,16 +113,16 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
 
   const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) return json(503, { error: "OPENAI_API_KEY is not configured." });
+  if (!apiKey) return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503));
 
   const auth = await requireUser(request.headers.get("authorization") ?? "");
-  if (!auth) return json(401, { error: "Authentication is required." });
+  if (!auth) return imageErrorResponse(new ImageUploadError("AUTHENTICATION_REQUIRED", 401));
 
-  let body: { generationSource?: string; householdId?: string; imageDataUrl?: string; language?: unknown; plantId?: string; plantName?: string };
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return json(400, { error: "Invalid JSON body." });
+    body = await readImageRequest(request);
+  } catch (error) {
+    return imageErrorResponse(error instanceof ImageUploadError ? error : new ImageUploadError("INVALID_IMAGE"));
   }
 
   const householdId = typeof body.householdId === "string" ? body.householdId : "";
@@ -129,9 +130,9 @@ Deno.serve(async (request) => {
   const generationSource = body.generationSource === "manual_refresh" ? "manual_refresh" : "initial_plant_add";
   const plantName = sanitizeText(body.plantName, 90);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
-  if (!uuidLike.test(householdId) || !plantName || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 1_600_000) {
-    return json(400, { error: "Plant name and image are required." });
-  }
+  if (!uuidLike.test(householdId) || !plantName) return json(400, { error: "Plant name and household are required." });
+  try { requireProcessedImage(imageDataUrl); }
+  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
   if (generationSource === "initial_plant_add") {
     const { error } = await auth.client.rpc("assert_can_add_plant", { target_household_id: householdId });
@@ -146,28 +147,34 @@ Deno.serve(async (request) => {
     if (error) return json(403, { error: error.message || "AI care tip limit reached." });
   }
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    body: JSON.stringify({
-      instructions: buildAiLanguageInstruction(body.language),
-      input: [{
-        content: [
-          { text: "Identify the houseplant from its photo and supplied name. Return only JSON matching the schema. Localize all user-facing string values, including the display name, care pill labels and values, care description, identification note, and care tips. Give care suitable for ordinary indoor conditions. Calculate a practical watering interval in days based on the plant and its substrate drying needs. Include exactly five carePills for light, watering, humidity, difficulty, and repotting, and exactly three concise practical care tips. Prefer a specific identification when supported by the photo or name.", type: "input_text" },
-          { text: `User-provided name: ${plantName}`, type: "input_text" },
-          { detail: "high", image_url: imageDataUrl, type: "input_image" },
-        ],
-        role: "user",
-      }],
-      max_output_tokens: 1400,
-      model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
-      text: { format: { name: "plant_care_profile", schema: careSchema, strict: true, type: "json_schema" } },
-    }),
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    method: "POST",
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      body: JSON.stringify({
+        instructions: buildAiLanguageInstruction(body.language),
+        input: [{
+          content: [
+            { text: "Identify the houseplant from its photo and supplied name. Return only JSON matching the schema. Localize all user-facing string values, including the display name, care pill labels and values, care description, identification note, and care tips. Give care suitable for ordinary indoor conditions. Calculate a practical watering interval in days based on the plant and its substrate drying needs. Include exactly five carePills for light, watering, humidity, difficulty, and repotting, and exactly three concise practical care tips. Prefer a specific identification when supported by the photo or name.", type: "input_text" },
+            { text: `User-provided name: ${plantName}`, type: "input_text" },
+            { detail: "high", image_url: imageDataUrl, type: "input_image" },
+          ],
+          role: "user",
+        }],
+        max_output_tokens: 1400,
+        model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
+        text: { format: { name: "plant_care_profile", schema: careSchema, strict: true, type: "json_schema" } },
+      }),
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    return imageErrorResponse(imageNetworkError(error), body.language);
+  }
 
   if (!response.ok) {
     console.error("Supabase care AI request failed", { status: response.status, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
-    return json(502, { error: "AI request failed." });
+    return imageErrorResponse(await imageProviderFailure(response), body.language);
   }
 
   try {

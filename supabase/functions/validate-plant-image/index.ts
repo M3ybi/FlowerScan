@@ -1,9 +1,7 @@
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
-
-const rejectionMessage =
-  "Image contains sensitive/explicit information or does not contain a valid plant/tree. Please upload a clear plant image without sensitive background content.";
 
 type ValidationPayload = {
   containsPlant: boolean;
@@ -97,22 +95,21 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
 
   const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) return json(503, { error: rejectionMessage });
+  if (!apiKey) return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503));
 
   const auth = await requireUser(request.headers.get("authorization") ?? "");
-  if (!auth) return json(401, { error: "Authentication is required." });
+  if (!auth) return imageErrorResponse(new ImageUploadError("AUTHENTICATION_REQUIRED", 401));
 
-  let body: { imageDataUrl?: string; language?: unknown };
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return json(400, { error: rejectionMessage });
+    body = await readImageRequest(request);
+  } catch (error) {
+    return imageErrorResponse(error instanceof ImageUploadError ? error : new ImageUploadError("INVALID_IMAGE"));
   }
 
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
-  if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > 1_600_000) {
-    return json(400, { error: rejectionMessage });
-  }
+  try { requireProcessedImage(imageDataUrl); }
+  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
@@ -145,12 +142,12 @@ Deno.serve(async (request) => {
 
     if (!response.ok) {
       console.error("Plant image validation request failed", { status: response.status, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
-      return json(502, { error: rejectionMessage });
+      return imageErrorResponse(await imageProviderFailure(response), body.language);
     }
 
     const validation = parseValidation(extractOutputText(await response.json()));
     if (!validation || !isAllowed(validation)) {
-      return json(422, { error: rejectionMessage });
+      return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
     }
 
     return json(200, { validation });
@@ -159,7 +156,7 @@ Deno.serve(async (request) => {
       name: error instanceof Error ? error.name : "unknown",
       userIdPrefix: `${auth.user.id.slice(0, 8)}...`,
     });
-    return json(502, { error: rejectionMessage });
+    return imageErrorResponse(imageNetworkError(error), body.language);
   } finally {
     clearTimeout(timeoutId);
   }

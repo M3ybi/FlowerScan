@@ -1,4 +1,5 @@
-import { requireUser } from "../_shared/auth.ts";
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
+import { createServiceClient, requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
 
@@ -78,26 +79,25 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
 
   const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) return json(503, { error: "AI diagnostic service is not configured." });
+  if (!apiKey) return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503));
 
   const auth = await requireUser(request.headers.get("authorization") ?? "");
-  if (!auth) return json(401, { error: "Authentication is required." });
+  if (!auth) return imageErrorResponse(new ImageUploadError("AUTHENTICATION_REQUIRED", 401));
 
-  let body: { householdId?: string; imageDataUrl?: string; language?: unknown; plantName?: string; symptomNotes?: string };
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
-  } catch {
-    return json(400, { error: "Invalid JSON body." });
+    body = await readImageRequest(request);
+  } catch (error) {
+    return imageErrorResponse(error instanceof ImageUploadError ? error : new ImageUploadError("INVALID_IMAGE"));
   }
 
   const householdId = typeof body.householdId === "string" ? body.householdId : "";
   const plantName = sanitizeText(body.plantName, 90);
   const symptomNotes = sanitizeText(body.symptomNotes, 600);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
-  const isSupportedImage = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl);
-  if (!uuidLike.test(householdId) || !plantName || !isSupportedImage || imageDataUrl.length > 1_600_000) {
-    return json(400, { error: "Valid plant name and image are required." });
-  }
+  if (!uuidLike.test(householdId) || !plantName) return json(400, { error: "Plant name and household are required." });
+  try { requireProcessedImage(imageDataUrl); }
+  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
   const { data: reservationId, error: reservationError } = await auth.client.rpc("reserve_ai_analyze_usage", {
     analyze_type: "plant_unwell_ai_analyze",
@@ -106,43 +106,56 @@ Deno.serve(async (request) => {
   });
   if (reservationError) return json(403, { error: reservationError.message || "AI analyze limit reached." });
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    body: JSON.stringify({
-      instructions: buildAiLanguageInstruction(body.language),
-      input: [{
-        content: [
-          { text: "Diagnose the houseplant problem from the affected part shown in the photo. Return only JSON matching the schema. Be cautious: lower confidence and state uncertainty when the photo or symptoms are unclear. Do not state a definitive diagnosis without visual evidence.", type: "input_text" },
-          { text: `Plant: ${plantName}`, type: "input_text" },
-          ...(symptomNotes ? [{ text: `User notes: ${symptomNotes}`, type: "input_text" }] : []),
-          { detail: "high", image_url: imageDataUrl, type: "input_image" },
-        ],
-        role: "user",
-      }],
-      max_output_tokens: 1200,
-      model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
-      text: { format: { name: "plant_problem_diagnosis", schema: diagnosisSchema, strict: true, type: "json_schema" } },
-    }),
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    method: "POST",
-  });
+  const serviceClient = createServiceClient();
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      body: JSON.stringify({
+        instructions: buildAiLanguageInstruction(body.language),
+        input: [{
+          content: [
+            { text: "Diagnose the houseplant problem from the affected part shown in the photo. Return only JSON matching the schema. Be cautious: lower confidence and state uncertainty when the photo or symptoms are unclear. Do not state a definitive diagnosis without visual evidence.", type: "input_text" },
+            { text: `Plant: ${plantName}`, type: "input_text" },
+            ...(symptomNotes ? [{ text: `User notes: ${symptomNotes}`, type: "input_text" }] : []),
+            { detail: "high", image_url: imageDataUrl, type: "input_image" },
+          ],
+          role: "user",
+        }],
+        max_output_tokens: 1200,
+        model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
+        text: { format: { name: "plant_problem_diagnosis", schema: diagnosisSchema, strict: true, type: "json_schema" } },
+      }),
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+    });
+
+  } catch (error) {
+    if (reservationId) {
+      await serviceClient.rpc("release_ai_analyze_reservation", {
+        analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
+      }).catch(() => undefined);
+    }
+    return imageErrorResponse(imageNetworkError(error), body.language);
+  }
 
   if (!response.ok) {
     console.error("Supabase diagnosis AI request failed", { status: response.status, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
     if (reservationId) {
-      await auth.client.rpc("release_ai_analyze_reservation", {
+      await serviceClient.rpc("release_ai_analyze_reservation", {
         analyze_type: "plant_unwell_ai_analyze",
         reservation_id: reservationId,
         target_household_id: householdId,
       }).catch(() => undefined);
     }
-    return json(502, { error: "AI diagnosis failed." });
+    return imageErrorResponse(await imageProviderFailure(response), body.language);
   }
 
   try {
     const diagnosis = parseDiagnosis(extractOutputText(await response.json()));
     if (!diagnosis) {
       if (reservationId) {
-        await auth.client.rpc("release_ai_analyze_reservation", {
+        await serviceClient.rpc("release_ai_analyze_reservation", {
           analyze_type: "plant_unwell_ai_analyze",
           reservation_id: reservationId,
           target_household_id: householdId,
@@ -151,18 +164,23 @@ Deno.serve(async (request) => {
       return json(502, { error: "AI returned incomplete diagnosis data." });
     }
     if (reservationId) {
-      const { error: commitError } = await auth.client.rpc("commit_ai_analyze_usage", {
+      const { error: commitError } = await serviceClient.rpc("commit_ai_analyze_usage", {
         analyze_type: "plant_unwell_ai_analyze",
         generation_source: "plant_unwell_flow",
         reservation_id: reservationId,
         target_household_id: householdId,
       });
-      if (commitError) return json(409, { error: "AI analyze usage could not be recorded." });
+      if (commitError) {
+        await serviceClient.rpc("release_ai_analyze_reservation", {
+          analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
+        }).catch(() => undefined);
+        return json(409, { error: "AI analyze usage could not be recorded." });
+      }
     }
     return json(200, { diagnosis });
   } catch {
     if (reservationId) {
-      await auth.client.rpc("release_ai_analyze_reservation", {
+      await serviceClient.rpc("release_ai_analyze_reservation", {
         analyze_type: "plant_unwell_ai_analyze",
         reservation_id: reservationId,
         target_household_id: householdId,

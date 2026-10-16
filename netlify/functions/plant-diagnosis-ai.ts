@@ -1,3 +1,4 @@
+import { maxImageRequestBytes, validateProcessedImageDataUrl } from "../../src/lib/imageUploadConfig.js";
 import type { Handler } from "@netlify/functions";
 import { legacyBackendDisabledResponse } from "./_shared/household-scope";
 import { buildAiLanguageInstruction } from "../../src/lib/onboarding.js";
@@ -129,6 +130,9 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "AI diagnostic service is not configured." }), headers, statusCode: 503 };
   }
 
+  if (Buffer.byteLength(event.body || "", "utf8") > maxImageRequestBytes) {
+    return { body: JSON.stringify({ code: "IMAGE_TOO_LARGE", error: "Processed photos must be at most 2 MB." }), headers, statusCode: 413 };
+  }
   let body: { imageDataUrl?: string; language?: unknown; plantName?: string; symptomNotes?: string };
   try {
     body = JSON.parse(event.body || "{}") as { imageDataUrl?: string; language?: unknown; plantName?: string; symptomNotes?: string };
@@ -136,14 +140,15 @@ export const handler: Handler = async (event) => {
     return { body: JSON.stringify({ error: "Invalid JSON body." }), headers, statusCode: 400 };
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { body: JSON.stringify({ code: "INVALID_IMAGE", error: "Invalid image request." }), headers, statusCode: 400 };
+  }
   const plantName = typeof body.plantName === "string" ? body.plantName.trim().slice(0, 90) : "";
   const symptomNotes = sanitizeText(body.symptomNotes, 600);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
-  const isSupportedImage = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(imageDataUrl);
-
-  if (!plantName || !isSupportedImage || imageDataUrl.length > 1_600_000) {
-    return { body: JSON.stringify({ error: "Valid plant name and image are required." }), headers, statusCode: 400 };
-  }
+  if (!plantName) return { body: JSON.stringify({ error: "Plant name is required." }), headers, statusCode: 400 };
+  const image = validateProcessedImageDataUrl(imageDataUrl);
+  if ("code" in image) return { body: JSON.stringify({ code: image.code, error: "Choose a valid JPEG photo no larger than 2 MB." }), headers, statusCode: image.status };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",

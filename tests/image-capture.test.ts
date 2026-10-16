@@ -1,3 +1,5 @@
+import { imageUploadConfig } from "../src/lib/imageUploadConfig.js";
+import { jpegFixtureBytes, jpegFixtureAtSize, fixtureDataUrl } from "./fixtures/imagePayload.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -7,49 +9,91 @@ import {
   shouldUseNativeCamera,
   validateImageInput,
 } from "../src/lib/imageCaptureService.js";
-import { createDiagnosticImagePath, createPlantImagePath } from "../src/lib/imageStoragePaths.js";
+import { createDiagnosticImagePath, createPlantImagePath, getRetryImageId } from "../src/lib/imageStoragePaths.js";
 
 const householdId = "11111111-1111-4111-8111-111111111111";
 const plantId = "22222222-2222-4222-8222-222222222222";
 const diagnosticId = "33333333-3333-4333-8333-333333333333";
 
-test("image type validation accepts supported images", () => {
-  assert.doesNotThrow(() => validateImageInput({ size: 1024, type: "image/jpeg" }));
-  assert.doesNotThrow(() => validateImageInput({ size: 1024, type: "image/png" }));
-  assert.doesNotThrow(() => validateImageInput({ size: 1024, type: "image/webp" }));
+const jpeg = new Blob([jpegFixtureBytes], { type: "image/jpeg" });
+const options = {
+  createPreviewUrl: () => "blob:preview",
+  dataUrlFromBlob: async (blob: Blob) => fixtureDataUrl(new Uint8Array(await blob.arrayBuffer())),
+};
+
+test("original type and 15 MiB boundaries are enforced", () => {
+  for (const type of imageUploadConfig.supportedInputMimeTypes) assert.doesNotThrow(() => validateImageInput({ size: 15 * 1024 * 1024, type }));
+  assert.throws(() => validateImageInput({ size: 15 * 1024 * 1024 + 1, type: "image/jpeg" }), { code: "ORIGINAL_IMAGE_TOO_LARGE" });
+  assert.throws(() => validateImageInput({ size: 0, type: "image/jpeg" }), { code: "INVALID_IMAGE" });
+  assert.throws(() => validateImageInput({ size: 1024, type: "image/gif" }), { code: "UNSUPPORTED_IMAGE_FORMAT" });
 });
 
-test("image type validation rejects unsupported images", () => {
-  assert.throws(() => validateImageInput({ size: 1024, type: "image/gif" }), /JPG, PNG alebo WEBP/);
+test("1 MiB and 8 MiB JPEG originals and 14.9 MiB PNG reach the codec and produce JPEG", async () => {
+  for (const [size, type] of [[1024 * 1024, "image/jpeg"], [8 * 1024 * 1024, "image/jpeg"], [Math.floor(14.9 * 1024 * 1024), "image/png"]] as const) {
+    const header = type === "image/png" ? new Uint8Array([137,80,78,71,13,10,26,10]) : jpegFixtureBytes;
+    const file = new Blob([header, new Uint8Array(size - header.length)], { type });
+    let attempts = 0;
+    const result = await preprocessImageFile(file, { ...options, transformImage: async (original, dimension, quality) => {
+      attempts++;
+      assert.equal(original, file);
+      assert.equal(dimension, 1600);
+      assert.equal(quality, 0.85);
+      return { blob: jpeg, dataUrl: "unused" };
+    } });
+    assert.equal(result.mimeType, "image/jpeg");
+    assert.equal(result.previewUrl, "blob:preview");
+    assert.equal(attempts, 1);
+  }
 });
 
-test("size validation rejects oversized and empty images", () => {
-  assert.throws(() => validateImageInput({ size: 0, type: "image/jpeg" }), /prázdny/);
-  assert.throws(() => validateImageInput({ size: 9 * 1024 * 1024, type: "image/jpeg" }), /príliš veľký/);
+test("oversized original and MIME mismatch are rejected before decoding", async () => {
+  let calls = 0;
+  const transformImage = async () => { calls++; return { blob: jpeg, dataUrl: "unused" }; };
+  await assert.rejects(() => preprocessImageFile(new Blob([new Uint8Array(15 * 1024 * 1024 + 1)], { type: "image/jpeg" }), { ...options, transformImage }), { code: "ORIGINAL_IMAGE_TOO_LARGE" });
+  await assert.rejects(() => preprocessImageFile(new Blob([jpegFixtureBytes], { type: "image/png" }), { ...options, transformImage }), { code: "UNSUPPORTED_IMAGE_FORMAT" });
+  assert.equal(calls, 0);
 });
 
-test("resize failure falls back to original JPEG payload", async () => {
-  const file = new Blob(["jpeg"], { type: "image/jpeg" }) as Blob & { name?: string };
-  file.name = "fallback.jpg";
+test("adaptive attempts encode the original and stop as soon as the 2 MiB limit is met", async () => {
+  const calls: number[] = [];
+  const oversized = new Blob([jpegFixtureAtSize(imageUploadConfig.maxProcessedBytes + 1)], { type: "image/jpeg" });
+  const result = await preprocessImageFile(jpeg, { ...options, transformImage: async (original, _dimension, quality) => {
+    assert.equal(original, jpeg);
+    calls.push(quality);
+    return { blob: calls.length === 1 ? oversized : jpeg, dataUrl: "unused" };
+  } });
+  assert.deepEqual(calls, [0.85, 0.75]);
+  assert.equal(result.sizeBytes, jpeg.size);
+});
 
-  const result = await preprocessImageFile(file, {
-    createPreviewUrl: () => "blob:preview",
-    dataUrlFromBlob: async () => "data:image/jpeg;base64,ZmFsbGJhY2s=",
-    transformImage: async () => {
-      throw new Error("canvas unavailable");
-    },
-  });
+test("a first result between 1 and 2 MiB keeps its initial quality", async () => {
+  let attempts = 0;
+  const blob = new Blob([jpegFixtureAtSize(Math.floor(1.5 * 1024 * 1024))], { type: "image/jpeg" });
+  const result = await preprocessImageFile(jpeg, { ...options, transformImage: async () => { attempts++; return { blob, dataUrl: "unused" }; } });
+  assert.equal(attempts, 1);
+  assert.equal(result.sizeBytes, blob.size);
+});
 
-  assert.equal(result.blob, file);
-  assert.equal(result.dataUrl, "data:image/jpeg;base64,ZmFsbGJhY2s=");
-  assert.equal(result.mimeType, "image/jpeg");
-  assert.equal(result.previewUrl, "blob:preview");
+test("compression attempts are bounded and never return an oversized fallback", async () => {
+  let attempts = 0;
+  const blob = new Blob([new Uint8Array(imageUploadConfig.maxProcessedBytes + 1)], { type: "image/jpeg" });
+  await assert.rejects(() => preprocessImageFile(jpeg, { ...options, transformImage: async () => { attempts++; return { blob, dataUrl: "unused" }; } }), { code: "IMAGE_COMPRESSION_FAILED" });
+  assert.equal(attempts, imageUploadConfig.compressionAttempts.length);
+  await assert.rejects(() => preprocessImageFile(jpeg, { ...options, transformImage: async () => { throw new Error("decode failed"); } }), { code: "IMAGE_COMPRESSION_FAILED" });
 });
 
 test("path generation uses private household-scoped conventions", () => {
   assert.equal(createPlantImagePath(householdId, plantId), `${householdId}/plants/${plantId}/original.jpg`);
   assert.equal(createDiagnosticImagePath(householdId, diagnosticId), `${householdId}/diagnostics/${diagnosticId}/image.jpg`);
   assert.throws(() => createPlantImagePath("../bad", plantId), /householdId must be a UUID/);
+});
+
+test("retries reuse an image object while different content and households stay separate", async () => {
+  const first = await getRetryImageId(householdId,"record",jpeg);
+  const retry = await getRetryImageId(householdId,"record",new Blob([jpegFixtureBytes],{type:"image/jpeg"}));
+  assert.equal(first,retry);
+  assert.notEqual(first,await getRetryImageId(diagnosticId,"record",jpeg));
+  assert.notEqual(first,await getRetryImageId(householdId,"record",new Blob(["changed"])));
 });
 
 test("runtime branching separates web and native camera runtimes", () => {

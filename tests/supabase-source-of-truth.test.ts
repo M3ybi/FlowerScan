@@ -61,6 +61,8 @@ const catalogPlant: PlantCatalogItem = {
 const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
   const calls: string[] = [];
   const deps: SupabaseWriteDependencies = {
+    getPlantDiagnosticByLegacyId: async () => null,
+    deleteUploadedImage: async (kind, path) => { calls.push(`delete-image:${kind}:${path}`); },
     createHouseholdPlant: async (input) => {
       calls.push(`create:${input.legacyId}`);
       return { ...basePlant, id: `created-${input.legacyId}`, legacyId: input.legacyId ?? null, source: input.source };
@@ -147,6 +149,50 @@ const createDeps = (patch: Partial<SupabaseWriteDependencies> = {}) => {
 
   return { calls, deps };
 };
+
+test("failed plant creation cleans up its uploaded image and preserves the failure", async () => {
+  const { calls, deps } = createDeps({
+    createHouseholdPlant: async () => { throw new Error("Plant insertion denied"); },
+  });
+  await assert.rejects(() => upsertSupabasePlantFromFlower("household-id", {
+    ...flowers[0], id: "custom-failed", source: "custom", image: "data:image/jpeg;base64,eA==",
+  }, deps), /Plant insertion denied/);
+  assert.ok(calls.includes("delete-image:plant:plant/path.jpg"));
+});
+
+test("lost create response preserves the image of the committed plant", async () => {
+  let reads = 0;
+  const { calls, deps } = createDeps({
+    createHouseholdPlant: async () => { throw new Error("Response lost"); },
+    getHouseholdPlantByLegacyId: async () => ++reads === 1 ? null : { ...basePlant, imagePath: "plant/path.jpg" },
+  });
+  const saved = await upsertSupabasePlantFromFlower("household-id", {
+    ...flowers[0], id: "custom-committed", source: "custom", image: "data:image/jpeg;base64,eA==",
+  }, deps);
+  assert.equal(saved.imagePath, "plant/path.jpg");
+  assert.equal(calls.some((call) => call.startsWith("delete-image:")), false);
+});
+
+test("failed upload never attempts plant creation", async () => {
+  const { calls, deps } = createDeps({ uploadPlantImage: async () => { throw new Error("Storage unavailable"); } });
+  await assert.rejects(() => upsertSupabasePlantFromFlower("household-id", {
+    ...flowers[0], id: "custom-upload-failed", source: "custom", image: "data:image/jpeg;base64,eA==",
+  }, deps), /Storage unavailable/);
+  assert.equal(calls.some((call) => call.startsWith("create:")), false);
+});
+
+test("failed photo replacement cleans up the new upload and keeps the previous photo", async () => {
+  const { calls, deps } = createDeps({
+    getHouseholdPlantByLegacyId: async () => ({ ...basePlant, imagePath: "old/photo.jpg" }),
+    getHouseholdPlantById: async () => ({ ...basePlant, imagePath: "old/photo.jpg" }),
+    updateHouseholdPlant: async () => { throw new Error("Update denied"); },
+  });
+  await assert.rejects(() => upsertSupabasePlantFromFlower("household-id", {
+    ...flowers[0], image: "data:image/jpeg;base64,eA==",
+  }, deps), /Update denied/);
+  assert.ok(calls.includes("delete-image:plant:plant/path.jpg"));
+  assert.equal(calls.includes("delete-image:plant:old/photo.jpg"), false);
+});
 
 test("writes flag disabled uses legacy-only mode", () => {
   assert.equal(
@@ -317,7 +363,7 @@ test("diagnosis create surfaces RLS denial from Supabase insert", async () => {
       ),
     /row-level security/,
   );
-  assert.deepEqual(calls, ["upload-diagnosis-image", "create-diagnosis-denied"]);
+  assert.deepEqual(calls, ["upload-diagnosis-image", "create-diagnosis-denied", "delete-image:diagnostic:diagnostic/path.jpg"]);
 });
 
 test("rollback mode keeps writes legacy-only when local or env disables Supabase writes", () => {
