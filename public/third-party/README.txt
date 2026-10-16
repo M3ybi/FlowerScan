@@ -10,4 +10,3 @@ https://github.com/strukturag/libde265
 The separately loaded HEIC worker can be rebuilt/replaced from its source at:
 https://github.com/M3ybi/FlowerScan/blob/main/src/lib/heicDecode.worker.ts
 No decoder modification is made. The application wrapper is separate source.
-
