@@ -25,6 +25,19 @@ test("request timeout never aborts completed work, including rejected operations
   context.mock.timers.tick(60_000);
   assert.ok(signals.every((signal) => !signal.aborted));
 });
+
+test("selection cancellation propagates to HTTP work even when the SDK wraps abort errors", async () => {
+  const parent = new AbortController();
+  const result = withRequestTimeout(async (signal) => {
+    parent.abort();
+    assert.equal(signal.aborted, true);
+    return { error: new TypeError("SDK wrapped abort") };
+  }, 60_000, parent.signal);
+  await assert.rejects(result, { name: "AbortError" });
+  let invoked = false;
+  await assert.rejects(withRequestTimeout(async () => { invoked = true; }, 60_000, parent.signal), { name: "AbortError" });
+  assert.equal(invoked, false);
+});
 import {
   createPrivateImageSignedUrl,
   detectImageRuntime,
@@ -44,6 +57,45 @@ const options = {
   dataUrlFromBlob: async (blob: Blob) => fixtureDataUrl(new Uint8Array(await blob.arrayBuffer())),
 };
 
+test("a second gallery file read failure is classified instead of escaping as a generic error", async () => {
+  await preprocessImageFile(jpeg, { ...options, transformImage: async () => ({ blob: jpeg, dataUrl: "unused" }) });
+  const unreadable = new Blob([jpegFixtureBytes], { type: "image/jpeg" });
+  Object.defineProperty(unreadable, "arrayBuffer", { value: async () => { throw new DOMException("Gallery access lost", "NotReadableError"); } });
+  Object.defineProperty(unreadable, "slice", { value: () => unreadable });
+  await assert.rejects(() => preprocessImageFile(unreadable, options), { code: "IMAGE_READ_FAILED" });
+});
+
+test("a transient gallery read retries once, then decoders use only the owned snapshot", async () => {
+  const file = new Blob([jpegFixtureBytes], { type: "image/jpeg" });
+  let reads = 0;
+  Object.defineProperty(file, "arrayBuffer", { value: async () => {
+    if (++reads === 1) throw new DOMException("Temporary gallery read", "NotReadableError");
+    if (reads > 2) throw new DOMException("Gallery grant expired", "NotReadableError");
+    return jpegFixtureBytes.slice().buffer;
+  } });
+  const result = await preprocessImageFile(file, { ...options, transformImage: async (snapshot) => {
+    assert.notEqual(snapshot, file);
+    assert.deepEqual(new Uint8Array(await snapshot.arrayBuffer()), jpegFixtureBytes);
+    return { blob: jpeg, dataUrl: "unused" };
+  } });
+  assert.equal(reads, 2);
+  assert.equal(result.mimeType, "image/jpeg");
+});
+
+test("generic gallery MIME types are sniffed while supported mismatches remain rejected", async () => {
+  for (const type of ["", "application/octet-stream", "image/jpg"]) {
+    const result = await preprocessImageFile(new Blob([jpegFixtureBytes], { type }), { ...options,
+      transformImage: async (snapshot) => { assert.equal(snapshot.type, "image/jpeg"); return { blob: jpeg, dataUrl: "unused" }; },
+    });
+    assert.equal(result.mimeType, "image/jpeg");
+  }
+});
+
+test("an aborted selection stops before reading or decoding another file", async () => {
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(() => preprocessImageFile(jpeg, { signal: controller.signal }), { name: "AbortError" });
+});
+
 test("original type and 15 MiB boundaries are enforced", () => {
   for (const type of imageUploadConfig.supportedInputMimeTypes) assert.doesNotThrow(() => validateImageInput({ size: 15 * 1024 * 1024, type }));
   assert.throws(() => validateImageInput({ size: 15 * 1024 * 1024 + 1, type: "image/jpeg" }), { code: "ORIGINAL_IMAGE_TOO_LARGE" });
@@ -58,7 +110,9 @@ test("1 MiB and 8 MiB JPEG originals and 14.9 MiB PNG reach the codec and produc
     let attempts = 0;
     const result = await preprocessImageFile(file, { ...options, transformImage: async (original, dimension, quality) => {
       attempts++;
-      assert.equal(original, file);
+      assert.notEqual(original, file);
+      assert.equal(original.size, file.size);
+      assert.equal(original.type, file.type);
       assert.equal(dimension, 1600);
       assert.equal(quality, 0.85);
       return { blob: jpeg, dataUrl: "unused" };
@@ -81,7 +135,8 @@ test("adaptive attempts encode the original and stop as soon as the 2 MiB limit 
   const calls: number[] = [];
   const oversized = new Blob([jpegFixtureAtSize(imageUploadConfig.maxProcessedBytes + 1)], { type: "image/jpeg" });
   const result = await preprocessImageFile(jpeg, { ...options, transformImage: async (original, _dimension, quality) => {
-    assert.equal(original, jpeg);
+    assert.notEqual(original, jpeg);
+    assert.equal(original.size, jpeg.size);
     calls.push(quality);
     return { blob: calls.length === 1 ? oversized : jpeg, dataUrl: "unused" };
   } });

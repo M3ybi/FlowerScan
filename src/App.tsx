@@ -10,7 +10,6 @@ import {
   Crown,
   Droplets,
   FileDown,
-  ImagePlus,
   Home,
   Mail,
   KeyRound,
@@ -95,8 +94,8 @@ import { useCustomFlowers } from "./hooks/useCustomFlowers";
 import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import { useSubscriptionState } from "./hooks/useSubscriptionState";
 import type { FlowerRecords } from "./hooks/useFlowerRecords";
-import { captureImage, detectImageRuntime } from "./lib/imageCaptureService";
-import type { NormalizedImage } from "./lib/imageCaptureService";
+import { ImageSourcePicker } from "./components/ImageSourcePicker";
+import { useImageSelection } from "./hooks/useImageSelection";
 import { createTranslator, translate } from "./lib/i18n";
 import {
   getInitialOnboardingStep,
@@ -355,14 +354,10 @@ export const App = () => {
   const [qrExportStatus, setQrExportStatus] = useState("");
   const [isExportingQrPdf, setIsExportingQrPdf] = useState(false);
   const [newPlantName, setNewPlantName] = useState("");
-  const [newPlantImage, setNewPlantImage] = useState<NormalizedImage | null>(null);
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
   const plantSubmissionRef = useRef<symbol | null>(null);
   const pendingPlantIdRef = useRef<string | null>(null);
-  const newImageCaptureRef = useRef<symbol | null>(null);
-  const diagnosisCaptureRef = useRef<symbol | null>(null);
-  const [isCapturingNewPlantImage, setIsCapturingNewPlantImage] = useState(false);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
   const [plantPage, setPlantPage] = useState(1);
   const [deleteFlowerId, setDeleteFlowerId] = useState("");
@@ -374,16 +369,28 @@ export const App = () => {
   const [draftFlowerName, setDraftFlowerName] = useState("");
   const [legacyDiagnostics, setDiagnostics] = useState<PlantDiagnosticEntry[]>(() => readStoredDiagnostics());
   const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false);
-  const [diagnosisImageDataUrl, setDiagnosisImageDataUrl] = useState("");
-  const [diagnosisImagePreviewUrl, setDiagnosisImagePreviewUrl] = useState("");
   const [diagnosisDraft, setDiagnosisDraft] = useState<PlantDiagnosisDraft | null>(null);
   const [diagnosisUserNote, setDiagnosisUserNote] = useState("");
   const [diagnosisStatus, setDiagnosisStatus] = useState("");
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [isSavingDiagnosis, setIsSavingDiagnosis] = useState(false);
-  const [isCapturingDiagnosisImage, setIsCapturingDiagnosisImage] = useState(false);
   const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
+  const imageSelectionScope = `${householdOperationScope.userId}:${householdOperationScope.householdToken}:${householdOperationScope.generation}`;
+  const newImageSelection = useImageSelection({
+    enabled: isAddPlantModalOpen && route.page === "dashboard" && !isAddingPlant, scopeKey: imageSelectionScope, language: selectedLanguage,
+    onStatus: setNewPlantStatus, copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("image.ready") },
+  });
+  const diagnosisImageSelection = useImageSelection({
+    enabled: isDiagnosisModalOpen && route.page === "detail" && !isDiagnosing, scopeKey: `${imageSelectionScope}:${route.page === "detail" ? route.flowerId : ""}`, language: selectedLanguage,
+    onStatus: setDiagnosisStatus, onReady: () => setDiagnosisDraft(null),
+    copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("diagnosis.imageReady") },
+  });
+  const newPlantImage = newImageSelection.image;
+  const isCapturingNewPlantImage = newImageSelection.isProcessing;
+  const diagnosisImageDataUrl = diagnosisImageSelection.image?.dataUrl ?? "";
+  const diagnosisImagePreviewUrl = diagnosisImageSelection.image?.previewUrl ?? "";
+  const isCapturingDiagnosisImage = diagnosisImageSelection.isProcessing;
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
   const [diagnosticHistoryStatus, setDiagnosticHistoryStatus] = useState("");
   const [pendingDiagnosticUpdateKey, setPendingDiagnosticUpdateKey] = useState("");
@@ -406,7 +413,6 @@ export const App = () => {
   );
   const isSupabaseWriteThroughEnabled = isSupabaseWriteThroughEnvEnabled && !isSupabaseWritesLocallyDisabled;
   const shouldUseSupabaseAccountData = isSupabaseReadThroughEnabled && isSupabaseBackend && (auth.loading || auth.isAuthenticated);
-  const isNativeImageRuntime = detectImageRuntime() !== "web";
   const dataSourceMode = detectDataSourceMode({
     featureEnabled: isSupabaseReadThroughEnabled,
     hasAuthenticatedUser: auth.isAuthenticated,
@@ -531,23 +537,18 @@ export const App = () => {
     setIsAddingPlant(false);
     plantSubmissionRef.current = null;
     pendingPlantIdRef.current = null;
-    newImageCaptureRef.current = null;
-    diagnosisCaptureRef.current = null;
-    setIsCapturingNewPlantImage(false);
+    newImageSelection.clear();
+    diagnosisImageSelection.clear();
     setIsGeneratingCarePreview(false);
     setIsDiagnosing(false);
     setIsSavingDiagnosis(false);
-    setIsCapturingDiagnosisImage(false);
     setIsRemovingPlant(false);
     setIsCreatingInvite(false);
     setIsExportingQrPdf(false);
     setPendingQuickRecordKey("");
     setPendingDiagnosticUpdateKey("");
     setNewPlantName("");
-    setNewPlantImage(null);
     setDiagnosisDraft(null);
-    setDiagnosisImageDataUrl("");
-    setDiagnosisImagePreviewUrl("");
     setIsAddPlantModalOpen(false);
     setIsDiagnosisModalOpen(false);
     removingPersonKeysRef.current.clear();
@@ -849,24 +850,6 @@ export const App = () => {
       cancelled = true;
     };
   }, [route.page]);
-
-  useEffect(
-    () => () => {
-      if (newPlantImage?.previewUrl) {
-        URL.revokeObjectURL(newPlantImage.previewUrl);
-      }
-    },
-    [newPlantImage?.previewUrl],
-  );
-
-  useEffect(
-    () => () => {
-      if (diagnosisImagePreviewUrl) {
-        URL.revokeObjectURL(diagnosisImagePreviewUrl);
-      }
-    },
-    [diagnosisImagePreviewUrl],
-  );
 
   useEffect(() => {
     if (!quickRecordStatus) {
@@ -2217,7 +2200,7 @@ export const App = () => {
   const handleAddCustomFlower = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isHouseholdOperationCurrent()) return;
-    if (plantSubmissionRef.current) {
+    if (plantSubmissionRef.current || newImageSelection.isBusy()) {
       return;
     }
 
@@ -2272,8 +2255,7 @@ export const App = () => {
       setNewPlantStatus(t("plantForm.added", { plant: customFlower.displayName }));
       pendingPlantIdRef.current = null;
       setNewPlantName("");
-      URL.revokeObjectURL(newPlantImage.previewUrl);
-      setNewPlantImage(null);
+      newImageSelection.clear();
       setIsAddPlantModalOpen(false);
     } catch (error) {
       if (!isHouseholdOperationCurrent()) return;
@@ -2381,8 +2363,7 @@ export const App = () => {
       return;
     }
 
-    setDiagnosisImageDataUrl("");
-    setDiagnosisImagePreviewUrl("");
+    diagnosisImageSelection.clear();
     setDiagnosisDraft(null);
     setDiagnosisSymptomNotes("");
     setDiagnosisUserNote("");
@@ -2396,102 +2377,18 @@ export const App = () => {
       return;
     }
 
+    diagnosisImageSelection.cancel();
     setIsDiagnosisModalOpen(false);
   };
 
-  const handleNewPlantImageCapture = async (source: "camera" | "gallery", file?: File) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (newImageCaptureRef.current || isAddingPlant) {
-      return;
-    }
-    if (!file && !isNativeImageRuntime) return;
-
-    const capture = Symbol("image-capture");
-    newImageCaptureRef.current = capture;
-    let capturedImage: NormalizedImage | null = null;
-    try {
-      setIsCapturingNewPlantImage(true);
-      setNewPlantStatus(t("image.processing"));
-      const image = await captureImage({ file, source });
-      capturedImage = image;
-      if (!isHouseholdOperationCurrent()) {
-        URL.revokeObjectURL(image.previewUrl);
-        return;
-      }
-      setNewPlantStatus(t("image.validatingPlant"));
-      await validatePlantImageForUpload(image.dataUrl, selectedLanguage);
-      if (!isHouseholdOperationCurrent()) {
-        URL.revokeObjectURL(image.previewUrl);
-        return;
-      }
-      if (newPlantImage?.previewUrl) {
-        URL.revokeObjectURL(newPlantImage.previewUrl);
-      }
-      setNewPlantImage(image);
-      setNewPlantStatus(t("image.ready"));
-    } catch (error) {
-      if (capturedImage?.previewUrl) {
-        URL.revokeObjectURL(capturedImage.previewUrl);
-      }
-      if (!isHouseholdOperationCurrent()) return;
-      setNewPlantStatus(imageErrorMessage(error, selectedLanguage) ?? t("image.processFailed"));
-    } finally {
-      if (newImageCaptureRef.current === capture) newImageCaptureRef.current = null;
-      if (isHouseholdOperationCurrent()) setIsCapturingNewPlantImage(false);
-    }
-  };
-
   const handleDiagnosisImageChange = async (source: "camera" | "gallery", file?: File) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (diagnosisCaptureRef.current || isDiagnosing) {
-      return;
-    }
-
+    if (!isHouseholdOperationCurrent() || isDiagnosing) return;
     const access = resolveCurrentAiDiagnosisAccess();
     if (!access.allowed) {
       setDiagnosisStatus(aiDiagnosisAccessMessage(access));
       return;
     }
-
-    if (!file && source === "gallery" && !isNativeImageRuntime) {
-      return;
-    }
-
-    const capture = Symbol("image-capture");
-    diagnosisCaptureRef.current = capture;
-    let capturedImage: NormalizedImage | null = null;
-    try {
-      setIsCapturingDiagnosisImage(true);
-      setDiagnosisStatus(t("image.processing"));
-      const image = await captureImage({ file, source });
-      capturedImage = image;
-      if (!isHouseholdOperationCurrent()) {
-        URL.revokeObjectURL(image.previewUrl);
-        return;
-      }
-      setDiagnosisStatus(t("image.validatingPlant"));
-      await validatePlantImageForUpload(image.dataUrl, selectedLanguage);
-      if (!isHouseholdOperationCurrent()) {
-        URL.revokeObjectURL(image.previewUrl);
-        return;
-      }
-      if (diagnosisImagePreviewUrl) {
-        URL.revokeObjectURL(diagnosisImagePreviewUrl);
-      }
-      setDiagnosisDraft(null);
-      setDiagnosisImageDataUrl(image.dataUrl);
-      setDiagnosisImagePreviewUrl(image.previewUrl);
-      setDiagnosisStatus(t("diagnosis.imageReady"));
-    } catch (error) {
-      if (capturedImage?.previewUrl) {
-        URL.revokeObjectURL(capturedImage.previewUrl);
-      }
-      if (!isHouseholdOperationCurrent()) return;
-      setDiagnosisStatus(imageErrorMessage(error, selectedLanguage) ?? t("image.processFailed"));
-    } finally {
-      if (diagnosisCaptureRef.current === capture) diagnosisCaptureRef.current = null;
-      if (isHouseholdOperationCurrent()) setIsCapturingDiagnosisImage(false);
-    }
+    await diagnosisImageSelection.select(source, file);
   };
 
   const runPlantDiagnosis = async (flower: Flower) => {
@@ -2829,6 +2726,8 @@ export const App = () => {
   };
 
   const closeAddPlantModal = () => {
+    if (plantSubmissionRef.current) return;
+    newImageSelection.cancel();
     setNewPlantStatus("");
     setIsAddPlantModalOpen(false);
   };
@@ -3723,55 +3622,13 @@ export const App = () => {
                 />
               </label>
 
-              <label
-                className={`diagnosis-upload ${diagnosisAccess.allowed && !isCapturingDiagnosisImage && !isDiagnosing ? "" : "diagnosis-upload-disabled"}`}
-                aria-disabled={!diagnosisAccess.allowed || isCapturingDiagnosisImage || isDiagnosing}
-              >
-                <span className="image-upload-icon">
-                  <ImagePlus size={19} aria-hidden="true" />
-                </span>
-                <span className="image-upload-copy">
-                  <strong>{t("diagnosis.photoPrompt")}</strong>
-                  <small>{t("diagnosis.photoHelp")}</small>
-                </span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
-                  disabled={!diagnosisAccess.allowed || isCapturingDiagnosisImage || isDiagnosing}
-                  onChange={(event) => {
-                    void handleDiagnosisImageChange("gallery", event.target.files?.[0]);
-                    event.target.value = "";
-                  }}
-                />
-              </label>
-
-              {isNativeImageRuntime ? (
-                <div className="image-capture-actions">
-                  <LoadingButton
-                    className="ghost-action"
-                    type="button"
-                    disabled={!diagnosisAccess.allowed}
-                    onClick={() => void handleDiagnosisImageChange("camera")}
-                    isLoading={isCapturingDiagnosisImage}
-                    loadingLabel={t("image.processing")}
-                  >
-                    <Camera size={17} aria-hidden="true" />
-                    {t("action.camera")}
-                  </LoadingButton>
-                  <LoadingButton
-                    className="ghost-action"
-                    type="button"
-                    disabled={!diagnosisAccess.allowed}
-                    onClick={() => void handleDiagnosisImageChange("gallery")}
-                    isLoading={isCapturingDiagnosisImage}
-                    loadingLabel={t("image.processing")}
-                  >
-                    <ImagePlus size={17} aria-hidden="true" />
-                    {t("action.gallery")}
-                  </LoadingButton>
-                </div>
-              ) : null}
+              <ImageSourcePicker
+                title={t("diagnosis.photoPrompt")} help={t("diagnosis.photoHelp")}
+                cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")}
+                disabled={!diagnosisAccess.allowed || isDiagnosing} busy={isCapturingDiagnosisImage}
+                onSelect={handleDiagnosisImageChange}
+                onCancel={diagnosisImageSelection.cancel}
+              />
 
               {diagnosisImageDataUrl ? <img className="diagnosis-preview" src={diagnosisImagePreviewUrl || diagnosisImageDataUrl} alt={t("diagnosis.previewAlt")} /> : null}
               {diagnosisStatus ? <p className="care-preview-status">{diagnosisStatus}</p> : null}
@@ -4405,54 +4262,14 @@ export const App = () => {
               </label>
               <div className="field">
                 <span>{t("plantForm.image")}</span>
-                <label className="image-upload">
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={isCapturingNewPlantImage || isAddingPlant}
-                    onChange={(event) => {
-                      const input = event.currentTarget;
-                      const file = input.files?.[0];
-                      if (!file) return;
-                      void handleNewPlantImageCapture("gallery", file).finally(() => {
-                        input.value = "";
-                      });
-                    }}
-                  />
-                  <span className="image-upload-icon">
-                    <ImagePlus size={22} aria-hidden="true" />
-                  </span>
-                  <span className="image-upload-copy">
-                    <strong>{newPlantImage ? newPlantImage.name : t("plantForm.choosePhoto")}</strong>
-                    <small>{newPlantImage ? t("plantForm.photoReady") : t("plantForm.photoHelp")}</small>
-                  </span>
-                </label>
-                {isNativeImageRuntime ? (
-                  <div className="image-capture-actions">
-                    <LoadingButton
-                      className="ghost-action"
-                      type="button"
-                      onClick={() => void handleNewPlantImageCapture("camera")}
-                      isLoading={isCapturingNewPlantImage}
-                      disabled={isAddingPlant}
-                      loadingLabel={t("image.processing")}
-                    >
-                      <Camera size={17} aria-hidden="true" />
-                      {t("action.camera")}
-                    </LoadingButton>
-                    <LoadingButton
-                      className="ghost-action"
-                      type="button"
-                      onClick={() => void handleNewPlantImageCapture("gallery")}
-                      isLoading={isCapturingNewPlantImage}
-                      disabled={isAddingPlant}
-                      loadingLabel={t("image.processing")}
-                    >
-                      <ImagePlus size={17} aria-hidden="true" />
-                      {t("action.gallery")}
-                    </LoadingButton>
-                  </div>
-                ) : null}
+                <ImageSourcePicker
+                  title={newPlantImage?.name ?? t("plantForm.choosePhoto")}
+                  help={newPlantImage ? t("plantForm.photoReady") : t("plantForm.photoHelp")}
+                  cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")}
+                  disabled={isAddingPlant} busy={isCapturingNewPlantImage}
+                  onSelect={newImageSelection.select}
+                  onCancel={newImageSelection.cancel}
+                />
                 {newPlantImage ? <img className="diagnosis-preview" src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
               </div>
               <LoadingButton type="submit" disabled={plantLimitReached || isCapturingNewPlantImage} isLoading={isAddingPlant} loadingLabel={t("plantForm.adding")}>

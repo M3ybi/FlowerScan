@@ -1,14 +1,10 @@
+import { runImageSelectionChecks, renderImagePickerPreview } from "./image-selection-browser";
 import { preprocessImageFile, prepareImageBlobForUpload, captureImage } from "../../src/lib/imageCaptureService";
 import { Capacitor } from "@capacitor/core";
 import { callBackendFunction } from "../../src/lib/backendConfig";
-import { validatePlantImageForUpload } from "../../src/utils/imageUploadValidation";
-import type { NormalizedImage } from "../../src/lib/imageCaptureService";
-import { imageErrorMessage } from "../../src/lib/imageUploadErrors";
 import { imageUploadConfig, jpegDimensions } from "../../src/lib/imageUploadConfig";
 
 const checks: string[] = [];
-declare const __PRODUCTION_ADD_PLANT_PHOTO_HTML__: string;
-declare const __PRODUCTION_ADD_PLANT_CAPTURE_CODE__: string;
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); checks.push(message); };
 const encode = (canvas: HTMLCanvasElement, type: string) => new Promise<Blob>((resolve, reject) =>
   canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Fixture encode failed")), type, 0.95));
@@ -22,17 +18,6 @@ const canvas = (width: number, height: number) => {
 const inspect = async (blob: Blob) => jpegDimensions(new Uint8Array(await blob.arrayBuffer()))!;
 
 const run = async () => {
-  const photoField = document.createElement("div");
-  photoField.innerHTML = __PRODUCTION_ADD_PLANT_PHOTO_HTML__;
-  document.body.appendChild(photoField);
-  let pickerActivations = 0;
-  photoField.querySelector<HTMLInputElement>('input[type="file"]')!.addEventListener("click", (event) => {
-    event.preventDefault(); // Count activations without opening an OS picker.
-    pickerActivations++;
-  });
-  photoField.querySelector<HTMLElement>(".image-upload-copy strong")!.click();
-  assert(pickerActivations === 1, "add-plant photo label activates the browser picker exactly once");
-  photoField.remove();
   const timeout = AbortSignal.timeout;
   const originalFetch = globalThis.fetch;
   try {
@@ -77,9 +62,15 @@ const run = async () => {
     assert(image.sizeBytes < imageUploadConfig.preferredProcessedBytes, "ordinary photo reaches preferred size under 1 MiB");
   } finally { URL.revokeObjectURL(image.previewUrl); }
   const png = await encode(small,"image/png");
-  const paddedPng = new Blob([png,new Uint8Array(Math.floor(14.9 * 1024 * 1024) - png.size)], { type: "image/png" });
+  const phoneCanvas=canvas(6000,4000);
+  const phonePhoto=await encode(phoneCanvas,"image/jpeg");phoneCanvas.width=phoneCanvas.height=0;
+  const phoneImage=await preprocessImageFile(phonePhoto);
+  const phoneDimensions=await inspect(phoneImage.blob);
+  assert(phoneDimensions.width===1600&&phoneDimensions.height===1067,"24 megapixel phone image decodes to bounded dimensions and preserves aspect ratio");
+  URL.revokeObjectURL(phoneImage.previewUrl);
+  const paddedPng = new Blob([png,new Uint8Array(15 * 1024 * 1024 - png.size)], { type: "image/png" });
   const converted = await preprocessImageFile(paddedPng);
-  assert((await inspect(converted.blob)).width === 40, "14.9 MiB PNG decodes and converts");
+  assert((await inspect(converted.blob)).width === 40, "15 MiB PNG decodes and converts at the original-size boundary");
   URL.revokeObjectURL(converted.previewUrl);
 
   const landscape = new Uint8Array(await (await encode(small,"image/jpeg")).arrayBuffer());
@@ -101,7 +92,7 @@ const run = async () => {
 
   for (const [blob, code] of [
     [new Blob([landscape], { type: "image/png" }), "UNSUPPORTED_IMAGE_FORMAT"],
-    [new Blob([new Uint8Array([255,216,255,0,0])], { type: "image/jpeg" }), "INVALID_IMAGE"],
+    [new Blob([new Uint8Array([255,216,255,0,0])], { type: "image/jpeg" }), "IMAGE_DECODE_FAILED"],
     [new Blob([new Uint8Array(15*1024*1024+1)], { type: "image/jpeg" }), "ORIGINAL_IMAGE_TOO_LARGE"],
   ] as const) {
     let rejected = false;
@@ -122,45 +113,34 @@ const run = async () => {
     assert((await inspect(fallback.blob)).height === 40, "HTML decoder recovers when ImageBitmap exists but rejects the photo");
     URL.revokeObjectURL(fallback.previewUrl);
   } finally { Object.defineProperty(globalThis,"createImageBitmap",{value:createBitmap,configurable:true,writable:true}); }
-  // Execute the production add-plant selection handlers with real browser
-  // Files/decoding. Only the external validation HTTP response is substituted.
-  const picker = document.createElement("input"); picker.type = "file"; document.body.appendChild(picker);
-  let selected: NormalizedImage | null = null;
-  const statuses: string[] = [];
-  let releaseValidation: (() => void) | undefined;
-  const fetchBeforePicker = globalThis.fetch;
-  const production = new Function("context", `${__PRODUCTION_ADD_PLANT_CAPTURE_CODE__}; return createFixture(context);`)({
-    isHouseholdOperationCurrent: () => true, newImageCaptureRef: {current:null}, isAddingPlant:false, isNativeImageRuntime:false,
-    captureImage, validatePlantImageForUpload, selectedLanguage:"sk", newPlantImage:null, imageErrorMessage, t:(key:string)=>key,
-    setNewPlantImage: (image:NormalizedImage) => { selected=image; }, setNewPlantStatus:(status:string)=>statuses.push(status),
-    setIsCapturingNewPlantImage: (busy:boolean) => { picker.disabled=busy; },
-  }) as { capture:(source:string,file?:File)=>Promise<void>; change:(event:{currentTarget:HTMLInputElement})=>void };
-  const waitFor = async (condition:()=>unknown) => {
-    for(let attempt=0;attempt<200;attempt++){ if(condition())return; await new Promise(resolve=>setTimeout(resolve,10)); }
-    throw new Error("Add-plant browser flow did not finish");
-  };
+  const optimizedJpeg = await encode(canvas(30,20), "image/jpeg");
+  const unchanged = await preprocessImageFile(optimizedJpeg);
+  assert(Array.from(new Uint8Array(await unchanged.blob.arrayBuffer())).join()===Array.from(new Uint8Array(await optimizedJpeg.arrayBuffer())).join(),
+    "already optimized JPEG passes decoding without another lossy encode");
+  URL.revokeObjectURL(unchanged.previewUrl);
+  const toBlob = HTMLCanvasElement.prototype.toBlob;
   try {
-    globalThis.fetch=async()=>{
-      await new Promise<void>(resolve=>{releaseValidation=resolve;});
-      return Response.json({validation:{containsPlant:true,plantConfidence:1,hasSensitiveBackground:false,hasExplicitOrUnsafeContent:false,
-        hasRestrictedFootageOrPrivateContent:false,shouldAllowUpload:true,failureReasons:[],safeUserMessage:"Allowed"}});
-    };
-    const transfer=new DataTransfer();transfer.items.add(new File([portrait],"plant.jpg",{type:"image/jpeg"}));picker.files=transfer.files;
-    production.change({currentTarget:picker});
-    await waitFor(()=>releaseValidation);
-    assert(picker.files?.length===1 && picker.disabled, "add-plant retains the gallery File throughout decoding and validation");
-    releaseValidation!();
-    await waitFor(()=>!picker.disabled);
-    assert(selected!==null && statuses.at(-1)==="image.ready", "actual add-plant handlers produce a ready JPEG preview from a browser selection");
-    assert(picker.value==="", "add-plant resets the file input only after successful processing");
-    const previousStatusCount=statuses.length;
-    production.change({currentTarget:picker});
-    await production.capture("gallery");
-    assert(statuses.length===previousStatusCount && selected!==null, "empty add-plant selection events preserve the ready photo without processing errors");
-  } finally {
-    globalThis.fetch=fetchBeforePicker;picker.remove();
-    if(selected)URL.revokeObjectURL((selected as NormalizedImage).previewUrl);
-  }
+    HTMLCanvasElement.prototype.toBlob = (callback) => callback(null);
+    let compressionFailed = false;
+    try { await preprocessImageFile(png); } catch(error) { compressionFailed=(error as {code?:string}).code==="IMAGE_COMPRESSION_FAILED"; }
+    assert(compressionFailed,"canvas allocation/encoding failure has a specific compression error");
+  } finally { HTMLCanvasElement.prototype.toBlob=toBlob; }
+  const afterFailure=await preprocessImageFile(png);
+  assert(afterFailure.mimeType==="image/jpeg","processing recovers after a failed canvas encode");URL.revokeObjectURL(afterFailure.previewUrl);
+  const heic = new Blob([new Uint8Array([0,0,0,20,102,116,121,112,104,101,105,99,0,0,0,0,109,105,102,49])],{type:"image/heic"});
+  let unsupportedDeviceFormat=false;
+  try { await preprocessImageFile(heic); } catch(error) { unsupportedDeviceFormat=(error as {code?:string}).code==="UNSUPPORTED_IMAGE_FORMAT"; }
+  assert(unsupportedDeviceFormat,"HEIC without a working platform decoder reports unsupported format instead of being renamed JPEG");
+  const arrayBuffer=Blob.prototype.arrayBuffer;
+  try {
+    Object.defineProperty(Blob.prototype,"arrayBuffer",{value:undefined,configurable:true,writable:true});
+    const compatible=await preprocessImageFile(png);
+    assert((await prepareImageBlobForUpload(compatible.blob))===compatible.blob,"FileReader pipeline works without Blob.arrayBuffer on older mobile browsers");
+    URL.revokeObjectURL(compatible.previewUrl);
+  } finally {Object.defineProperty(Blob.prototype,"arrayBuffer",{value:arrayBuffer,configurable:true,writable:true});}
+  await runImageSelectionChecks(assert, portrait);
+  renderImagePickerPreview(assert);
+
 };
 void run().then(() => {
   document.getElementById("results")!.textContent = JSON.stringify({ checks, failures: [] });

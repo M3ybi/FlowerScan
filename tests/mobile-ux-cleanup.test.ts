@@ -86,11 +86,8 @@ test("AI diagnosis actions are disabled when household access is unavailable", (
   assert.match(detailRoute, /const diagnosisBlockedReason = aiDiagnosisAccessMessage\(diagnosisAccess\)/);
   assert.match(detailRoute, /disabled=\{isGeneratingCarePreview \|\| !diagnosisAccess\.allowed\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\} onClick=\{openDiagnosisModal\}/);
-  assert.match(
-    detailRoute,
-    /className=\{`diagnosis-upload \$\{diagnosisAccess\.allowed && !isCapturingDiagnosisImage && !isDiagnosing \? "" : "diagnosis-upload-disabled"\}`\}/,
-  );
-  assert.match(detailRoute, /aria-disabled=\{!diagnosisAccess\.allowed \|\| isCapturingDiagnosisImage \|\| isDiagnosing\}/);
+  assert.match(detailRoute, /<ImageSourcePicker/);
+  assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed \|\| isDiagnosing\} busy=\{isCapturingDiagnosisImage\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisAccess\.allowed\}/);
   assert.match(detailRoute, /disabled=\{!diagnosisImageDataUrl \|\| isDiagnosing \|\| !diagnosisAccess\.allowed\}/);
   assert.doesNotMatch(detailRoute, /diagnosis\.premiumUnlimited/);

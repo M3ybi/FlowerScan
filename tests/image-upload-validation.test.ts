@@ -1,6 +1,6 @@
 import { jpegFixtureBytes, jpegFixtureAtSize, fixtureDataUrl } from "./fixtures/imagePayload.js";
 import { imageUploadConfig, validateProcessedImageDataUrl } from "../src/lib/imageUploadConfig.js";
-import { ImageUploadError, imageErrorFromResponse, imageErrorMessage } from "../src/lib/imageUploadErrors.js";
+import { ImageUploadError, imageErrorFromResponse, imageErrorMessage, isImageSelectionCancelled } from "../src/lib/imageUploadErrors.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseValidatedJpeg } from "../src/lib/validatedImageInput.js";
@@ -41,6 +41,16 @@ test("validated storage parser rejects malformed, oversized and mislabeled bytes
   assert.equal(parseValidatedJpeg("data:image/png;base64,/9j/AA=="), null);
   assert.equal(parseValidatedJpeg("data:image/jpeg;base64," + "A".repeat(3_000_000)), null);
   assert.equal(parseValidatedJpeg(fixtureDataUrl())?.contentType, "image/jpeg");
+});
+
+test("selection read/decode/permission errors localize in all supported app languages", () => {
+  for (const code of ["IMAGE_READ_FAILED", "IMAGE_DECODE_FAILED", "CAMERA_PERMISSION_DENIED"] as const) {
+    const messages = ["en", "sk", "de", "fr", "es"].map(language=>imageErrorMessage(new ImageUploadError(code),language));
+    assert.equal(new Set(messages).size, 5);
+    assert.ok(messages.every(message=>message && !message.includes(code)));
+  }
+  assert.equal(isImageSelectionCancelled(new Error("User cancelled photos app")),true);
+  assert.equal(isImageSelectionCancelled(new Error("User denied access to camera")),false);
 });
 import {
   imageUploadRejectionMessage,

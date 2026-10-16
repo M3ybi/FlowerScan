@@ -342,7 +342,6 @@ body::before {
 
 .watering-panel,
 .diagnosis-result,
-.diagnosis-upload,
 .danger-panel,
 .diagnostic-detail {
   border-color: var(--glass-border);
@@ -3193,6 +3192,19 @@ textarea:focus-visible {
   margin-top: 18px;
 }
 
+.image-source-picker {
+  min-width: 0;
+}
+
+.image-source-picker > .image-upload {
+  width: 100%;
+  text-align: left;
+}
+
+.image-source-picker input[hidden] {
+  display: none;
+}
+
 .image-upload {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -3214,35 +3226,6 @@ textarea:focus-visible {
     transform 140ms ease;
 }
 
-.diagnosis-upload {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  align-items: center;
-  margin-top: 16px;
-  min-height: 58px;
-  border: 1px dashed rgba(61, 103, 128, 0.28);
-  border-radius: 18px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.74);
-  cursor: pointer;
-}
-
-.diagnosis-upload-disabled {
-  opacity: 0.62;
-  cursor: not-allowed;
-}
-
-.diagnosis-upload input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-}
-
 .image-capture-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3255,9 +3238,9 @@ textarea:focus-visible {
   border-radius: 12px;
 }
 
-.image-capture-actions + .diagnosis-preview,
-.image-capture-actions + .care-preview-status,
-.image-capture-actions ~ .diagnosis-run-button {
+.image-source-picker + .diagnosis-preview,
+.image-source-picker + .care-preview-status,
+.image-source-picker ~ .diagnosis-run-button {
   margin-top: 16px;
 }
 
@@ -3496,15 +3479,6 @@ textarea:focus-visible {
   transform: translateY(-1px);
   border-color: rgba(183, 103, 42, 0.58);
   box-shadow: 0 12px 26px rgba(121, 77, 32, 0.12);
-}
-
-.image-upload input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
 }
 
 .image-upload-icon {

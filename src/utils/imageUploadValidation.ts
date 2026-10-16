@@ -9,12 +9,13 @@ import {
 
 export { imageUploadRejectionMessage };
 
-export const validatePlantImageForUpload = async (imageDataUrl: string, language?: PlantieLanguage | null) => {
+export const validatePlantImageForUpload = async (imageDataUrl: string, language?: PlantieLanguage | null, signal?: AbortSignal) => {
   try {
     const data = await callBackendFunction<{ validation?: unknown }>({
       body: { imageDataUrl, language },
       functionName: "validate-plant-image",
       netlifyPath: "/.netlify/functions/validate-plant-image",
+      signal,
     });
 
     if (!isImageUploadValidationPayload(data.validation) || !isImageUploadAllowed(data.validation)) {
