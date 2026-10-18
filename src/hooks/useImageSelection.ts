@@ -1,3 +1,4 @@
+import { clearImageValidationReceipts } from "../lib/imageValidationReceipts.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { captureImage, detectImageRuntime } from "../lib/imageCaptureService.js";
 import type { ImageCaptureSource, ImagePickerLabels, NormalizedImage } from "../lib/imageCaptureService.js";
@@ -31,6 +32,7 @@ export const useImageSelection = (options: Options) => {
   }, []);
   const clear = useCallback(() => {
     cancel();
+    clearImageValidationReceipts();
     if (ownedImage.current) URL.revokeObjectURL(ownedImage.current.previewUrl);
     ownedImage.current = null;
     status.current = "";
@@ -47,7 +49,7 @@ export const useImageSelection = (options: Options) => {
       ownedImage.current = null;
     };
   }, []);
-  useEffect(() => { clear(); }, [options.scopeKey, clear]);
+  useEffect(() => { clearImageValidationReceipts(); clear(); }, [options.scopeKey, clear]);
   useEffect(() => { if (!options.enabled) cancel(); }, [options.enabled, cancel]);
 
   const select = useCallback(async (source: ImageCaptureSource, file?: File, pickerLabels?: ImagePickerLabels) => {

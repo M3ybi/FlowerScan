@@ -149,8 +149,7 @@ test("all AI provider endpoints use the shared selected-language instruction", (
     "netlify/functions/plant-diagnosis-ai.ts",
     "supabase/functions/plant-care-ai/index.ts",
     "supabase/functions/plant-diagnosis-ai/index.ts",
-    "supabase/functions/validate-plant-image/index.ts",
-    "supabase/functions/upload-validated-image/index.ts",
+    "supabase/functions/_shared/plantImageValidation.ts",
   ];
 
   for (const endpoint of endpoints) {
@@ -164,5 +163,8 @@ test("all AI provider endpoints use the shared selected-language instruction", (
   assert.match(readSource("src/utils/customFlower.ts"), /language: options\.language/);
   assert.match(readSource("src/utils/diagnostics.ts"), /body: \{ householdId, imageDataUrl, language,/);
   assert.match(readSource("src/utils/imageUploadValidation.ts"), /body: \{ imageDataUrl, language \}/);
-  assert.match(readSource("src/lib/plantieRepository.ts"), /language: typeof globalThis\.localStorage/);
+  assert.match(readSource("src/lib/plantieRepository.ts"), /language: readStoredLanguage\(browserStorage\)/);
+  for (const endpoint of ["validate-plant-image", "upload-validated-image"]) {
+    assert.match(readSource(`supabase/functions/${endpoint}/index.ts`), /validateImageSafety\(apiKey, imageDataUrl, body\.language\)/);
+  }
 });

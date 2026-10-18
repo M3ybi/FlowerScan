@@ -96,6 +96,21 @@ export const defaultSupabaseWriteDependencies: SupabaseWriteDependencies = {
   uploadPlantImage,
 };
 
+const cleanupImage = async (deps: SupabaseWriteDependencies, kind: "plant" | "diagnostic", path: string) => {
+  try { await deps.deleteUploadedImage(kind, path); }
+  catch { console.warn("[plantie:image-cleanup]", { code: "IMAGE_CLEANUP_FAILED", kind }); }
+};
+
+const reconcileWrite = async <T>(read: () => Promise<T>, originalError: unknown): Promise<T> => {
+  try { return await read(); }
+  catch {
+    // Unknown commit state: keep the upload and the original failure for a safe
+    // idempotent retry. No read failure is evidence that an object is unclaimed.
+    console.warn("[plantie:image-cleanup]", { code: "IMAGE_RECONCILIATION_FAILED" });
+    throw originalError;
+  }
+};
+
 export const detectSupabaseWriteMode = ({
   hasAuthenticatedUser,
   hasMigratedHousehold,
@@ -180,14 +195,14 @@ export const upsertSupabasePlantFromFlower = async (
         wateringIntervalDays: input.wateringIntervalDays,
       });
       if (imageBlob && existing.imagePath && existing.imagePath !== imagePath) {
-        await deps.deleteUploadedImage("plant", existing.imagePath).catch(() => undefined);
+        await cleanupImage(deps, "plant", existing.imagePath);
       }
       return saved;
     } catch (error) {
       if (imageBlob && imagePath) {
-        const committed = await deps.getHouseholdPlantById(existing.id);
+        const committed = await reconcileWrite(() => deps.getHouseholdPlantById(existing.id), error);
         if (committed.imagePath === imagePath) return committed;
-        await deps.deleteUploadedImage("plant", imagePath);
+        await cleanupImage(deps, "plant", imagePath);
       }
       throw error;
     }
@@ -200,9 +215,9 @@ export const upsertSupabasePlantFromFlower = async (
       return await deps.createHouseholdPlant(toPlantInput(flower, householdId, catalogPlant, imagePath));
     } catch (error) {
       // A lost response may hide a committed insert. Retain its image on retry.
-      const committed = await deps.getHouseholdPlantByLegacyId(householdId, flower.id);
+      const committed = await reconcileWrite(() => deps.getHouseholdPlantByLegacyId(householdId, flower.id), error);
       if (committed?.imagePath === imagePath) return committed;
-      await deps.deleteUploadedImage("plant", imagePath);
+      await cleanupImage(deps, "plant", imagePath);
       if (committed) return committed;
       throw error;
     }
@@ -276,9 +291,9 @@ export const createSupabaseDiagnosis = async (
     });
     return diagnostic;
   } catch (error) {
-    const committed = await deps.getPlantDiagnosticByLegacyId(input.plantId, input.legacyId);
+    const committed = await reconcileWrite(() => deps.getPlantDiagnosticByLegacyId(input.plantId, input.legacyId), error);
     if (committed?.imagePath === imagePath) return committed;
-    await deps.deleteUploadedImage("diagnostic", imagePath);
+    await cleanupImage(deps, "diagnostic", imagePath);
     if (committed) return committed;
     throw error;
   }

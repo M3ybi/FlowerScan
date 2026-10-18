@@ -1,3 +1,4 @@
+import { requireImageAdmission } from "../_shared/imageAdmission.ts";
 import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
@@ -146,6 +147,9 @@ Deno.serve(async (request) => {
     });
     if (error) return json(403, { error: error.message || "AI care tip limit reached." });
   }
+
+  try { await requireImageAdmission(() => auth.client.rpc("admit_image_operation", { requested_operation: "care" })); }
+  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
   let response: Response;
   try {

@@ -1,9 +1,12 @@
 export type ImageErrorCode = "ORIGINAL_IMAGE_TOO_LARGE" | "IMAGE_TOO_LARGE" | "UNSUPPORTED_IMAGE_FORMAT" |
-  "INVALID_IMAGE" | "IMAGE_COMPRESSION_FAILED" | "IMAGE_VALIDATION_FAILED" | "IMAGE_UPLOAD_FAILED" |
+  "IMAGE_RATE_LIMITED" | "IMAGE_UPLOAD_CAPACITY" | "IMAGE_VALIDATION_REQUIRED" | "INVALID_IMAGE" | "IMAGE_COMPRESSION_FAILED" | "IMAGE_VALIDATION_FAILED" | "IMAGE_UPLOAD_FAILED" |
   "AUTHENTICATION_REQUIRED" | "HOUSEHOLD_ACCESS_DENIED" | "IMAGE_NETWORK_TIMEOUT" | "IMAGE_NETWORK_FAILED" | "IMAGE_SERVICE_UNAVAILABLE" |
   "IMAGE_SELECTION_FAILED" | "IMAGE_READ_FAILED" | "IMAGE_DECODE_FAILED" | "IMAGE_DECODE_LIMIT" | "CAMERA_PERMISSION_DENIED";
 
 const english: Record<ImageErrorCode, string> = {
+  IMAGE_VALIDATION_REQUIRED: "This photo needs a new safety check. Choose it again and retry.",
+  IMAGE_RATE_LIMITED: "Too many photo requests. Wait an hour and try again. Your form is preserved.",
+  IMAGE_UPLOAD_CAPACITY: "Too many unfinished photo uploads in this household. Retry your previous upload or contact support.",
   IMAGE_DECODE_LIMIT: "This HEIC photo needs too much decoding memory. Choose a resized JPEG or PNG export.",
   IMAGE_SELECTION_FAILED: "The photo picker could not open. Close it and try choosing a photo again.",
   IMAGE_READ_FAILED: "The selected photo could not be read. Download it to your device or choose another photo.",
@@ -23,6 +26,9 @@ const english: Record<ImageErrorCode, string> = {
   IMAGE_SERVICE_UNAVAILABLE: "Image processing is temporarily unavailable. Please try again.",
 };
 const slovak: Record<ImageErrorCode, string> = {
+  IMAGE_VALIDATION_REQUIRED: "Táto fotka potrebuje novú kontrolu bezpečnosti. Vyber ju znova a zopakuj nahranie.",
+  IMAGE_RATE_LIMITED: "Priveľa požiadaviek na fotky. Počkaj hodinu a skús to znova. Formulár zostal vyplnený.",
+  IMAGE_UPLOAD_CAPACITY: "V domácnosti je priveľa nedokončených nahrávaní fotiek. Zopakuj predchádzajúce nahranie alebo kontaktuj podporu.",
   IMAGE_DECODE_LIMIT: "Táto HEIC fotka potrebuje priveľa pamäte na spracovanie. Vyber zmenšenú verziu vo formáte JPEG alebo PNG.",
   IMAGE_SELECTION_FAILED: "Výber fotografií sa nepodarilo otvoriť. Zavri ho a skús vybrať fotku znova.",
   IMAGE_READ_FAILED: "Vybranú fotografiu sa nepodarilo načítať. Stiahni ju do zariadenia alebo vyber inú fotografiu.",
@@ -45,7 +51,7 @@ const slovak: Record<ImageErrorCode, string> = {
 export class ImageUploadError extends Error {
   stage?: string;
   detectedMime?: string;
-  constructor(public readonly code: ImageErrorCode, public readonly status = 400, public readonly cause?: unknown) {
+  constructor(public readonly code: ImageErrorCode, public readonly status = 400, public override readonly cause?: unknown) {
     super(english[code]);
     this.name = "ImageUploadError";
   }
@@ -62,7 +68,8 @@ export const isImageDiagnosticEnabled = () => Boolean((import.meta as ImportMeta
 
 const imageBrowserCategory = () => {
   const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
-  if (/iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) {
+  const touchPoints = typeof navigator === "undefined" ? 0 : (navigator as typeof navigator & { maxTouchPoints?: number }).maxTouchPoints ?? 0;
+  if (/iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && touchPoints > 1)) {
     return /CriOS/.test(ua) ? "ios-chrome" : /Version\/.+Safari\//.test(ua) ? "ios-safari" : "ios-browser";
   }
   if (/Android/.test(ua)) return /Chrome\//.test(ua) ? "android-chromium" : "android-browser";
@@ -89,6 +96,9 @@ export const logImageProcessingFailure = (stage: string, error: unknown, context
 const localized: Record<string, Record<ImageErrorCode, string>> = {
   en: english, sk: slovak,
   de: {
+    IMAGE_VALIDATION_REQUIRED: "Dieses Foto muss erneut geprüft werden. Wähle es noch einmal aus und versuche es erneut.",
+    IMAGE_RATE_LIMITED: "Zu viele Fotoanfragen. Warte eine Stunde und versuche es erneut. Dein Formular bleibt erhalten.",
+    IMAGE_UPLOAD_CAPACITY: "Zu viele unvollständige Foto-Uploads in diesem Haushalt. Wiederhole den letzten Upload oder kontaktiere den Support.",
     IMAGE_DECODE_LIMIT: "Dieses HEIC-Foto benötigt zu viel Speicher. Wähle einen verkleinerten JPEG- oder PNG-Export.",
     IMAGE_SELECTION_FAILED: "Die Fotoauswahl konnte nicht geöffnet werden. Schließe sie und versuche es erneut.",
     ORIGINAL_IMAGE_TOO_LARGE: "Das Originalfoto ist größer als 15 MB. Wähle ein kleineres Foto.",
@@ -108,6 +118,9 @@ const localized: Record<string, Record<ImageErrorCode, string>> = {
     IMAGE_SERVICE_UNAVAILABLE: "Die Fotoverarbeitung ist vorübergehend nicht verfügbar. Versuche es erneut.",
   },
   fr: {
+    IMAGE_VALIDATION_REQUIRED: "Cette photo doit être vérifiée à nouveau. Sélectionne-la encore une fois et réessaie.",
+    IMAGE_RATE_LIMITED: "Trop de demandes de photos. Attends une heure et réessaie. Ton formulaire est conservé.",
+    IMAGE_UPLOAD_CAPACITY: "Trop de téléversements de photos inachevés dans ce foyer. Réessaie le dernier ou contacte le support.",
     IMAGE_DECODE_LIMIT: "Cette photo HEIC nécessite trop de mémoire. Choisissez un export JPEG ou PNG réduit.",
     IMAGE_SELECTION_FAILED: "Impossible d’ouvrir le sélecteur de photos. Fermez-le et réessayez.",
     ORIGINAL_IMAGE_TOO_LARGE: "La photo originale dépasse 15 Mo. Choisissez une photo plus petite.",
@@ -127,6 +140,9 @@ const localized: Record<string, Record<ImageErrorCode, string>> = {
     IMAGE_SERVICE_UNAVAILABLE: "Le traitement des photos est temporairement indisponible. Réessayez.",
   },
   es: {
+    IMAGE_VALIDATION_REQUIRED: "Esta foto necesita una nueva comprobación de seguridad. Selecciónala de nuevo y reintenta.",
+    IMAGE_RATE_LIMITED: "Demasiadas solicitudes de fotos. Espera una hora y vuelve a intentarlo. Se conserva el formulario.",
+    IMAGE_UPLOAD_CAPACITY: "Hay demasiadas cargas de fotos incompletas en este hogar. Reintenta la anterior o contacta con soporte.",
     IMAGE_DECODE_LIMIT: "Esta foto HEIC necesita demasiada memoria. Elige una versión JPEG o PNG de menor resolución.",
     IMAGE_SELECTION_FAILED: "No se pudo abrir el selector de fotos. Ciérralo e inténtalo de nuevo.",
     ORIGINAL_IMAGE_TOO_LARGE: "La foto original supera los 15 MB. Elige una foto más pequeña.",

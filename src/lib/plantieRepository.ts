@@ -1,3 +1,5 @@
+import { browserStorage } from "./browserStorage.js";
+import { imageValidationReceipt } from "./imageValidationReceipts.js";
 import { supabase } from "./supabase.js";
 import { withRequestTimeout } from "./requestTimeout.js";
 import type { DiagnosisConfirmation, DiagnosisRiskLevel, PlantDiagnosisDraft } from "../utils/diagnostics.js";
@@ -376,6 +378,7 @@ export type UpdatePlantDiagnosticPatch = {
   userNote?: string;
 };
 
+// Legacy caller acknowledgement only; never sent as backend proof of safety.
 export const imageUploadValidationToken = "ai-plant-image-validation-passed" as const;
 
 export type ImageUploadValidation = {
@@ -408,7 +411,8 @@ const uploadValidatedImage = async ({
       householdId,
       imageDataUrl,
       imageId,
-      language: typeof globalThis.localStorage === "undefined" ? null : readStoredLanguage(globalThis.localStorage),
+      imageValidationReceipt: imageValidationReceipt(imageDataUrl),
+      language: readStoredLanguage(browserStorage),
       kind,
     },
     signal,
@@ -429,8 +433,7 @@ const uploadValidatedImage = async ({
 
 const isSupabaseReadDebugEnabled = () =>
   Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) &&
-  typeof globalThis.localStorage !== "undefined" &&
-  globalThis.localStorage.getItem("plantie-debug-supabase-reads") === "true";
+  browserStorage.getItem("plantie-debug-supabase-reads") === "true";
 
 const logSupabaseRead = (table: string, operation: string) => {
   if (!isSupabaseReadDebugEnabled()) {

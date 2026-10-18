@@ -22,6 +22,7 @@ export const isImageUploadValidationPayload = (value: unknown): value is ImageUp
     typeof payload.containsPlant === "boolean" &&
     typeof payload.plantConfidence === "number" &&
     Number.isFinite(payload.plantConfidence) &&
+    payload.plantConfidence >= 0 && payload.plantConfidence <= 1 &&
     typeof payload.hasSensitiveBackground === "boolean" &&
     typeof payload.hasExplicitOrUnsafeContent === "boolean" &&
     typeof payload.hasRestrictedFootageOrPrivateContent === "boolean" &&

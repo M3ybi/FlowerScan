@@ -1,3 +1,4 @@
+import { webcrypto } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
@@ -9,7 +10,7 @@ const fixtureBundle = await build({ entryPoints: ["tests/fixtures/imagePayload.t
 const { fixtureDataUrl, jpegFixtureAtSize } = await import(`data:text/javascript;base64,${Buffer.from(fixtureBundle.outputFiles[0].text).toString("base64")}`);
 const imageDataUrl = fixtureDataUrl();
 const bundles = new Map();
-const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploadError = null, serviceOverride } = {}) => {
+const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploadError = null, serviceOverride, signingSecret, admissionError = null, userId = imageId } = {}) => {
   if (!bundles.has(name)) {
     const result = await build({
       entryPoints: [`supabase/functions/${name}/index.ts`], bundle: true, write: false, format: "iife",
@@ -24,6 +25,7 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
   const calls = [];
   const user = { rpc: async (method) => {
     calls.push(`user:${method}`);
+    if (method === "admit_image_operation" || method === "reserve_image_upload") return { data: true, error: admissionError };
     if (method === "can_manage_household_content") return { data: allowed, error: null };
     if (method === "reserve_ai_analyze_usage") return { data: imageId, error: null };
     if (method === "assert_can_add_plant") return { error: null };
@@ -39,9 +41,9 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
   };
   let handler;
   vm.runInNewContext(bundles.get(name), {
-    Deno: { env: { get: () => "fixture-key" }, serve: (fn) => { handler = fn; } },
-    fixture: { auth: signedIn ? { user: { id: imageId }, client: user } : null, service: serviceOverride ?? service },
-    Request, Response, AbortSignal, AbortController, Uint8Array, TextDecoder, Error, TypeError, SyntaxError, DOMException, atob, setTimeout, clearTimeout,
+    Deno: { env: { get: (name) => name === "IMAGE_VALIDATION_SIGNING_SECRET" ? signingSecret : "fixture-key" }, serve: (fn) => { handler = fn; } },
+    fixture: { auth: signedIn ? { user: { id: userId }, client: user } : null, service: serviceOverride ?? service },
+    crypto: webcrypto, btoa, TextEncoder, Request, Response, AbortSignal, AbortController, Uint8Array, TextDecoder, Error, TypeError, SyntaxError, DOMException, atob, setTimeout, clearTimeout,
     fetch: fetch ?? (async () => { throw new Error("Unexpected provider call"); }),
     console: { error() {}, info() {}, log() {} },
   });
@@ -75,6 +77,16 @@ test("upload handler rejects malformed bytes before AI and never stores rejected
   assert.equal((await invoke({ ...uploadBody, imageDataUrl: "data:image/jpeg;base64,A" })).status, 400);
   assert.deepEqual(calls, ["user:can_manage_household_content"]);
 });
+
+test("server admission rejects excess image requests before provider or storage work", async () => {
+  for (const name of ["validate-plant-image", "upload-validated-image", "plant-care-ai"]) {
+    const { invoke, calls } = await loadHandler(name, { admissionError: { message: "IMAGE_RATE_LIMITED" } });
+    const response = await invoke({ ...uploadBody, plantName: "Plant", generationSource: "initial_plant_add" });
+    assert.equal(response.status, 429, name);
+    assert.equal((await response.json()).code, "IMAGE_RATE_LIMITED");
+    assert.equal(calls.includes("storage:upload"), false);
+  }
+});
 test("active member upload uses a household path after server validation", async () => {
   const { invoke, calls } = await loadHandler("upload-validated-image", {
     fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
@@ -82,7 +94,36 @@ test("active member upload uses a household path after server validation", async
   const response = await invoke(uploadBody);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).path, `${householdId}/plants/${imageId}/original.jpg`);
-  assert.deepEqual(calls, ["user:can_manage_household_content", "storage:upload"]);
+  assert.deepEqual(calls, ["user:can_manage_household_content", "user:admit_image_operation", "user:reserve_image_upload", "storage:upload"]);
+});
+
+test("case variants of UUIDs use the canonical reservation and Storage namespace", async () => {
+  const { invoke } = await loadHandler("upload-validated-image", {
+    fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
+  });
+  const householdId = "ABCDEF12-ABCD-4ABC-8ABC-ABCDEFABCDEF";
+  const imageId = "FEDCBA12-ABCD-4ABC-8ABC-ABCDEFABCDEF";
+  const result = await invoke({ ...uploadBody, householdId, imageId });
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).path, `${householdId.toLowerCase()}/plants/${imageId.toLowerCase()}/original.jpg`);
+});
+
+test("a verified safety receipt avoids a second provider request while forged content fails closed", async () => {
+  const signingSecret = "synthetic-test-signing-secret-over-32-characters";
+  const validation = await loadHandler("validate-plant-image", {
+    signingSecret, fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
+  });
+  const result = await validation.invoke({ imageDataUrl });
+  assert.equal(result.status, 200);
+  const { receipt } = await result.json();
+  assert.equal(typeof receipt.token, "string");
+  const upload = await loadHandler("upload-validated-image", { signingSecret });
+  assert.equal((await upload.invoke({ ...uploadBody, imageValidationReceipt: receipt.token })).status, 200);
+  const tampered = await upload.invoke({ ...uploadBody, imageValidationReceipt: receipt.token + "tampered" });
+  assert.equal(tampered.status, 422);
+  assert.equal((await tampered.json()).code, "IMAGE_VALIDATION_REQUIRED");
+  const anotherUser = await loadHandler("upload-validated-image", { signingSecret, userId: householdId });
+  assert.equal((await anotherUser.invoke({ ...uploadBody, imageValidationReceipt: receipt.token })).status, 422);
 });
 test("storage failure and AI rejection return failures without a success path", async () => {
   const rejected = await loadHandler("upload-validated-image", {

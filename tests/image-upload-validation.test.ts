@@ -99,6 +99,12 @@ test("valid plant image validation payload is allowed", () => {
   assert.equal(isImageUploadAllowed(validPayload), true);
 });
 
+test("model confidence must be a probability within the schema's range", () => {
+  for (const plantConfidence of [-1, 1.1, Infinity, NaN]) {
+    assert.equal(isImageUploadValidationPayload({ ...validPayload, plantConfidence }), false);
+  }
+});
+
 test("no plant image is rejected", () => {
   assert.equal(isImageUploadAllowed({ ...validPayload, containsPlant: false, failureReasons: ["no_plant"] }), false);
 });

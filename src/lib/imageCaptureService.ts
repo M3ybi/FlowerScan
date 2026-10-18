@@ -2,6 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { detectImageMimeType, imageUploadConfig, jpegDimensions } from "./imageUploadConfig.js";
 import { ImageUploadError, isImageSelectionCancelled, logImageProcessingFailure } from "./imageUploadErrors.js";
 import { withRequestTimeout } from "./requestTimeout.js";
+import { awaitImageOperation } from "./imageOperation.js";
 import { detectDeviceImageMimeType, stripEncodedJpegMetadata } from "./imageFormats.js";
 
 export type ImageCaptureSource = "camera" | "gallery" | "prompt";
@@ -202,18 +203,19 @@ const prepareImageEncoder = async (file: Blob, bytes: Uint8Array, maxDimension: 
         // unambiguous. The canvas still enforces the final bound for all formats.
         const dimensions = jpeg && !jpeg.hasPrivateMetadata ? jpeg : png;
         const ratio = dimensions ? Math.min(1, maxDimension / Math.max(dimensions.width, dimensions.height)) : 1;
-        source = await createImageBitmap(file, { imageOrientation: "from-image", ...(dimensions && ratio < 1 ? {
+        source = await awaitImageOperation(() => createImageBitmap(file, { imageOrientation: "from-image", ...(dimensions && ratio < 1 ? {
           resizeWidth: Math.max(1, Math.round(dimensions.width * ratio)),
           resizeHeight: Math.max(1, Math.round(dimensions.height * ratio)), resizeQuality: "high",
-        } : {}) });
+        } : {}) }), signal, bitmap => bitmap.close());
       } catch { /* Some mobile decoders reject images that HTMLImageElement supports. */ }
     }
     if (!source) {
+      checkCancelled(signal);
       sourceUrl = URL.createObjectURL(file);
       const image = new Image();
       image.src = sourceUrl;
       source = image;
-      await image.decode();
+      await awaitImageOperation(() => image.decode(), signal);
     }
     if (!("naturalWidth" in source ? source.naturalWidth && source.naturalHeight : source.width && source.height)) {
       throw new ImageUploadError("IMAGE_DECODE_FAILED");
@@ -269,10 +271,10 @@ const prepareImageEncoder = async (file: Blob, bytes: Uint8Array, maxDimension: 
         context.fillStyle = "#fff";
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(decodedSource, 0, 0, canvas.width, canvas.height);
-        return await new Promise<Blob>((resolve, reject) => canvas.toBlob(
+        return await awaitImageOperation(() => new Promise<Blob>((resolve, reject) => canvas.toBlob(
           (blob) => blob ? resolve(blob) : reject(new ImageUploadError("IMAGE_COMPRESSION_FAILED")),
           imageUploadConfig.outputMimeType, quality,
-        ));
+        )), signal);
       } finally {
         canvas.width = canvas.height = 0;
       }

@@ -173,6 +173,35 @@ test("lost create response preserves the image of the committed plant", async ()
   assert.equal(calls.some((call) => call.startsWith("delete-image:")), false);
 });
 
+test("cleanup failure preserves the original database error and logs no image path", async (context) => {
+  const failure = new Error("Original database failure");
+  const warnings: unknown[][] = [];
+  context.mock.method(console, "warn", (...args) => { warnings.push(args); });
+  const { deps } = createDeps({
+    createHouseholdPlant: async () => { throw failure; },
+    deleteUploadedImage: async () => { throw new Error("private/path.jpg"); },
+  });
+  await assert.rejects(upsertSupabasePlantFromFlower("household-id", {
+    ...flowers[0], id: "custom-cleanup", source: "custom", image: "data:image/jpeg;base64,eA==",
+  }, deps), error => error === failure);
+  assert.match(JSON.stringify(warnings), /IMAGE_CLEANUP_FAILED/);
+  assert.doesNotMatch(JSON.stringify(warnings), /path.jpg|Original database failure/);
+});
+
+test("failed reconciliation preserves both uploaded image and original write failure", async (context) => {
+  context.mock.method(console, "warn", () => undefined);
+  const failure = new Error("Response lost");
+  let reads = 0;
+  const { calls, deps } = createDeps({
+    createHouseholdPlant: async () => { throw failure; },
+    getHouseholdPlantByLegacyId: async () => { if (++reads > 1) throw new Error("Offline"); return null; },
+  });
+  await assert.rejects(upsertSupabasePlantFromFlower("household-id", {
+    ...flowers[0], id: "custom-unknown", source: "custom", image: "data:image/jpeg;base64,eA==",
+  }, deps), error => error === failure);
+  assert.equal(calls.some(call => call.startsWith("delete-image:")), false);
+});
+
 test("failed upload never attempts plant creation", async () => {
   const { calls, deps } = createDeps({ uploadPlantImage: async () => { throw new Error("Storage unavailable"); } });
   await assert.rejects(() => upsertSupabasePlantFromFlower("household-id", {

@@ -38,7 +38,7 @@ export const readImageRequest = async (request: Request): Promise<Record<string,
 
 export const requireProcessedImage = (value: unknown) => {
   const result = validateProcessedImageDataUrl(value);
-  if ("code" in result) throw new ImageUploadError(result.code, result.status);
+  if (result.code !== undefined) throw new ImageUploadError(result.code, result.status);
   return result;
 };
 

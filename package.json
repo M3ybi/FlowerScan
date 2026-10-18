@@ -69,7 +69,8 @@
     "test:logged-out-menu-facts": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --jsx react-jsx --resolveJsonModule --allowSyntheticDefaultImports --skipLibCheck --types node tests/logged-out-menu-facts.test.ts && esbuild tests/logged-out-menu-facts.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/logged-out-menu-facts.bundle.mjs && node --test .tmp-tests/logged-out-menu-facts.bundle.mjs",
     "test:logged-out-menu-browser": "node scripts/test-logged-out-menu-browser.mjs",
     "test:auth-service-flow": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node tests/auth-service-flow.test.ts && esbuild tests/auth-service-flow.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/auth-service-flow.bundle.mjs && node --test .tmp-tests/auth-service-flow.bundle.mjs",
-    "test:auth-flow-browser": "node scripts/test-auth-flow-browser.mjs"
+    "test:auth-flow-browser": "node scripts/test-auth-flow-browser.mjs",
+    "test:audit-reliability": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node tests/audit-reliability.test.ts && esbuild tests/audit-reliability.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/audit-reliability.mjs && node --test .tmp-tests/audit-reliability.mjs tests/image-validation-receipt.test.mjs tests/image-admission-database.test.mjs tests/operational-email.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
