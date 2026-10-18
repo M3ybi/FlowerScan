@@ -89,4 +89,3 @@ export const validateImageSafety = async (apiKey: string, imageDataUrl: string, 
     clearTimeout(timeoutId);
   }
 };
-

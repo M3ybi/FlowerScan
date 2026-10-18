@@ -10,10 +10,47 @@ import { LoadingButton } from "../../src/components/LoadingButton";
 import { createTranslator } from "../../src/lib/i18n";
 import { ImageUploadError, logImageProcessingFailure } from "../../src/lib/imageUploadErrors";
 import { validateProcessedImageDataUrl } from "../../src/lib/imageUploadConfig";
+import { PlantGrid } from "../../src/features/plants/components/PlantGrid";
+import type { Flower } from "../../src/data/flowers";
+import { useFlowerRecords } from "../../src/hooks/useFlowerRecords";
+import { useCustomFlowers } from "../../src/hooks/useCustomFlowers";
+import { StorageNotice } from "../../src/components/StorageNotice";
 
 export const runImageSelectionChecks = async (assert: (value: unknown, message: string) => void, jpeg: Blob, heic: Blob) => {
   const host = document.createElement("div"); document.body.appendChild(host);
   let root = createRoot(host);
+  const originalLocation = location.href;
+  const fixturePlant: Flower = { id: "fixture-plant", displayName: "Plant", likelyName: "Plant", image: URL.createObjectURL(jpeg),
+    identification: "confident", identificationNote: "", shortCare: "Care", light: "Light", watering: "Water", soil: "Soil", carePills: [], careTips: [] };
+  const fixturePlants = [fixturePlant];
+  let watered = 0;
+  flushSync(() => root.render(<PlantGrid t={createTranslator("sk")} visibleFlowers={[fixturePlant]} records={{}}
+    formatAppWateringStatus={() => "Water"} updateCareRecord={async () => { watered++; }} />));
+  const card = host.querySelector<HTMLElement>(".flower-card")!;
+  const water = card.querySelector<HTMLButtonElement>("button")!;
+  water.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+  assert(location.href === originalLocation, "nested card controls do not trigger card keyboard navigation");
+  water.click();
+  assert(watered === 1, "extracted plant grid preserves the watering quick action");
+  assert(card.querySelector(".plant-card-open-action")?.getAttribute("aria-label") === createTranslator("sk")("plants.openPlant", { plant: fixturePlant.displayName }),
+    "plant open accessibility label uses the selected language");
+  card.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  assert(location.hash.startsWith("#/flower/"), "focused plant cards retain keyboard navigation");
+  history.replaceState(null, "", originalLocation);
+  const storageDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage")!;
+  const StorageHarness = () => {
+    const { records, updateRecord } = useFlowerRecords(fixturePlants);
+    const { customFlowers, addCustomFlower } = useCustomFlowers();
+    return <><button onClick={() => { updateRecord(fixturePlant.id, { note: "unsaved note" }); addCustomFlower(fixturePlant); }}>Edit</button>
+      <output>{records[fixturePlant.id]?.note}:{customFlowers.length}</output><StorageNotice /></>;
+  };
+  try {
+    Object.defineProperty(window, "localStorage", { configurable: true, get() { throw new DOMException("Blocked", "SecurityError"); } });
+    flushSync(() => root.render(<StorageHarness />));
+    flushSync(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    assert(host.querySelector("output")?.textContent === "unsaved note:1", "real record and custom-plant hooks remain editable when the storage getter throws");
+    assert(host.querySelector('[role="alert"]')?.textContent?.includes("session"), "blocked storage shows an actionable session-only persistence warning");
+  } finally { Object.defineProperty(window, "localStorage", storageDescriptor); URL.revokeObjectURL(fixturePlant.image); }
   let state: ReturnType<typeof useImageSelection>;
   let mode: "safe" | "reject" | "hold" = "safe";
   const held: Array<() => void> = [];
@@ -84,6 +121,24 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
       assert(state!.image?.mimeType==="image/jpeg"&&input.value==="",`consecutive web ${source} selection creates a fresh ready JPEG`);
       if(previous)assert(revoked.has(previous.previewUrl),"replacing a selection releases the previous preview");
     }
+    // Ten complete selection -> mocked persistence -> clear -> close/reopen
+    // cycles exercise the same hook and picker ownership as Add Plant.
+    const saved: string[] = [];
+    for (let cycle = 0; cycle < 10; cycle++) {
+      const old = state!.image;
+      webFile("gallery", new File([cycle === 1 || cycle === 9 ? heic : jpeg], `cycle-${cycle}.jpg`, { type: "" }));
+      await wait(() => !state!.isProcessing && state!.image !== old);
+      const ready = state!.image!;
+      const processed = validateProcessedImageDataUrl(ready.dataUrl);
+      assert(!("code" in processed), `cycle ${cycle + 1} upload passes authoritative JPEG validation`);
+      await Promise.resolve().then(() => saved.push(ready.dataUrl));
+      flushSync(() => state!.clear());
+      render(false); render(true);
+      assert(state!.image === null && !state!.isBusy() && revoked.has(ready.previewUrl), `cycle ${cycle + 1} save/close/reopen releases preview and operation ownership`);
+    }
+    assert(saved.length === 10, "ten sequential saved selections include a second and tenth HEIC photo");
+    webFile("gallery", new File([jpeg], "after-ten.jpg", { type: "image/jpeg" }));
+    await wait(() => !state!.isProcessing && state!.image);
     const previous=state!.image;
     const empty=host.querySelector<HTMLInputElement>('input[type=file]:not([capture])')!;
     const count=statuses.length;
@@ -223,7 +278,9 @@ export const runImageSelectionChecks = async (assert: (value: unknown, message: 
         },reject);};
       })});
       webFile("gallery",new File([jpeg],"unmount-decode.jpg",{type:"image/jpeg"}));await wait(()=>releaseDecode);
-      const statusBeforeDecodeUnmount=statuses.length;flushSync(()=>root.unmount());releaseDecode!();await wait(()=>closed===1);
+      const statusBeforeDecodeUnmount=statuses.length;flushSync(()=>state!.cancel());
+      assert(!state!.isBusy(),"cancelling a stalled decode releases the selection lock before the decoder resolves");
+      flushSync(()=>root.unmount());releaseDecode!();await wait(()=>closed===1);
       assert(statuses.length===statusBeforeDecodeUnmount,"unmount during decoding closes the bitmap without updating React state");
     } finally { globalThis.createImageBitmap=createBitmap; }
   } finally {

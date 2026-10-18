@@ -1,3 +1,4 @@
+import { browserStorage } from "../lib/browserStorage.js";
 import { useEffect, useState } from "react";
 import type { Flower } from "../data/flowers";
 
@@ -48,7 +49,7 @@ const readRecords = (flowers: Flower[]): FlowerRecords => {
   }
 
   try {
-    const rawValue = window.localStorage.getItem(storageKey);
+    const rawValue = browserStorage.getItem(storageKey);
     if (!rawValue) {
       return createInitialRecords(flowers);
     }
@@ -69,7 +70,7 @@ export const useFlowerRecords = (flowers: Flower[]) => {
   const [records, setRecords] = useState<FlowerRecords>(() => readRecords(flowers));
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(records));
+    browserStorage.setItem(storageKey, JSON.stringify(records));
   }, [records]);
 
   useEffect(() => {

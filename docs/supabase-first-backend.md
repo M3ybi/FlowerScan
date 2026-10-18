@@ -42,7 +42,7 @@ The legacy `VITE_ENABLE_SUPABASE_WRITES=false` flag also disables write-through 
 | Push notifications | `push-public-key`, `push-subscription`, scheduled notification function | Still Netlify-only and gated behind explicit legacy backend flag. Supabase push delivery is a future migration. |
 | RevenueCat webhook | `/.netlify/functions/revenuecat-webhook` | `supabase/functions/revenuecat-webhook` with idempotent event insert and service-role subscription/entitlement writes. Netlify webhook remains deprecated compatibility fallback. |
 | Health endpoint | `/.netlify/functions/health` | Health page reports selected Supabase backend in Supabase mode. Netlify health remains only for legacy backend checks. |
-| Delete account request | `/.netlify/functions/delete-account-request` | `supabase/functions/delete-account-request` records a safe manual-review request response without destructive deletes. |
+| Delete account request | `/.netlify/functions/delete-account-request` | `supabase/functions/delete-account-request` acknowledges manual review without destructive deletes. It currently logs metadata only; no durable review queue or delivery mechanism is implemented. |
 
 ## Supabase Edge Functions
 
@@ -64,7 +64,7 @@ supabase secrets set REVENUECAT_WEBHOOK_SECRET=...
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-`SUPABASE_URL` and `SUPABASE_ANON_KEY` are available in the Edge Function runtime for user-authenticated Supabase clients. `SUPABASE_SERVICE_ROLE_KEY` is only used server-side for RevenueCat webhook writes.
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` are available in the Edge Function runtime for user-authenticated Supabase clients. `SUPABASE_SERVICE_ROLE_KEY` is confined to server code: RevenueCat billing transactions, validated image Storage writes and diagnosis quota reservation completion/release. It must never enter a `VITE_*` variable or client bundle.
 
 ## RevenueCat webhook URL
 

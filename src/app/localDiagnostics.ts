@@ -1,3 +1,4 @@
+import { browserStorage } from "../lib/browserStorage.js";
 import type { createTranslator } from "../lib/i18n";
 import { sanitizeDiagnosticEntries } from "../utils/diagnostics";
 import type { PlantDiagnosticEntry } from "../utils/diagnostics";
@@ -10,7 +11,7 @@ export const readStoredDiagnostics = () => {
   }
 
   try {
-    return sanitizeDiagnosticEntries(JSON.parse(window.localStorage.getItem(diagnosticsStorageKey) ?? "[]"));
+    return sanitizeDiagnosticEntries(JSON.parse(browserStorage.getItem(diagnosticsStorageKey) ?? "[]"));
   } catch {
     return [];
   }

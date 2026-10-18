@@ -93,6 +93,7 @@ export const useAuth = (): AuthState => {
     let lastEventSession: Session | null = null;
     let bootstrappedUserId: string | null = null;
     let initializing = true;
+    let authEventGeneration = 0;
     const callback = Capacitor.isNativePlatform() ? null : readWebAuthCallback(window.location.href);
     const storedRecovery = readPasswordRecoveryMarker(recoveryStorage());
     if (storedRecovery) changeRecoveryPhase("active", storedRecovery);
@@ -112,7 +113,7 @@ export const useAuth = (): AuthState => {
       bootstrappedUserId = nextSession.user.id;
       // Supabase auth callbacks must stay synchronous; database work starts afterward.
       window.setTimeout(() => {
-        if (!mounted || recovery.current.phase !== "none") return;
+        if (!mounted || recovery.current.phase !== "none" || bootstrappedUserId !== nextSession.user.id) return;
         void bootstrapAuthenticatedAccount(nextSession.user).catch(() => {
           if (bootstrappedUserId === nextSession.user.id) bootstrappedUserId = null;
         });
@@ -121,6 +122,7 @@ export const useAuth = (): AuthState => {
 
     const { data } = onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
+      authEventGeneration += 1;
       lastEvent = event;
       lastEventSession = nextSession;
       if (event === "PASSWORD_RECOVERY") {
@@ -185,7 +187,10 @@ export const useAuth = (): AuthState => {
 
     const refreshOnFocus = () => {
       if (initializing || document.visibilityState === "hidden") return;
-      void getCurrentSession().then(applySession).catch(() => undefined);
+      const generation = authEventGeneration;
+      void getCurrentSession().then(nextSession => {
+        if (generation === authEventGeneration) applySession(nextSession);
+      }).catch(() => undefined);
     };
     window.addEventListener("focus", refreshOnFocus);
     document.addEventListener("visibilitychange", refreshOnFocus);

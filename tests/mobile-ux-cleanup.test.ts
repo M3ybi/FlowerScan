@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const appSource = readFileSync("src/App.tsx", "utf8");
+const appSource = readFileSync("src/App.tsx", "utf8") + "\n" + readFileSync("src/features/plants/components/PlantGrid.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 

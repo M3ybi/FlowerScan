@@ -95,10 +95,9 @@ Push notifications:
 
 ## Billing and push status
 
-- RevenueCat SDK is installed for native runtime only.
-- App Store / Google Play products are not configured yet.
+- RevenueCat uses separate web and native SDK adapters. Store products and restore policy require provider-side verification; repository source alone does not establish their deployed configuration.
 - Native push notifications are not implemented.
-- Existing web push and Netlify functions are unchanged.
+- Legacy web push and Netlify data functions require the explicit server rollback flag. The RevenueCat compatibility webhook retains its own shared-secret authorization.
 
 ## Image testing
 

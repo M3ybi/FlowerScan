@@ -1,3 +1,4 @@
+import { browserStorage } from "../lib/browserStorage.js";
 import { useEffect, useState } from "react";
 import type { Flower } from "../data/flowers";
 
@@ -36,7 +37,7 @@ const readCustomFlowers = () => {
   }
 
   try {
-    return sanitizeCustomFlowers(JSON.parse(window.localStorage.getItem(storageKey) ?? "[]"));
+    return sanitizeCustomFlowers(JSON.parse(browserStorage.getItem(storageKey) ?? "[]"));
   } catch {
     return [];
   }
@@ -48,7 +49,7 @@ const readRemovedFlowerIds = () => {
   }
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(removedStorageKey) ?? "[]");
+    const parsed = JSON.parse(browserStorage.getItem(removedStorageKey) ?? "[]");
     return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
   } catch {
     return [];
@@ -60,11 +61,11 @@ export const useCustomFlowers = () => {
   const [removedFlowerIds, setRemovedFlowerIds] = useState<string[]>(() => readRemovedFlowerIds());
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey, JSON.stringify(customFlowers));
+    browserStorage.setItem(storageKey, JSON.stringify(customFlowers));
   }, [customFlowers]);
 
   useEffect(() => {
-    window.localStorage.setItem(removedStorageKey, JSON.stringify(removedFlowerIds));
+    browserStorage.setItem(removedStorageKey, JSON.stringify(removedFlowerIds));
   }, [removedFlowerIds]);
 
   const addCustomFlower = (flower: Flower) => {

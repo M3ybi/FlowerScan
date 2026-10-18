@@ -1,5 +1,7 @@
 # Image upload pipeline and size mismatch fix
 
+This records the original size-contract repair. Current HEIC/provider handling is documented in [mobile image compatibility](image-compatibility-ios-android-2026-10-16.md); request admission, signed safety receipts and cancellation changes are documented in the [2026-10-18 implementation audit](codebase-audit-2026-10-18.md).
+
 ## Root cause
 
 The client accepted 8 MiB originals, while upload, safety validation, care generation and diagnosis rejected data URLs longer than 1,600,000 characters. Base64 adds approximately one third to the binary size, so that transport restriction admitted only about 1.14 MiB of decoded image data. The Storage buckets independently allowed 8 MiB. JPEG preprocessing also returned the original file if resizing failed, bypassing normalization and metadata removal.
@@ -13,7 +15,7 @@ The pre-change upload handler was executed in isolation against a valid 2 MiB JP
 | Property | Value |
 | --- | --- |
 | Original input | At most 15,728,640 bytes (15 MiB) |
-| Input MIME types | JPEG/JPG, PNG, WebP; signatures must match |
+| Inputs | JPEG/JPG, PNG, WebP, HEIC/HEIF; actual signatures are authoritative when MIME metadata is missing or inaccurate |
 | Normalized output | JPEG, at most 2,097,152 bytes (2 MiB) |
 | Preferred output | Under 1,048,576 bytes (1 MiB), when the initial encode achieves it |
 | Longest output side | At most 1600 px; aspect ratio preserved; no upscaling |

@@ -15,6 +15,12 @@ import type { FlowerRecords } from "../src/hooks/useFlowerRecords.js";
 import { householdAfterInviteAcceptance, readSelectedHouseholdId, resolveHouseholdSelection, writeSelectedHouseholdId } from "../src/lib/householdSelection.js";
 import type { Household } from "../src/lib/plantieRepository.js";
 
+test("malformed percent-encoded plant routes safely return to the dashboard", () => {
+  for (const hash of ["#/flower/%", "#/flower/%ZZ", "#/flower/%E0%A4%A"]) {
+    assert.deepEqual(parseHashRoute(hash), { page: "dashboard" });
+  }
+});
+
 test("invite helper normalizes raw tokens and copied invite URLs", () => {
   const token = "abc1234567890_DEF-abc1234567890_DEF";
 

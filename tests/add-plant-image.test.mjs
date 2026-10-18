@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 
-const text = readFileSync("src/App.tsx", "utf8");
+const text = readFileSync("src/App.tsx", "utf8") + "\n" + readFileSync("src/features/plants/components/AddPlantModal.tsx", "utf8");
 const app = ts.createSourceFile("App.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const pickers = [];
 const visit = node => {
@@ -33,7 +33,8 @@ test("both plant workflows use the same modal, preview and status components", (
 test("plant submission refuses an in-flight selection and resets the form only after saving", () => {
   const handler = text.slice(text.indexOf("const handleAddCustomFlower"), text.indexOf("const handleGenerateCarePreview"));
   assert.match(handler, /plantSubmissionRef\.current \|\| newImageSelection\.isBusy\(\)/);
-  assert.ok(handler.indexOf("await addFlower(customFlower)") < handler.indexOf("newImageSelection.clear()"));
-  assert.match(handler, /if \(!await addFlower\(customFlower\)\) return/);
+  assert.ok(handler.indexOf("await addPlantFromPhoto(") < handler.indexOf("newImageSelection.clear()"));
+  assert.match(handler, /if \(!customFlower \|\| !isHouseholdOperationCurrent\(\)\) return/);
+  assert.match(handler, /save: addFlower/);
   assert.match(text, /newImageSelection\.cancel\(\)/);
 });

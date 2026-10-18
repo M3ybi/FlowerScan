@@ -1,3 +1,4 @@
+import { browserStorage } from "../lib/browserStorage.js";
 export type HouseholdSession = {
   name: string;
   publicToken: string;
@@ -18,7 +19,7 @@ export const getHouseholdTokenFromUrl = () => {
 
 export const getStoredHouseholdSession = (): HouseholdSession | null => {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(householdSessionStorageKey) ?? "null") as Partial<HouseholdSession> | null;
+    const parsed = JSON.parse(browserStorage.getItem(householdSessionStorageKey) ?? "null") as Partial<HouseholdSession> | null;
     if (parsed && typeof parsed.name === "string" && isValidHouseholdToken(parsed.publicToken)) {
       return { name: parsed.name, publicToken: parsed.publicToken };
     }
@@ -30,11 +31,11 @@ export const getStoredHouseholdSession = (): HouseholdSession | null => {
 };
 
 export const storeHouseholdSession = (household: HouseholdSession) => {
-  window.localStorage.setItem(householdSessionStorageKey, JSON.stringify(household));
+  browserStorage.setItem(householdSessionStorageKey, JSON.stringify(household));
 };
 
 export const clearHouseholdSession = () => {
-  window.localStorage.removeItem(householdSessionStorageKey);
+  browserStorage.removeItem(householdSessionStorageKey);
 };
 
 export const createHouseholdUrl = (householdToken: string, hash = window.location.hash || "#/") => {

@@ -1,3 +1,8 @@
+import { addPlantFromPhoto } from "./features/plants/services/addPlant";
+import { safeFailureMetadata } from "./lib/errorDiagnostics";
+import { PlantGrid } from "./features/plants/components/PlantGrid";
+import { AddPlantModal } from "./features/plants/components/AddPlantModal";
+import { browserStorage } from "./lib/browserStorage.js";
 import { imageErrorMessage } from "./lib/imageUploadErrors";
 import {
   ArrowLeft,
@@ -186,7 +191,6 @@ import {
   sanitizeDiagnosticNote,
   sanitizeDiagnosticEntries,
 } from "./utils/diagnostics";
-import { validatePlantImageForUpload } from "./utils/imageUploadValidation";
 import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
 import { callBackendFunction, isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
 import { normalizeDiagnosisConfidenceLevel } from "./lib/diagnosisConfidence";
@@ -209,10 +213,7 @@ const getSupabaseDiagnosticId = (diagnostic: PlantDiagnosticEntry) =>
   diagnostic.supabaseId ?? (isUuid(diagnostic.id) ? diagnostic.id : "");
 
 const logTechnicalError = (message: string, error: unknown) => {
-  console.error(message, {
-    error: error instanceof Error ? error.message : String(error),
-    name: error instanceof Error ? error.name : "UnknownError",
-  });
+  console.error(message, safeFailureMetadata(error));
 };
 
 type HouseholdLookupStatus = "idle" | "checking" | "complete";
@@ -291,7 +292,7 @@ export const App = () => {
     : route.page === "join" ? `route:${route.invite}:${route.invitationId ?? ""}` : "";
   const invitationRouteKeyRef = useRef(invitationRouteKey);
   invitationRouteKeyRef.current = invitationRouteKey;
-  const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(window.localStorage));
+  const [selectedLanguage, setSelectedLanguage] = useState<PlantieLanguage | null>(() => readStoredLanguage(browserStorage));
   const t = useMemo(() => createTranslator(selectedLanguage), [selectedLanguage]);
   const subscriptionCopy = householdSubscriptionCopy(selectedLanguage);
   const invitationCopy = householdInvitationCopy(selectedLanguage);
@@ -304,16 +305,16 @@ export const App = () => {
   const formatAppWateringStatus = (progress: ReturnType<typeof getWateringProgress>) => formatLocalizedWateringStatus(progress, t);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(() =>
     getInitialOnboardingStep({
-      hasCompleted: hasCompletedOnboarding(window.localStorage),
+      hasCompleted: hasCompletedOnboarding(browserStorage),
       hasExistingHousehold: Boolean(getStoredHouseholdSession() || getHouseholdTokenFromUrl()),
-      hasLanguage: Boolean(readStoredLanguage(window.localStorage)),
+      hasLanguage: Boolean(readStoredLanguage(browserStorage)),
       hasMigratedSupabaseHousehold: false,
     }),
   );
   const [onboardingStatus, setOnboardingStatus] = useState("");
   const [isNewOnboardingHousehold, setIsNewOnboardingHousehold] = useState(false);
   const [accessStatus, setAccessStatus] = useState("");
-  const [householdNameDraft, setHouseholdNameDraft] = useState(() => translate(readStoredLanguage(window.localStorage), "household.defaultName"));
+  const [householdNameDraft, setHouseholdNameDraft] = useState(() => translate(readStoredLanguage(browserStorage), "household.defaultName"));
   const [householdNameEditDraft, setHouseholdNameEditDraft] = useState("");
   const [householdNameEditSurface, setHouseholdNameEditSurface] = useState<HouseholdNameEditSurface | null>(null);
   const [householdNameEditStatus, setHouseholdNameEditStatus] = useState("");
@@ -350,7 +351,7 @@ export const App = () => {
   const [isAccessChecking, setIsAccessChecking] = useState(true);
   const [householdLookupStatus, setHouseholdLookupStatus] = useState<HouseholdLookupStatus>("idle");
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false);
-  const [, setReportRecipient] = useState(() => window.localStorage.getItem("flowscan-report-recipient-v1") ?? "");
+  const [, setReportRecipient] = useState(() => browserStorage.getItem("flowscan-report-recipient-v1") ?? "");
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [qrExportStatus, setQrExportStatus] = useState("");
@@ -411,7 +412,7 @@ export const App = () => {
     isSupabaseBackend && !auth.loading && previousAuthUserIdRef.current !== (auth.user?.id ?? null);
   const transientMessageGenerationRef = useRef(0);
   const [isSupabaseWritesLocallyDisabled] = useState(
-    () => window.localStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
+    () => browserStorage.getItem(supabaseWritesDisabledStorageKey) === "true",
   );
   const isSupabaseWriteThroughEnabled = isSupabaseWriteThroughEnvEnabled && !isSupabaseWritesLocallyDisabled;
   const shouldUseSupabaseAccountData = isSupabaseReadThroughEnabled && isSupabaseBackend && (auth.loading || auth.isAuthenticated);
@@ -662,7 +663,7 @@ export const App = () => {
   }, [householdLifecycleKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(diagnosticsStorageKey, JSON.stringify(legacyDiagnostics));
+    browserStorage.setItem(diagnosticsStorageKey, JSON.stringify(legacyDiagnostics));
   }, [legacyDiagnostics]);
 
   useEffect(() => {
@@ -707,7 +708,7 @@ export const App = () => {
 
   useEffect(() => {
     if (activeHousehold || supabaseReadState) {
-      markOnboardingComplete(window.localStorage);
+      markOnboardingComplete(browserStorage);
       setOnboardingStep("complete");
     }
   }, [activeHousehold, supabaseReadState]);
@@ -734,7 +735,7 @@ export const App = () => {
     setAccessStatus("");
     setOnboardingStatus("");
 
-    const pendingInvite = window.localStorage.getItem(pendingInviteStorageKey);
+    const pendingInvite = browserStorage.getItem(pendingInviteStorageKey);
     if (!pendingInvite && inviteStatus === t("household.inviteStatusAuthRequired")) {
       setInviteStatus("");
     }
@@ -763,12 +764,12 @@ export const App = () => {
       return;
     }
 
-    const pendingInvite = window.localStorage.getItem(pendingInviteStorageKey);
+    const pendingInvite = browserStorage.getItem(pendingInviteStorageKey);
     if (!pendingInvite) {
       return;
     }
 
-    window.localStorage.removeItem(pendingInviteStorageKey);
+    browserStorage.removeItem(pendingInviteStorageKey);
     if (route.page !== "join") window.location.hash = `#/join?invite=${encodeURIComponent(pendingInvite)}`;
   }, [auth.isAuthenticated, auth.loading]);
 
@@ -998,7 +999,7 @@ export const App = () => {
 
       const urlToken = getHouseholdTokenFromUrl();
       const storedHousehold = getStoredHouseholdSession();
-      const savedSelection = auth.user?.id ? readSelectedHouseholdId(window.localStorage, auth.user.id) : null;
+      const savedSelection = auth.user?.id ? readSelectedHouseholdId(browserStorage, auth.user.id) : null;
       const token = urlToken || savedSelection || storedHousehold?.publicToken || "";
 
       if (!token && (!isSupabaseBackend || !auth.isAuthenticated)) {
@@ -1053,7 +1054,7 @@ export const App = () => {
         }
 
         storeHouseholdSession(household);
-        if (auth.user?.id && isSupabaseBackend) writeSelectedHouseholdId(window.localStorage, auth.user.id, household.publicToken);
+        if (auth.user?.id && isSupabaseBackend) writeSelectedHouseholdId(browserStorage, auth.user.id, household.publicToken);
         setActiveHousehold(household);
         setBaseUrl(currentHouseholdBaseUrl(household.publicToken));
         setAccessStatus("");
@@ -1400,13 +1401,13 @@ export const App = () => {
     setCloudSyncReady(false);
     const session = { name: selected.name, publicToken: selected.id };
     storeHouseholdSession(session);
-    writeSelectedHouseholdId(window.localStorage, auth.user.id, selected.id);
+    writeSelectedHouseholdId(browserStorage, auth.user.id, selected.id);
     setActiveHousehold(session);
     setBaseUrl(currentHouseholdBaseUrl(selected.id));
     setIsHouseholdSheetOpen(false);
     setIsInvitationInboxOpen(false);
     setSelectedInboxInvitationId(null);
-    clearInvitationAuthContext(window.localStorage);
+    clearInvitationAuthContext(browserStorage);
     window.history.replaceState(null, "", createHouseholdUrl(selected.id, "#/"));
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   };
@@ -1929,8 +1930,8 @@ export const App = () => {
   };
 
   const leaveInvitationReview = () => {
-    clearInvitationAuthContext(window.localStorage);
-    window.localStorage.removeItem(pendingInviteStorageKey);
+    clearInvitationAuthContext(browserStorage);
+    browserStorage.removeItem(pendingInviteStorageKey);
     setJoinInviteInput("");
     window.location.hash = "#/menu";
   };
@@ -2003,19 +2004,19 @@ export const App = () => {
       if (!isCurrent()) return false;
       // Joining adds a membership; it does not replace an existing household selection.
       if (source === "route" && households && !currentHousehold && !getStoredHouseholdSession()) {
-        const preferred = readSelectedHouseholdId(window.localStorage, userId);
+        const preferred = readSelectedHouseholdId(browserStorage, userId);
         const existing = resolveHouseholdSelection(households.filter((item) => item.id !== household.id), preferred);
         const selected = householdAfterInviteAcceptance(existing, household);
         const session = { name: selected.name, publicToken: selected.id };
         householdDataGenerationRef.current += 1;
         invalidateSupabaseReadThroughCache();
         storeHouseholdSession(session);
-        writeSelectedHouseholdId(window.localStorage, userId, selected.id);
+        writeSelectedHouseholdId(browserStorage, userId, selected.id);
         setActiveHousehold(session);
         setBaseUrl(currentHouseholdBaseUrl(session.publicToken));
       }
-      window.localStorage.removeItem(pendingInviteStorageKey);
-      clearInvitationAuthContext(window.localStorage);
+      browserStorage.removeItem(pendingInviteStorageKey);
+      clearInvitationAuthContext(browserStorage);
       if (source === "inbox") setAcceptedInboxInvitationHousehold(household);
       else setAcceptedInvitationHousehold(household);
       return true;
@@ -2049,7 +2050,7 @@ export const App = () => {
       window.dispatchEvent(new Event(householdInvitationsChangedEvent));
       await invitationInbox.refresh();
       if (!isCurrent()) return;
-      clearInvitationAuthContext(window.localStorage);
+      clearInvitationAuthContext(browserStorage);
     } catch (error) {
       if (isCurrent()) setActionError(t(joinInviteErrorMessage(error)));
     } finally {
@@ -2145,7 +2146,7 @@ export const App = () => {
       setHouseholdLookupStatus("complete");
       setIsAccessChecking(false);
       storeHouseholdSession(household);
-      if (auth.user?.id && isUuid(household.publicToken)) writeSelectedHouseholdId(window.localStorage, auth.user.id, household.publicToken);
+      if (auth.user?.id && isUuid(household.publicToken)) writeSelectedHouseholdId(browserStorage, auth.user.id, household.publicToken);
       window.history.replaceState(null, "", createHouseholdUrl(household.publicToken));
       setActiveHousehold(household);
       setBaseUrl(currentHouseholdBaseUrl(household.publicToken));
@@ -2215,40 +2216,19 @@ export const App = () => {
     setNewPlantStatus(t("image.validatingSafety"));
 
     try {
-      if (activeSupabaseHouseholdId) {
-        await assertCanAddPlant(activeSupabaseHouseholdId);
-      }
-      if (!isHouseholdOperationCurrent()) return;
-      const imageDataUrl = newPlantImage.dataUrl;
-      await validatePlantImageForUpload(imageDataUrl, selectedLanguage);
-      if (!isHouseholdOperationCurrent()) return;
-      setNewPlantStatus(t("plantForm.generatingCare"));
-      const care = await fetchGeneratedCare(plantName, imageDataUrl, {
-        generationSource: "initial_plant_add",
-        householdId: activeSupabaseHouseholdId,
-        language: selectedLanguage,
-      });
-      if (!isHouseholdOperationCurrent()) return;
-      const { displayName: aiCareDisplayName, identificationConfidence, ...careProfile } = care;
-      const aiDisplayName = aiCareDisplayName.trim();
-
-      const customFlower: Flower = {
-        ...careProfile,
-        displayName: aiDisplayName || plantName,
+      const customFlower = await addPlantFromPhoto({
+        name: plantName, imageDataUrl: newPlantImage.dataUrl,
         id: pendingPlantIdRef.current ?? (pendingPlantIdRef.current = createCustomFlowerId()),
-        identification: identificationConfidence,
-        image: imageDataUrl,
-        source: "custom",
-      };
-
-      savingPlant = true;
-      setNewPlantStatus(t("image.uploading"));
-      if (!await addFlower(customFlower)) return;
-      if (!isHouseholdOperationCurrent()) return;
-      if (activeSupabaseHouseholdId) {
-        await refreshHouseholdPlanUsage().catch(() => null);
-      }
-      if (!isHouseholdOperationCurrent()) return;
+        householdId: activeSupabaseHouseholdId, language: selectedLanguage,
+      }, {
+        assertCanAdd: assertCanAddPlant, generateCare: fetchGeneratedCare, save: addFlower,
+        refreshUsage: refreshHouseholdPlanUsage, isCurrent: isHouseholdOperationCurrent,
+        onStage: stage => {
+          savingPlant = stage === "saving";
+          setNewPlantStatus(t(stage === "checking" ? "image.validatingSafety" : stage === "generating" ? "plantForm.generatingCare" : "image.uploading"));
+        },
+      });
+      if (!customFlower || !isHouseholdOperationCurrent()) return;
       setNewPlantStatus(t("plantForm.added", { plant: customFlower.displayName }));
       pendingPlantIdRef.current = null;
       setNewPlantName("");
@@ -2399,7 +2379,6 @@ export const App = () => {
 
     try {
       setDiagnosisStatus(t("image.validatingSafety"));
-      await validatePlantImageForUpload(diagnosisImageDataUrl, selectedLanguage);
       if (!isHouseholdOperationCurrent()) return;
 
       if (auth.isAuthenticated && !activeSupabaseHouseholdId) {
@@ -2683,7 +2662,7 @@ export const App = () => {
   };
 
   const selectOnboardingLanguage = (language: PlantieLanguage) => {
-    writeStoredLanguage(window.localStorage, language);
+    writeStoredLanguage(browserStorage, language);
     setSelectedLanguage(language);
     if (onboardingStep !== "complete") {
       setOnboardingStep("welcome");
@@ -2704,7 +2683,7 @@ export const App = () => {
     const created = await handleCreateHousehold(event);
     if (householdOperationScopeRef.current.userId !== userId || !created && !isHouseholdOperationCurrent()) return;
     if (created) {
-      markOnboardingComplete(window.localStorage);
+      markOnboardingComplete(browserStorage);
       setOnboardingStep("complete");
     } else {
       setIsNewOnboardingHousehold(false);
@@ -3765,7 +3744,7 @@ export const App = () => {
           if (normalizeInviteTokenInput(joinInviteInput)) void handleJoinInvite(joinInviteInput);
           else {
             try {
-              const invitationId = readInvitationAuthContext(window.localStorage);
+              const invitationId = readInvitationAuthContext(browserStorage);
               if (invitationId) window.location.hash = invitationReturnLocation(invitationId).slice(1);
             } catch { /* Invitations remain available from the authenticated inbox. */ }
           }
@@ -4227,38 +4206,9 @@ export const App = () => {
       {renderHouseholdSheet()}
 
       {isAddPlantModalOpen ? (
-        <PlantActionModal id="add-plant" title={t("plantForm.title")} description={t("plantForm.body")}
-          icon={<Plus size={20} aria-hidden="true" />} closeLabel={t("action.close")} busy={isAddingPlant} onClose={closeAddPlantModal}>
-            <form className="add-plant-form modal-form" onSubmit={handleAddCustomFlower}>
-              <label className="field">
-                <span>{t("plantForm.name")}</span>
-                <input
-                  type="text"
-                  value={newPlantName}
-                  maxLength={80}
-                  placeholder={t("plantForm.namePlaceholder")}
-                  onChange={(event) => setNewPlantName(event.target.value)}
-                />
-              </label>
-              <div className="field">
-                <span>{t("plantForm.image")}</span>
-                <ImageSourcePicker
-                  title={t("plantForm.choosePhoto")}
-                  help={newPlantImage ? t("plantForm.photoReady") : t("plantForm.photoHelp")}
-                  cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")} cancelLabel={t("action.cancel")}
-                  disabled={isAddingPlant} busy={isCapturingNewPlantImage}
-                  onSelect={newImageSelection.select}
-                  onCancel={newImageSelection.cancel}
-                />
-                {newPlantImage ? <PlantImagePreview src={newPlantImage.previewUrl} alt={t("plantForm.previewAlt")} /> : null}
-              </div>
-              <LoadingButton className="primary-action" type="submit" disabled={plantLimitReached || isCapturingNewPlantImage} isLoading={isAddingPlant} loadingLabel={t("plantForm.adding")}>
-                <Plus size={18} aria-hidden="true" />
-                {t("dashboard.addPlant")}
-              </LoadingButton>
-            </form>
-            <PlantFormStatus>{newPlantStatus}</PlantFormStatus>
-        </PlantActionModal>
+        <AddPlantModal t={t} newPlantName={newPlantName} setNewPlantName={setNewPlantName}
+          newPlantStatus={newPlantStatus} isAddingPlant={isAddingPlant} plantLimitReached={plantLimitReached}
+          newImageSelection={newImageSelection} handleAddCustomFlower={handleAddCustomFlower} closeAddPlantModal={closeAddPlantModal} />
       ) : null}
 
       {isNewOnboardingHousehold && customFlowers.length === 0 ? (
@@ -4282,70 +4232,8 @@ export const App = () => {
           </div>
         </section>
       ) : (
-      <section className="flower-grid" aria-label={t("dashboard.hero")}>
-        {visibleFlowers.map((flower) => {
-          const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
-          const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
-          const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
-
-          return (
-            <article
-              className="flower-card"
-              key={flower.id}
-              role="link"
-              tabIndex={0}
-              aria-label={t("plants.openPlant", { plant: flower.displayName })}
-              onClick={(event) => {
-                if ((event.target as HTMLElement).closest("button,a")) {
-                  return;
-                }
-                window.location.hash = flowerPath(flower.id).slice(1);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") {
-                  return;
-                }
-                event.preventDefault();
-                window.location.hash = flowerPath(flower.id).slice(1);
-              }}
-            >
-              <img src={flower.image} alt={flower.displayName} loading="lazy" />
-              <div className="flower-card-body">
-                <div className="card-topline">
-                  <span className="flower-index">{flower.id.replace("flower-", "#")}</span>
-                </div>
-                <h2>{flower.displayName}</h2>
-                <div className={`image-watering image-watering-${wateringProgress.state}`}>
-                  <div className="image-watering-label">
-                    <span>{t("plants.watering")}</span>
-                    <strong>{Math.round(wateringProgress.percent)} %</strong>
-                  </div>
-                  <div className="image-progress-track">
-                    <div className="image-progress-fill" style={{ width: `${wateringProgress.percent}%` }} />
-                  </div>
-                  <small>{formatAppWateringStatus(wateringProgress)}</small>
-                </div>
-                <div className="plant-card-actions">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void updateCareRecord(flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"));
-                    }}
-                  >
-                    <Droplets size={16} aria-hidden="true" />
-                    {t("plants.water")}
-                  </button>
-                  <a className="plant-card-open-action" href={flowerPath(flower.id)} onClick={(event) => event.stopPropagation()} aria-label={`Open ${flower.displayName}`}>
-                    <ArrowRight size={17} aria-hidden="true" />
-                    {t("plants.open")}
-                  </a>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </section>
+      <PlantGrid t={t} visibleFlowers={visibleFlowers} records={records}
+        formatAppWateringStatus={formatAppWateringStatus} updateCareRecord={updateCareRecord} />
       )}
 
       {!isNewOnboardingHousehold && filteredFlowers.length > plantPageSize ? (

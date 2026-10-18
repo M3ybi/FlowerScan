@@ -17,10 +17,13 @@ export const parseHashRoute = (hash: string): AppRoute => {
   const normalizedHash = hash || "#/";
   const match = normalizedHash.match(/^#\/flower\/([^/?]+)(?:\?(.+))?$/);
   if (match) {
+    let flowerId: string;
+    try { flowerId = decodeURIComponent(match[1]); }
+    catch { return { page: "dashboard" }; }
     const params = new URLSearchParams(match[2] ?? "");
     return {
       page: "detail",
-      flowerId: decodeURIComponent(match[1]),
+      flowerId,
       panel: params.get("panel") === "diagnostics" ? "diagnostics" : "",
       scan: params.get("scan") === "1",
     };

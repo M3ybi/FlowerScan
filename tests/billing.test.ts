@@ -834,7 +834,16 @@ test("RevenueCat webhook rejects invalid secret", async () => {
   assert.equal(response.statusCode, 401);
 });
 
-test("RevenueCat webhook fails closed when Supabase admin env is missing", async () => {
+test("RevenueCat webhook fails closed when Supabase admin env is missing", async (context) => {
+  // This test must never inherit an operator's live service credentials.
+  const original = { url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY };
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  context.after(() => {
+    if (original.url === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = original.url;
+    if (original.key === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = original.key;
+  });
+  context.mock.method(globalThis, "fetch", async () => { assert.fail("missing-config test must never access a network"); });
   const previousSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
   process.env.REVENUECAT_WEBHOOK_SECRET = "expected-secret";
 

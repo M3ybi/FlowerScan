@@ -1,0 +1,30 @@
+name: Verify application
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Select the installed Chromium for browser fixtures
+        run: node --input-type=module -e "import { chromium } from 'playwright'; import { appendFileSync } from 'node:fs'; appendFileSync(process.env.GITHUB_ENV, 'PLANTIE_TEST_BROWSER=' + chromium.executablePath() + '\n');"
+      - run: npm run test:image-browser
+      - run: npm run test:image-webkit
+      - run: npm run test:auth-flow-browser
+      - run: npm audit --omit=dev

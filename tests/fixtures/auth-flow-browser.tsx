@@ -427,7 +427,15 @@ const run = async () => {
     }
     await waitFor(() => (scene.startsWith("standalone-") || currentAuth && !currentAuth.loading) && Boolean(panel()), "initial real auth hook/panel");
     await assertHelpers();
-    if (scene === "modes") await exerciseModes();
+    if (scene === "focus-session-race") {
+      provider.emit("SIGNED_IN", provider.seedSession()); await tick();
+      provider.holdSession = true; window.dispatchEvent(new Event("focus"));
+      await waitFor(() => provider.releaseSession, "held focus session read");
+      provider.emit("SIGNED_OUT", null); provider.releaseSession!();
+      await tick(); await tick();
+      check("A delayed focus refresh cannot restore a session after sign-out", () => assert(!currentAuth.isAuthenticated && currentAuth.user === null, "Stale focus refresh restored the signed-out user"));
+    }
+    else if (scene === "modes") await exerciseModes();
     else if (scene === "invitation") await exerciseInvitation();
     else if (scene.startsWith("standalone-")) await exerciseStandalone();
     else if (scene.startsWith("marker-")) await exerciseMarker();

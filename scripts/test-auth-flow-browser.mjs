@@ -135,7 +135,7 @@ for (const width of [390, 1280]) for (const scene of ["modes", "invitation", "re
   scenarios.push({ width, scene });
 for (const scene of ["marker-valid", "marker-expired", "marker-mismatched", "marker-malformed", "marker-normal-callback", "native-events"])
   scenarios.push({ width: 390, scene });
-for (const scene of ["marker-failed-normal-callback", "recovery-event-race", "recovery-marker-timers", "recovery-flow-generation", "native-close-failure"])
+for (const scene of ["focus-session-race", "marker-failed-normal-callback", "recovery-event-race", "recovery-marker-timers", "recovery-flow-generation", "native-close-failure"])
   scenarios.push({ width: 390, scene });
 for (const width of [390, 1280]) for (const scene of ["recovery-form-preview", "recovery-handoff-preview"])
   scenarios.push({ width, scene });
