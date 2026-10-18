@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   createNativeAuthCallbackHandler,
   NativeAuthCallbackError,
@@ -8,6 +9,16 @@ import {
   nativeRecoveryRedirectUrl,
   parseNativeAuthCallback,
 } from "../src/lib/nativeOAuth.js";
+
+test("iOS package paths are portable and the native runtime version matches the lock intent", () => {
+  const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+  const swift = readFileSync("ios/App/CapApp-SPM/Package.swift", "utf8");
+  assert.ok(swift.includes(`exact: "${manifest.dependencies["@capacitor/ios"]}"`));
+  for (const match of swift.matchAll(/path: "([^"]+)"/g)) {
+    assert.ok(match[1].startsWith("../../../node_modules/"));
+    assert.doesNotMatch(match[1], /\\/);
+  }
+});
 
 test("native OAuth callback uses the registered app URL", () => {
   assert.equal(nativeOAuthRedirectUrl, "com.plantie.app://auth/callback");

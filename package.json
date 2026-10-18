@@ -72,12 +72,12 @@
     "test:auth-flow-browser": "node scripts/test-auth-flow-browser.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.4",
+    "@capacitor/android": "8.5.3",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",
     "@capacitor/camera": "^8.2.0",
-    "@capacitor/core": "^8.3.4",
-    "@capacitor/ios": "^8.3.4",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
     "@netlify/blobs": "^10.7.7",
     "@netlify/functions": "^5.2.1",
     "@revenuecat/purchases-capacitor": "^13.1.4",
@@ -92,7 +92,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.3.4",
+    "@capacitor/cli": "8.4.3",
+    "@electric-sql/pglite": "0.5.10",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
