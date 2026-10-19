@@ -9,6 +9,7 @@ test("Supabase startup diagnostics identify failures without echoing CLI credent
   assert.equal(supabaseFailureSummary({ stdout: "ANON_KEY=private-value", stderr: "secret=private-value", error: { code: "ENOENT" } }), "EXECUTABLE_UNAVAILABLE");
   assert.equal(supabaseFailureSummary({ stdout: "postgresql://private-user:private-password@host/db", stderr: "eyJ-private-token" }), "UNCLASSIFIED_CLI_FAILURE");
   assert.equal(supabaseFailureSummary({ stderr: "container unhealthy\nno space left on device" }), "CONTAINER_HEALTH_FAILED,DISK_CAPACITY");
+  assert.equal(supabaseFailureSummary({ error: { code: "ENOBUFS" } }), "OUTPUT_BUFFER_LIMIT");
 });
 
 test("release runner retains child failures, blocked infrastructure and missing executables", async () => {

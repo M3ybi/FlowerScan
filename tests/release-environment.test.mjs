@@ -33,7 +33,7 @@ test("missing targets, environment overrides, legacy paths and wrong billing fai
 test("a preview build cannot select the same approved test and production database", async () => {
   const values = { CONTEXT: "deploy-preview", PLANTIE_TEST_SUPABASE_URL: "https://production.example.invalid",
     PLANTIE_PRODUCTION_SUPABASE_URL: "https://production.example.invalid", VITE_SUPABASE_URL: "https://production.example.invalid",
-    VITE_REVENUECAT_API_KEY_TEST_STORE: "test_synthetic_fixture" };
+    VITE_SUPABASE_ANON_KEY: "synthetic-public-key", VITE_REVENUECAT_API_KEY_TEST_STORE: "test_synthetic_fixture" };
   const original = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
   Object.assign(process.env, values);
   try { await assert.rejects(resolveConfig({ mode: "test", logLevel: "silent" }, "build"), /RELEASE_DATABASE_ISOLATION_REQUIRED/); }

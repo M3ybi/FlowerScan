@@ -15,5 +15,6 @@ export const supabaseFailureSummary = ({ stdout, stderr, error }) => {
   ].filter(([, pattern]) => pattern.test(output)).map(([category]) => category);
   if (error?.code === "ENOENT") categories.push("EXECUTABLE_UNAVAILABLE");
   if (error?.code === "ETIMEDOUT") categories.push("COMMAND_TIMEOUT");
+  if (error?.code === "ENOBUFS") categories.push("OUTPUT_BUFFER_LIMIT");
   return categories.length ? [...new Set(categories)].join(",") : "UNCLASSIFIED_CLI_FAILURE";
 };
