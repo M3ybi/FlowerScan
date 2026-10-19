@@ -17,7 +17,7 @@ test("legacy Netlify backend requires explicit provider or fallback flag", () =>
 });
 
 test("Supabase reads are default-on when the browser client is configured", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
 
   assert.match(appSource, /import \{ isSupabaseConfigured \} from "\.\/lib\/supabase"/);
   assert.match(appSource, /const isSupabaseReadThroughEnabled = isSupabaseConfigured && import\.meta\.env\.VITE_DISABLE_SUPABASE_READS !== "true"/);
@@ -25,7 +25,7 @@ test("Supabase reads are default-on when the browser client is configured", () =
 });
 
 test("Supabase-only data mode uses empty local plant baseline", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
 
   assert.match(appSource, /VITE_DISABLE_SUPABASE_WRITES !== "true"/);
   assert.match(appSource, /VITE_ENABLE_SUPABASE_WRITES !== "false"/);
@@ -34,7 +34,7 @@ test("Supabase-only data mode uses empty local plant baseline", () => {
 });
 
 test("Supabase-only writes fail closed instead of saving legacy fallback data", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
 
   assert.match(appSource, /runRequiredSupabaseWrite/);
   assert.match(appSource, /if \(isSupabaseOnlyDataMode\) \{\s*try \{\s*await runRequiredSupabaseWrite\(operation\)/);
@@ -42,7 +42,7 @@ test("Supabase-only writes fail closed instead of saving legacy fallback data", 
 });
 
 test("household creation uses Supabase RPC before legacy Netlify fallback", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const createHouseholdSection = appSource.slice(appSource.indexOf("const handleCreateHousehold"), appSource.indexOf("const changeHousehold"));
 
   assert.match(createHouseholdSection, /createHousehold\(nameValidation\.name\)/);
@@ -52,7 +52,7 @@ test("household creation uses Supabase RPC before legacy Netlify fallback", () =
 });
 
 test("legacy Netlify plant-state sync is gated away from Supabase source-of-truth mode", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const plantStateReferences = appSource.match(/plant-state/g) ?? [];
 
   assert.ok(plantStateReferences.length > 0);
@@ -60,7 +60,7 @@ test("legacy Netlify plant-state sync is gated away from Supabase source-of-trut
 });
 
 test("Supabase-first startup preserves existing stored legacy household sessions", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const resolverSection = appSource.slice(appSource.indexOf("const resolveHousehold"), appSource.indexOf("void resolveHousehold"));
 
   assert.match(resolverSection, /storedHousehold\?\.publicToken === token/);
@@ -69,7 +69,7 @@ test("Supabase-first startup preserves existing stored legacy household sessions
 });
 
 test("Supabase startup loads authenticated household even without a cached token", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const resolverSection = appSource.slice(appSource.indexOf("const resolveHousehold"), appSource.indexOf("void resolveHousehold"));
 
   assert.match(resolverSection, /!token && \(!isSupabaseBackend \|\| !auth\.isAuthenticated\)/);
@@ -79,7 +79,7 @@ test("Supabase startup loads authenticated household even without a cached token
 });
 
 test("Supabase startup without memberships prompts create or join instead of invalid link", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const resolverSection = appSource.slice(appSource.indexOf("const resolveHousehold"), appSource.indexOf("void resolveHousehold"));
 
   assert.match(resolverSection, /if \(!supabaseHousehold\)/);
@@ -89,7 +89,7 @@ test("Supabase startup without memberships prompts create or join instead of inv
 });
 
 test("public menu and compliance routes are not blocked by household gate", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const routesSource = readFileSync("src/app/routes.ts", "utf8");
 
   assert.match(routesSource, /export const isRouteAllowedWithoutHousehold/);
@@ -113,7 +113,7 @@ test("AI frontend calls use backend provider layer", () => {
 });
 
 test("AI care refresh fetches a fresh signed URL for Supabase plant images", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const careHandler = appSource.match(/const handleGenerateCarePreview = async \(flower: Flower\) => \{[\s\S]*?\n  \};/)?.[0] ?? "";
 
   assert.match(careHandler, /getHouseholdPlantById\(supabasePlantId\)/);
@@ -122,7 +122,7 @@ test("AI care refresh fetches a fresh signed URL for Supabase plant images", () 
 });
 
 test("subscription UI uses one provider and household server state", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const pricingSource = readFileSync("src/components/PricingPage.tsx", "utf8");
   const subscriptionHook = readFileSync("src/hooks/useSubscriptionState.ts", "utf8");
 
@@ -156,7 +156,7 @@ test("Supabase diagnosis confidence labels are mapped to the database enum", () 
 });
 
 test("Supabase diagnosis save patches and refetches rendered history", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const readThroughSource = readFileSync("src/lib/supabaseReadThrough.ts", "utf8");
 
   assert.match(appSource, /const upsertSupabaseDiagnosisInReadState/);
@@ -171,7 +171,7 @@ test("Supabase diagnosis save patches and refetches rendered history", () => {
 });
 
 test("Supabase startup avoids duplicate per-plant PostgREST reads", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const readThroughSource = readFileSync("src/lib/supabaseReadThrough.ts", "utf8");
 
   assert.doesNotMatch(appSource, /getPlantDiagnostics/);

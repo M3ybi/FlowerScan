@@ -88,7 +88,7 @@ test("subscription restriction copy is user-friendly and localized", () => {
 });
 
 test("detail screen uses translator keys for quick actions", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const detailSource = appSource;
 
   assert.match(detailSource, /t\("detail\.todayTransplanted"\)/);

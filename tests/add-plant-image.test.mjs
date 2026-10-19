@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 
-const text = readFileSync("src/App.tsx", "utf8") + "\n" + readFileSync("src/features/plants/components/AddPlantModal.tsx", "utf8");
+const text = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath) => readFileSync(sourcePath, "utf8")).join("\n") + "\n" + readFileSync("src/features/plants/components/AddPlantModal.tsx", "utf8");
 const app = ts.createSourceFile("App.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const pickers = [];
 const visit = node => {

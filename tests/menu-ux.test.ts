@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-const appSource = readFileSync("src/App.tsx", "utf8");
+const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
 const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
 const loggedOutMenuSource = readFileSync("src/components/LoggedOutMenu.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
@@ -51,7 +51,7 @@ test("signed-out Menu hides application navigation while the authenticated branc
 
 test("dashboard account access opens the household sheet with account actions", () => {
   const dashboardTrigger = appSource.slice(appSource.indexOf("const renderHeroActions"), appSource.indexOf("const renderHouseholdSheet"));
-  const householdSheet = appSource.slice(appSource.indexOf("const renderHouseholdSheet"), appSource.indexOf("const renderHouseholdLoading"));
+  const householdSheet = readFileSync("src/features/households/components/HouseholdSheet.tsx", "utf8");
 
   assert.match(dashboardTrigger, /className="user-menu-trigger"/);
   assert.match(dashboardTrigger, /setIsHouseholdSheetOpen\(true\)/);
@@ -240,7 +240,7 @@ test("primary navigation provides secondary app routes", () => {
 });
 
 test("household switching uses the active membership directory and isolates old data", () => {
-  const switching = appSource.slice(appSource.indexOf("const selectHousehold"), appSource.indexOf("const renderHeroActions"));
+  const switching = readFileSync("src/features/households/hooks/useHouseholdSelectionActions.tsx", "utf8");
   assert.match(switching, /householdDirectory\.households\.find/);
   assert.match(switching, /householdDataGenerationRef\.current \+= 1/);
   assert.match(switching, /setSupabaseReadState\(null\)/);

@@ -1,5 +1,5 @@
 import { browserStorage } from "./browserStorage.js";
-import { imageValidationReceipt } from "./imageValidationReceipts.js";
+import { uploadWithValidationRecovery } from "./validatedImageUpload.js";
 import { supabase } from "./supabase.js";
 import { withRequestTimeout } from "./requestTimeout.js";
 import type { DiagnosisConfirmation, DiagnosisRiskLevel, PlantDiagnosisDraft } from "../utils/diagnostics.js";
@@ -10,7 +10,6 @@ import {
   plantImagesBucket,
 } from "./imageStoragePaths.js";
 import { createPrivateImageSignedUrl, prepareImageBlobForUpload, imageBlobToDataUrl } from "./imageCaptureService.js";
-import { imageErrorFromResponse, ImageUploadError } from "./imageUploadErrors.js";
 import { validateHouseholdName } from "./householdNameValidation.js";
 import { readStoredLanguage } from "./onboarding.js";
 import { normalizeDiagnosisConfidenceLevel, type DiagnosisConfidenceLevel } from "./diagnosisConfidence.js";
@@ -406,23 +405,17 @@ const uploadValidatedImage = async ({
 }) => {
   const normalizedBlob = await prepareImageBlobForUpload(imageBlob);
   const imageDataUrl = await blobToDataUrl(normalizedBlob);
-  const { data, error } = await withRequestTimeout((signal) => getClient().functions.invoke("upload-validated-image", {
+  const data = await uploadWithValidationRecovery(imageDataUrl, (receipt) => withRequestTimeout((signal) => getClient().functions.invoke("upload-validated-image", {
     body: {
       householdId,
       imageDataUrl,
       imageId,
-      imageValidationReceipt: imageValidationReceipt(imageDataUrl),
+      imageValidationReceipt: receipt,
       language: readStoredLanguage(browserStorage),
       kind,
     },
     signal,
-  }), 60_000).catch(async (error: unknown) => {
-    throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_NETWORK_FAILED", 502);
-  });
-
-  if (error) {
-    throw (await imageErrorFromResponse(error)) ?? new ImageUploadError("IMAGE_UPLOAD_FAILED", 502);
-  }
+  }), 60_000));
 
   if (!data || typeof (data as { path?: unknown }).path !== "string") {
     throw new Error("Validated image upload did not return a storage path.");

@@ -1,5 +1,5 @@
+import { useRecoveryActions } from "../../src/features/auth/hooks/useRecoveryActions";
 import { useState } from "react";
-import type { ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { KeyRound } from "lucide-react";
 import { AuthMessage, AuthPanel } from "../../src/components/AuthPanel";
@@ -7,11 +7,10 @@ import { LoggedOutMenu } from "../../src/components/LoggedOutMenu";
 import { LoadingButton } from "../../src/components/LoadingButton";
 import { useAuth } from "../../src/hooks/useAuth";
 import type { AuthState } from "../../src/hooks/useAuth";
-import { createNativeAuthLinkSuccessEvent, finishPasswordRecovery, nativeAuthLinkErrorEvent } from "../../src/lib/authService";
+import { createNativeAuthLinkSuccessEvent, nativeAuthLinkErrorEvent } from "../../src/lib/authService";
 import { authPanelCopy, authPanelNoticeContent } from "../../src/lib/authPanelCopy";
 import { minimumAuthPasswordLength } from "../../src/lib/authRules";
 import { createTranslator } from "../../src/lib/i18n";
-import type { AuthMode } from "../../src/lib/authRules";
 import { createAuthRedirectUrl, readWebAuthCallback, safeAuthReturnLocation } from "../../src/lib/authRedirects";
 import { createNativeAuthCallbackHandler, NativeAuthCallbackError, nativeOAuthSuccessEvent, nativeRecoveryRedirectUrl, parseNativeAuthCallback } from "../../src/lib/nativeOAuth";
 import { invitationAuthContextStorageKey, readInvitationAuthContext, rememberInvitationAuthContext } from "../../src/lib/invitationAuthContext";
@@ -33,7 +32,7 @@ const callbacks = { signedIn: 0, updated: 0, noticeConsumed: 0, resetRequested: 
 const t = createTranslator("en");
 const result = { scene, viewport: { width: innerWidth, height: innerHeight }, checks: [] as string[], failures: [] as string[],
   limitations: ["Real AuthPanel, useAuth, auth service/rules, redirect helpers and production stylesheet. Only Supabase and profile repository boundaries are synthetic.",
-    "Provider callbacks and parent recovery/login handoff are controlled fixtures, not a live password update or full App route transition.",
+    "Production recovery controller, hooks and auth UI run against synthetic provider callbacks; this is not a live password update or full App route transition.",
     "No real signup, email, OAuth, native plugins, software keyboard or trusted user input. Native helper parsing/exchange identity is tested without a native store or OS."] };
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 const check = (message: string, run: () => void) => { run(); result.checks.push(message); };
@@ -80,16 +79,12 @@ const assertNoOverflow = () => {
 const Fixture = () => {
   const auth = useAuth(); currentAuth = auth;
   const [mount, setMount] = useState(0);
-  const [leaving, setLeaving] = useState(false);
-  const [exitFailed, setExitFailed] = useState(false);
-  const [handoff, setHandoff] = useState<{ mode: AuthMode; email: string; notice: ComponentProps<typeof AuthPanel>["initialNotice"] } | null>(null);
+  const { authEntry: handoff, setAuthEntry: setHandoff, isLeavingRecovery: leaving, recoveryExitFailed: exitFailed,
+    requestNewRecoveryLink, completeRecovery } = useRecoveryActions(auth);
   remount = () => setMount(value => value + 1);
   const requestNewLink = async (address = auth.user?.email ?? "") => {
-    const flowId = auth.recoveryFlowId;
-    callbacks.resetRequested += 1; setLeaving(true); setExitFailed(false);
-    try { await finishPasswordRecovery(); if (!auth.completePasswordRecovery(flowId)) return; setHandoff({ mode: "reset", email: address || auth.user?.email || "", notice: undefined }); }
-    catch { if (auth.isPasswordRecoveryFlowCurrent(flowId)) setExitFailed(true); }
-    finally { setLeaving(false); }
+    callbacks.resetRequested += 1;
+    await requestNewRecoveryLink(address);
   };
   if (auth.loading) return <main className="app-shell access-shell"><p role="status">Loading synthetic auth session</p></main>;
   if (auth.invalidRecoveryLink) return <main className="app-shell access-shell onboarding-shell" data-screen="invalid-recovery">
@@ -107,9 +102,8 @@ const Fixture = () => {
     <section className="access-card onboarding-card auth-recovery-card" aria-labelledby="fixture-recovery-title"><div className="section-title"><KeyRound size={22} aria-hidden="true" /><h1 id="fixture-recovery-title">{t("auth.newPasswordTitle")}</h1></div>
       <p>{t("auth.newPasswordBody")}</p><AuthPanel key={auth.recoveryFlowId} compact initialMode="updatePassword" language="en"
       onRequestPasswordReset={requestNewLink} onPasswordUpdated={async address => {
-        callbacks.updated += 1; const flowId = auth.beginPasswordRecoveryCompletion(auth.recoveryFlowId); if (flowId === null) return;
-        await finishPasswordRecovery(); if (!auth.completePasswordRecovery(flowId)) return;
-        setHandoff({ mode: "login", email: address ?? "", notice: { key: "password_changed", severity: "success" } });
+        callbacks.updated += 1;
+        await completeRecovery(address);
       }} /></section>
   </main>;
   if (scene === "invitation") return <main className="app-shell access-shell onboarding-shell" data-screen="invitation"><section className="access-card onboarding-card">

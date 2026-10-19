@@ -1,14 +1,16 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
+import { useOperationScope } from "../hooks/useOperationScope";
 import type { BillingProduct } from "../lib/billingService";
+import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
+import { beginHouseholdPurchase } from "../lib/householdPlanService";
+import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
 import { canPurchaseHouseholdPlan, canSwitchToYearly, isOwnPaidSubscription, safeBillingManagementUrl } from "../lib/subscriptionUiRules";
-import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { LoadingButton } from "./LoadingButton";
-import { beginHouseholdPurchase } from "../lib/householdPlanService";
+import { ModalDialog } from "./ModalDialog";
 
 type UpgradeModalProps = {
   limitReason?: string;
@@ -28,8 +30,7 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
   const [products, setProducts] = useState<BillingProduct[]>([]);
   const purchaseInProgress = useRef(false);
   const pendingPlanRef = useRef<"monthly" | "yearly" | null>(null);
-  const subscriptionScopeRef = useRef("");
-  subscriptionScopeRef.current = `${subscription.userId ?? ""}:${subscription.householdId ?? ""}`;
+  const captureOperationScope = useOperationScope(`${subscription.userId ?? ""}:${subscription.householdId ?? ""}`);
   const billingStatus = billing.getStatus();
   const billingDisabled = !billingStatus.configured;
   const isResolving = subscription.status === "loading" || subscription.view === "loading" || subscription.view === "syncing";
@@ -40,10 +41,15 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
   const managementUrl = isOwnPaidSubscription(subscription) ? safeBillingManagementUrl(subscription.customerInfo?.managementUrl) : null;
 
   useEffect(() => {
-    setProducts([]);
-    setStatusMessage("");
+    purchaseInProgress.current = false;
+    setIsPurchasing(false);
     setIsAwaitingConfirmation(false);
     pendingPlanRef.current = null;
+    setStatusMessage("");
+  }, [subscription.userId, subscription.householdId]);
+
+  useEffect(() => {
+    setProducts([]);
     if (billingDisabled || !subscription.userId) {
       if (billingDisabled) setStatusMessage(t("pricing.notConfigured"));
       return;
@@ -70,22 +76,22 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
   const purchase = async (period: "monthly" | "yearly") => {
     if (purchaseInProgress.current || isAwaitingConfirmation || (!isFree && !(period === "yearly" && canUpgradeYearly))) return;
     purchaseInProgress.current = true;
-    const purchaseScope = subscriptionScopeRef.current;
+    const isPurchaseCurrent = captureOperationScope();
     setIsPurchasing(true);
     setStatusMessage(t("pricing.openingPurchase"));
     let providerPurchaseCompleted = false;
     try {
       if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
       await beginHouseholdPurchase(subscription.householdId);
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       const info = period === "monthly" ? await billing.purchasePremiumMonthly(subscription.householdId)
         : canUpgradeYearly ? await billing.changePlan("yearly", subscription.householdId)
         : await billing.purchasePremiumYearly(subscription.householdId);
       providerPurchaseCompleted = true;
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       pendingPlanRef.current = period;
       const refreshed = await onSubscriptionChanged();
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       const confirmed = info.hasRevenueCatPremium && refreshed.status === "ready" && refreshed.householdId === subscription.householdId &&
         (period === "monthly"
           ? refreshed.view === "monthly_active" || refreshed.view === "monthly_cancelled_active"
@@ -94,20 +100,18 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
       setIsAwaitingConfirmation(!confirmed);
       setStatusMessage(confirmed ? t("pricing.currentServerPremium") : t("pricing.purchaseSubmitted"));
     } catch (error) {
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       const pending = providerPurchaseCompleted || error instanceof BillingConfirmationPendingError;
       pendingPlanRef.current = pending ? period : null;
       setIsAwaitingConfirmation(pending);
       setStatusMessage(pending ? t("pricing.purchaseSubmitted") : error instanceof Error ? error.message : t("pricing.purchaseFailed"));
     } finally {
-      purchaseInProgress.current = false;
-      setIsPurchasing(false);
+      if (isPurchaseCurrent()) { purchaseInProgress.current = false; setIsPurchasing(false); }
     }
   };
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section className="upgrade-modal" role="dialog" aria-modal="true" aria-labelledby="upgrade-title">
+    <ModalDialog className="upgrade-modal" labelledBy="upgrade-title" busy={isPurchasing} onClose={onClose}>
         <button className="modal-close" type="button" onClick={onClose} disabled={isPurchasing} aria-label={t("pricing.closeUpgrade")}>
           <X size={20} aria-hidden="true" />
         </button>
@@ -140,7 +144,6 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
               </LoadingButton>
             ) : null}
         </div>
-      </section>
-    </div>
+      </ModalDialog>
   );
 };

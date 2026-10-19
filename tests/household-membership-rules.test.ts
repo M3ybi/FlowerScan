@@ -56,7 +56,7 @@ test("an old closure cannot refresh after switching away and back, including bef
 });
 
 test("an unavailable explicit household refreshes the authorized directory after the async scope guard", () => {
-  const app = readFileSync("src/App.tsx", "utf8");
+  const app = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const forcedRefresh = app.slice(app.indexOf("const refreshSupabaseReadState"), app.indexOf("const refreshHouseholdPlanUsage"));
   assert.match(forcedRefresh, /if \(generation !== householdDataGenerationRef\.current \|\| !isHouseholdOperationCurrent\(\)\) return null;\s*if \(activeHousehold && !nextState\) void householdDirectory\.refresh\(true\)/);
   const initialLoad = app.slice(app.indexOf("const loadReadThroughState"), app.indexOf("void loadReadThroughState"));

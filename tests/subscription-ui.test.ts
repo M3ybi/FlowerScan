@@ -253,7 +253,7 @@ test("billing management only accepts safe HTTPS URLs and invalid dates do not c
 test("subscription screens consume the central snapshot and preserve provider cancellation semantics", () => {
   const pricing = readFileSync("src/components/PricingPage.tsx", "utf8");
   const upgrade = readFileSync("src/components/UpgradeModal.tsx", "utf8");
-  const app = readFileSync("src/App.tsx", "utf8");
+  const app = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const hook = readFileSync("src/hooks/useSubscriptionState.ts", "utf8");
   assert.match(pricing, /subscription: SubscriptionSnapshot/);
   assert.match(upgrade, /subscription: SubscriptionSnapshot/);

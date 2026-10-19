@@ -6,6 +6,9 @@ export { defaultLanguage };
 
 export const translations: Record<PlantieLanguage, TranslationDictionary> = {
   "en": {
+    "app.unavailableTitle": "This screen is unavailable",
+    "app.unavailableBody": "The screen could not be loaded. Return to your plants or reload the page and try again.",
+    "app.reload": "Reload page",
     "account.authProvider": "Auth provider",
     "account.emailAddress": "Email address",
     "household.myHouseholds": "My households",
@@ -554,6 +557,9 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
     "sync.removeUnavailable": "Supabase plant is not available. Removal was not saved."
   },
   "sk": {
+    "app.unavailableTitle": "Táto obrazovka je nedostupná",
+    "app.unavailableBody": "Obrazovku sa nepodarilo načítať. Vráť sa k rastlinám alebo obnov stránku a skús to znova.",
+    "app.reload": "Obnoviť stránku",
     "household.retryInviteEmail": "Znova odoslať e-mail",
     "household.inviteEmailRetryFailed": "Pozvánka zostáva čakajúca, ale e-mail sa nepodarilo doručiť. Skús to znova alebo skopíruj odkaz.",
     "household.inviteEmailConfigError": "Odosielanie pozvánok nie je nastavené. Pozvánka zostáva čakajúca; skopíruj odkaz alebo kontaktuj podporu.",
@@ -1102,6 +1108,9 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
     "sync.removeUnavailable": "Supabase rastlina nie je dostupn\u00e1. Odstr\u00e1nenie nebolo ulo\u017een\u00e9."
   },
   "de": {
+    "app.unavailableTitle": "Diese Ansicht ist nicht verfügbar",
+    "app.unavailableBody": "Die Ansicht konnte nicht geladen werden. Kehre zu deinen Pflanzen zurück oder lade die Seite erneut.",
+    "app.reload": "Seite neu laden",
       "household.retryInviteEmail": "E-Mail erneut senden",
       "household.inviteEmailRetryFailed": "Die Einladung bleibt ausstehend, aber die E-Mail konnte nicht zugestellt werden. Versuchen Sie es erneut oder kopieren Sie den Link.",
       "household.inviteEmailConfigError": "Der E-Mail-Versand ist nicht konfiguriert. Die Einladung bleibt ausstehend; kopieren Sie den Link oder kontaktieren Sie den Support.",
@@ -1650,6 +1659,9 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
       "sync.removeUnavailable": "Supabase-Anlage ist nicht verfügbar. Die Entfernung wurde nicht gespeichert."
   },
   "fr": {
+    "app.unavailableTitle": "Cet écran est indisponible",
+    "app.unavailableBody": "Impossible de charger cet écran. Reviens à tes plantes ou recharge la page et réessaie.",
+    "app.reload": "Recharger la page",
       "household.retryInviteEmail": "Renvoyer l’e-mail",
       "household.inviteEmailRetryFailed": "L’invitation reste en attente, mais l’e-mail n’a pas pu être envoyé. Réessayez ou copiez le lien.",
       "household.inviteEmailConfigError": "L’envoi d’e-mails n’est pas configuré. L’invitation reste en attente ; copiez le lien ou contactez l’assistance.",
@@ -2198,6 +2210,9 @@ export const translations: Record<PlantieLanguage, TranslationDictionary> = {
       "sync.removeUnavailable": "L'installation Supabase n'est pas disponible. La suppression n'a pas été enregistrée."
   },
   "es": {
+    "app.unavailableTitle": "Esta pantalla no está disponible",
+    "app.unavailableBody": "No se pudo cargar la pantalla. Vuelve a tus plantas o recarga la página e inténtalo de nuevo.",
+    "app.reload": "Recargar la página",
       "household.retryInviteEmail": "Reenviar correo",
       "household.inviteEmailRetryFailed": "La invitación sigue pendiente, pero no se pudo enviar el correo. Vuelve a intentarlo o copia el enlace.",
       "household.inviteEmailConfigError": "El envío de correos no está configurado. La invitación sigue pendiente; copia el enlace o contacta con soporte.",

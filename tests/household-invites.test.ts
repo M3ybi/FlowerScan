@@ -171,7 +171,7 @@ test("frontend repository exposes authenticated invite and viewer removal operat
 });
 
 test("frontend invites use server-defined expiry and a single pending record for email retries", () => {
-  const appSource = read("src/App.tsx");
+  const appSource = JSON.parse(read("tests/fixtures/application-sources.json")).map((sourcePath: string) => read(sourcePath)).join("\n");
   const inviteSource = read("src/app/householdInvites.ts");
 
   assert.match(appSource, /normalizeInviteEmail\(inviteEmail\)/);
@@ -187,7 +187,7 @@ test("frontend invites use server-defined expiry and a single pending record for
 });
 
 test("frontend uses one current-state list and owner-only member removal", () => {
-  const appSource = read("src/App.tsx");
+  const appSource = JSON.parse(read("tests/fixtures/application-sources.json")).map((sourcePath: string) => read(sourcePath)).join("\n");
 
   assert.match(appSource, /<HouseholdPeopleList/);
   assert.match(appSource, /buildHouseholdPeople\(/);
@@ -214,7 +214,7 @@ test("earlier people migration restricted invitation writes and member removal",
 });
 
 test("frontend exposes owner-only household rename in sheet and menu", () => {
-  const appSource = read("src/App.tsx");
+  const appSource = JSON.parse(read("tests/fixtures/application-sources.json")).map((sourcePath: string) => read(sourcePath)).join("\n");
 
   assert.match(appSource, /const canRenameHousehold = auth\.isAuthenticated && Boolean\(activeSupabaseHouseholdId\) && householdPermissions\.canEditHousehold/);
   assert.match(appSource, /renderHouseholdNameEditor\("sheet", "household-sheet-title"\)/);
@@ -239,7 +239,7 @@ test("signed-out invitation resumes review after authentication without autoacce
 });
 
 test("legacy household links remain available only through legacy compatibility paths", () => {
-  const appSource = read("src/App.tsx");
+  const appSource = JSON.parse(read("tests/fixtures/application-sources.json")).map((sourcePath: string) => read(sourcePath)).join("\n");
 
   assert.match(appSource, /createHouseholdApiUrl\("\/\.netlify\/functions\/household-access"/);
   assert.match(appSource, /isLegacyNetlifyBackendEnabled/);

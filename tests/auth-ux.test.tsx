@@ -352,13 +352,13 @@ test("header sign-out requires confirmation and does not expose account deletion
 });
 
 test("delete account is exposed only from logged-in menu settings", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   assert.match(appSource, /auth\.isAuthenticated \? \(/);
   assert.match(appSource, /href="#\/delete-account"/);
 });
 
 test("password recovery route renders a dedicated password update mode", () => {
-  const appSource = readFileSync("src/App.tsx", "utf8");
+  const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
   const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
   const hookSource = readFileSync("src/hooks/useAuth.ts", "utf8");
 

@@ -14,13 +14,17 @@ const artifacts = path.join(workspace, ".tmp-tests", "auth-flow-browser");
 // This structural assertion checks production wiring, not a live full-App
 // navigation. Runtime recovery/event behavior is tested in the real hook below.
 const appPath = path.join(workspace, "src", "App.tsx");
-const app = ts.createSourceFile(appPath, await readFile(appPath, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const owners = JSON.parse(await readFile(path.join(workspace, "tests/fixtures/application-sources.json"), "utf8"));
+const applicationSource = (await Promise.all(owners.map(file => readFile(path.join(workspace, file), "utf8")))).join("\n");
+const app = ts.createSourceFile(appPath, applicationSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const descendants = (node, predicate) => {
   const matches = [];
   const visit = current => { if (predicate(current)) matches.push(current); ts.forEachChild(current, visit); };
   visit(node); return matches;
 };
 const completion = descendants(app, node => ts.isVariableDeclaration(node) && node.name.getText(app) === "completeRecovery")[0]?.initializer;
+assert.ok(descendants(app, node => ts.isCallExpression(node) && node.expression.getText(app) === "useRecoveryActions").length === 1,
+  "App must wire the extracted recovery controller exactly once.");
 assert.ok(completion && ts.isArrowFunction(completion) && ts.isBlock(completion.body), "Production recovery completion is missing.");
 const completionStatements = completion.body.statements.map(node => node.getText(app));
 const requiredCompletion = ["auth.beginPasswordRecoveryCompletion(", "await finishPasswordRecovery()", "auth.completePasswordRecovery(", "setAuthEntry", "window.location.hash"];
@@ -171,4 +175,4 @@ try {
   }
 } finally { await new Promise(resolve => server.close(resolve)); }
 console.log(`Auth flow fixture passed. Screenshots/results: ${path.relative(workspace, artifacts)}.`);
-console.log("Real AuthPanel, useAuth, auth service/rules, redirect helpers and stylesheet; only Supabase/profile repository boundaries substituted. Parent handoff and provider auth events are synthetic. No actual email, signup, OAuth, password update, native plugin, software keyboard, or full App session transition exercised.");
+console.log("Real AuthPanel, useAuth, auth service/rules, redirect helpers and stylesheet; only Supabase/profile repository boundaries substituted. Production recovery controller is exercised; provider auth events and parent presentation are synthetic. No actual email, signup, OAuth, password update, native plugin, software keyboard, or full App session transition exercised.");

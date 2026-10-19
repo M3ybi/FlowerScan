@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const appSource = readFileSync("src/App.tsx", "utf8") + "\n" + readFileSync("src/features/plants/components/PlantGrid.tsx", "utf8");
+const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n") + "\n" + readFileSync("src/features/plants/components/PlantGrid.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 
@@ -94,7 +94,7 @@ test("AI diagnosis actions are disabled when household access is unavailable", (
 });
 
 test("household actions are behind a compact sheet", () => {
-  const householdSheet = appSource.slice(appSource.indexOf("const renderHouseholdSheet"), appSource.indexOf("const renderHouseholdLoading"));
+  const householdSheet = readFileSync("src/features/households/components/HouseholdSheet.tsx", "utf8");
 
   assert.match(appSource, /isHouseholdSheetOpen/);
   assert.match(appSource, /className="user-menu-trigger"/);

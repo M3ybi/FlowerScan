@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type R
 import { createPortal } from "react-dom";
 import { ArrowLeft, X } from "lucide-react";
 import { installInvitationOverlayInteractions, invitationPopoverPosition } from "../lib/invitationOverlay";
+import { lockDialogScroll } from "../lib/dialogScrollLock";
 
 export type InvitationCenterOverlayProps = {
   anchorRef: RefObject<HTMLButtonElement>;
@@ -25,13 +26,12 @@ export const InvitationCenterOverlay = ({ anchorRef, mode, title, onClose, child
     const dialog = dialogRef.current;
     if (!dialog) return;
     const ownerDocument = dialog.ownerDocument;
-    const previousOverflow = ownerDocument.body.style.overflow;
-    ownerDocument.body.style.overflow = "hidden";
+    const unlock = lockDialogScroll(ownerDocument);
     const removeInteractions = installInvitationOverlayInteractions({
       dialog, anchor: anchorRef.current, onClose: () => latest.current.onClose(), isBusy: () => latest.current.busy,
     });
     return () => {
-      ownerDocument.body.style.overflow = previousOverflow;
+      unlock();
       removeInteractions();
     };
   }, [anchorRef]);

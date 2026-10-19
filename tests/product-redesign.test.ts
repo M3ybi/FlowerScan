@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const appSource = readFileSync("src/App.tsx", "utf8");
+const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
 const loadingButtonSource = readFileSync("src/components/LoadingButton.tsx", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 
 test("dashboard overview UI is removed from the dashboard surface", () => {
   assert.doesNotMatch(appSource, /DashboardOverview/);
-  assert.doesNotMatch(appSource, /diagnostics=\{diagnostics\}/);
+  assert.doesNotMatch(readFileSync("src/features/dashboard/components/DashboardPage.tsx", "utf8"), /diagnostics=\{diagnostics\}/);
   assert.doesNotMatch(appSource, /onAddPlant=\{openAddPlantModal\}/);
   assert.doesNotMatch(styleSource, /dashboard-overview|dashboard-insight|dashboard-focus|dashboard-botanical|dashboard-overview-actions/);
   assert.doesNotMatch(appSource, /careSummaryKey/);

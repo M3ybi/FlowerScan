@@ -27,7 +27,7 @@ test("public plan and capacity facts follow canonical product limits", () => {
   assert.equal(PLAN_LIMITS.premium.monthlyPlantUnwellAiAnalyzes, null);
   assert.equal(PLAN_LIMITS.premium.careTipRefreshPerPlantPerDay, null);
   assert.equal(PLAN_LIMITS.free.initialCareGenerationCountsAsAnalyze, false);
-  assert.match(readFileSync("src/App.tsx", "utf8"), /!subscription\.householdEntitlement\.isPremium && allFlowers\.length > freeQrLabelLimit/);
+  assert.match(JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n"), /!subscription\.householdEntitlement\.isPremium && allFlowers\.length > freeQrLabelLimit/);
 });
 
 test("published destinations are existing routes available without a household", () => {

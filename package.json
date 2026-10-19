@@ -70,7 +70,13 @@
     "test:logged-out-menu-browser": "node scripts/test-logged-out-menu-browser.mjs",
     "test:auth-service-flow": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node tests/auth-service-flow.test.ts && esbuild tests/auth-service-flow.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/auth-service-flow.bundle.mjs && node --test .tmp-tests/auth-service-flow.bundle.mjs",
     "test:auth-flow-browser": "node scripts/test-auth-flow-browser.mjs",
-    "test:audit-reliability": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node tests/audit-reliability.test.ts && esbuild tests/audit-reliability.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/audit-reliability.mjs && node --test .tmp-tests/audit-reliability.mjs tests/image-validation-receipt.test.mjs tests/image-admission-database.test.mjs tests/operational-email.test.mjs"
+    "test:audit-reliability": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --jsx react-jsx --types node src/vite-env.d.ts tests/audit-reliability.test.ts && esbuild tests/audit-reliability.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/audit-reliability.mjs && node --test .tmp-tests/audit-reliability.mjs tests/image-validation-receipt.test.mjs tests/image-admission-database.test.mjs tests/operational-email.test.mjs tests/account-deletion.test.mjs tests/invite-delivery.test.mjs tests/client-secrets.test.mjs tests/backend-timeout.test.mjs",
+    "test:postgres": "node scripts/test-postgres-concurrency.mjs",
+    "check:client-secrets": "node scripts/check-client-secrets.mjs",
+    "test:application-browser": "node scripts/test-application-browser.mjs",
+    "test:application-webkit": "node scripts/test-application-browser.mjs --webkit",
+    "check:source-graph": "node scripts/analyze-source-graph.mjs",
+    "check:edge-types": "deno check --node-modules-dir=none --no-lock supabase/functions/delete-account-request/index.ts supabase/functions/plant-care-ai/index.ts supabase/functions/plant-diagnosis-ai/index.ts supabase/functions/revenuecat-webhook/index.ts supabase/functions/send-auth-email/index.ts supabase/functions/send-household-invite-email/index.ts supabase/functions/send-test-email/index.ts supabase/functions/upload-validated-image/index.ts supabase/functions/validate-plant-image/index.ts"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
@@ -100,6 +106,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.0.0",
+    "pg": "8.16.3",
     "playwright": "1.61.1",
     "supabase": "^2.119.0",
     "typescript": "^5.6.3",

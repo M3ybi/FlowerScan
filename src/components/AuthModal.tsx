@@ -1,17 +1,18 @@
 import { X } from "lucide-react";
-import { AuthPanel } from "./AuthPanel";
+import { browserStorage } from "../lib/browserStorage";
 import { readStoredLanguage } from "../lib/onboarding";
+import { AuthPanel } from "./AuthPanel";
+import { ModalDialog } from "./ModalDialog";
 
 type AuthModalProps = {
   onClose: () => void;
 };
 
 export const AuthModal = ({ onClose }: AuthModalProps) => {
-  const language = typeof window === "undefined" ? null : readStoredLanguage(window.localStorage);
+  const language = typeof window === "undefined" ? null : readStoredLanguage(browserStorage);
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <ModalDialog className="auth-modal" labelledBy="auth-title" onClose={onClose}>
         <button className="modal-close" type="button" onClick={onClose} aria-label="Close sign-in">
           <X size={20} aria-hidden="true" />
         </button>
@@ -20,7 +21,6 @@ export const AuthModal = ({ onClose }: AuthModalProps) => {
         </div>
         <p>Sign in or create an account to sync household data and manage family access.</p>
         <AuthPanel language={language} />
-      </section>
-    </div>
+    </ModalDialog>
   );
 };

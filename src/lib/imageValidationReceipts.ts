@@ -2,6 +2,7 @@
 // binds receipts to the authenticated user, exact content, action and expiry.
 const receipts = new Map<string, { token: string; expiresAt: number }>();
 export const clearImageValidationReceipts = () => receipts.clear();
+export const forgetImageValidationReceipt = (image: string) => receipts.delete(image);
 export const rememberImageValidationReceipt = (image: string, value: unknown) => {
   if (!value || typeof value !== "object") return;
   const receipt = value as { token?: unknown; expiresAt?: unknown };

@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
 import { CalendarDays, ChevronDown, Clock, Crown, Leaf, Sprout, Users } from "lucide-react";
-import { LoadingButton } from "./LoadingButton";
-import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
+import type { KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useHouseholdSubscriptionHistory } from "../hooks/useHouseholdSubscriptionHistory";
+import { useOperationScope } from "../hooks/useOperationScope";
 import type { BillingProduct, BillingStatus } from "../lib/billingService";
+import { BillingConfirmationPendingError, getBillingService, revenueCatProductIds } from "../lib/billingService";
+import { lockDialogScroll } from "../lib/dialogScrollLock";
+import { usedHouseholdSlots } from "../lib/householdMembershipRules";
+import { resolveHouseholdPermissions } from "../lib/householdPermissions";
+import { beginHouseholdPurchase } from "../lib/householdPlanService";
+import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
-import { useHouseholdSubscriptionHistory } from "../hooks/useHouseholdSubscriptionHistory";
-import { BillingHistoryTimeline } from "./BillingHistoryTimeline";
-import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
-import { beginHouseholdPurchase } from "../lib/householdPlanService";
-import { resolveHouseholdPermissions } from "../lib/householdPermissions";
-import { usedHouseholdSlots } from "../lib/householdMembershipRules";
 import {
   canCancelSubscription,
   canPurchaseHouseholdPlan,
@@ -22,6 +22,8 @@ import {
   isOwnPaidSubscription,
   safeBillingManagementUrl,
 } from "../lib/subscriptionUiRules";
+import { BillingHistoryTimeline } from "./BillingHistoryTimeline";
+import { LoadingButton } from "./LoadingButton";
 
 const createFallbackPlans = (t: ReturnType<typeof createTranslator>) => [
   {
@@ -88,8 +90,7 @@ export const PricingPage = ({
   const managementListenerRef = useRef<{ remove(): Promise<void> } | null>(null);
   const onSubscriptionChangedRef = useRef(onSubscriptionChanged);
   onSubscriptionChangedRef.current = onSubscriptionChanged;
-  const subscriptionScopeRef = useRef("");
-  subscriptionScopeRef.current = `${subscription.userId ?? ""}:${subscription.householdId ?? ""}`;
+  const captureOperationScope = useOperationScope(`${subscription.userId ?? ""}:${subscription.householdId ?? ""}`);
   const fallbackPlans = useMemo(() => createFallbackPlans(t), [t]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const presentation = getSubscriptionPresentation(subscription);
@@ -128,10 +129,15 @@ export const PricingPage = ({
   useEffect(() => () => { void managementListenerRef.current?.remove(); }, []);
 
   useEffect(() => {
-    setProducts([]);
+    actionInProgress.current = false;
+    setIsPurchasing(false);
     setIsAwaitingConfirmation(false);
     pendingPlanRef.current = null;
     setBillingMessage("");
+  }, [subscription.userId, subscription.householdId]);
+
+  useEffect(() => {
+    setProducts([]);
     if (!billingStatus.configured || !subscription.userId) {
       return;
     }
@@ -159,6 +165,11 @@ export const PricingPage = ({
     if (isOpeningManagement) cancelDialogRef.current?.focus();
     else if (isCancelModalOpen) keepButtonRef.current?.focus();
   }, [isOpeningManagement, isCancelModalOpen]);
+
+  useEffect(() => {
+    if (!isCancelModalOpen || !cancelDialogRef.current) return;
+    return lockDialogScroll(cancelDialogRef.current.ownerDocument);
+  }, [isCancelModalOpen]);
 
   const closeCancelModal = () => {
     if (!cancellationHandoff.dismiss()) return;
@@ -249,7 +260,7 @@ export const PricingPage = ({
   const runPurchase = async (period: "monthly" | "yearly") => {
     if (actionInProgress.current || !isOwner || !(canPurchasePlan || isOwnPaidSubscription(subscription))) return;
     actionInProgress.current = true;
-    const purchaseScope = subscriptionScopeRef.current;
+    const isPurchaseCurrent = captureOperationScope();
     setIsPurchasing(true);
     setBillingMessage(t("pricing.openingPurchase"));
     let providerPurchaseCompleted = false;
@@ -263,29 +274,28 @@ export const PricingPage = ({
       }
       if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
       await beginHouseholdPurchase(subscription.householdId);
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       const info = changingPlan
         ? await billing.changePlan(period, subscription.householdId)
         : period === "monthly" ? await billing.purchasePremiumMonthly(subscription.householdId) : await billing.purchasePremiumYearly(subscription.householdId);
       providerPurchaseCompleted = true;
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       pendingPlanRef.current = period;
       const refreshed = await onSubscriptionChanged();
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       const confirmed = info.hasRevenueCatPremium && refreshed.householdId === subscription.householdId && matchesPurchasedPlan(refreshed, period);
       if (confirmed) pendingPlanRef.current = null;
       setIsAwaitingConfirmation(!confirmed);
       setBillingMessage(confirmed ? t("pricing.currentServerPremium") : t("pricing.purchaseSubmitted"));
     } catch (error) {
-      if (subscriptionScopeRef.current !== purchaseScope) return;
+      if (!isPurchaseCurrent()) return;
       const pending = providerPurchaseCompleted || error instanceof BillingConfirmationPendingError;
       if (pending) pendingPlanRef.current = period;
       else pendingPlanRef.current = null;
       setIsAwaitingConfirmation(pending);
       setBillingMessage(pending ? t("pricing.purchaseSubmitted") : error instanceof Error ? error.message : t("pricing.purchaseFailed"));
     } finally {
-      actionInProgress.current = false;
-      setIsPurchasing(false);
+      if (isPurchaseCurrent()) { actionInProgress.current = false; setIsPurchasing(false); }
     }
   };
 
@@ -337,7 +347,7 @@ export const PricingPage = ({
         {entitlement?.role === "viewer" ? <p className="pricing-action-note">{copy.ownerOnly}</p> : null}
         {hasSubscriptionError ? <p>{t("pricing.refreshFailed")}</p> : null}
         <div className="pricing-summary-actions">
-          {isOwner && isOwnPaidSubscription(subscription) ? <a className="pricing-provider-action" href="#pricing-plans">{copy.changePlan}</a> : null}
+          {isOwner && isOwnPaidSubscription(subscription) ? <button type="button" className="pricing-provider-action" onClick={() => document.getElementById("pricing-plans")?.scrollIntoView({ block: "start" })}>{copy.changePlan}</button> : null}
           {isOwner && (presentation.status === "cancelled" || presentation.plan === "yearly" && presentation.status === "active") && managementUrl
             ? <a className="pricing-provider-action" href={managementUrl} rel="noopener noreferrer" target="_blank" aria-disabled={isBusy} onClick={(event) => { if (isBusy) event.preventDefault(); else setBillingMessage(t("pricing.manageHint")); }}>{presentation.status === "cancelled" ? copy.resumeSubscription : t("pricing.manage")}</a>
             : null}

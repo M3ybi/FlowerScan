@@ -126,7 +126,7 @@ export const legalPages: LegalPage[] = [
         heading: "What happens",
         body: [
           "A deletion request starts a manual review. This prevents accidental deletion of shared household records before ownership and household membership are checked.",
-          "The placeholder endpoint records no destructive action and does not delete Supabase, RevenueCat, Netlify, or storage data automatically.",
+          "Sign in to verify your identity. Your request is saved to a private review queue and does not delete Supabase, RevenueCat, Netlify, or storage data automatically.",
         ],
       },
       {

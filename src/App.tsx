@@ -1,109 +1,82 @@
-import { addPlantFromPhoto } from "./features/plants/services/addPlant";
-import { safeFailureMetadata } from "./lib/errorDiagnostics";
-import { PlantGrid } from "./features/plants/components/PlantGrid";
-import { AddPlantModal } from "./features/plants/components/AddPlantModal";
-import { browserStorage } from "./lib/browserStorage.js";
-import { imageErrorMessage } from "./lib/imageUploadErrors";
 import {
   ArrowLeft,
-  ArrowRight,
-  BadgeCheck,
-  Camera,
-  Check,
-  ChevronRight,
-  CircleHelp,
-  Crown,
-  Droplets,
-  FileDown,
   Home,
-  Mail,
   KeyRound,
-  Languages,
   Leaf,
-  Pencil,
   Plus,
-  Printer,
-  QrCodeIcon,
-  Search,
-  Settings,
-  Sparkles,
   Sprout,
-  Trash2,
-  UserRound,
-  UsersRound,
-  X,
+  UserRound
 } from "lucide-react";
+import type { MouseEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, MouseEvent } from "react";
 import {
   currentBaseUrl,
   currentHouseholdBaseUrl,
   formatLocalizedDate,
   formatLocalizedElapsedDays,
   formatLocalizedWateringStatus,
-  pageTitle,
-  publicFlowerUrl,
-  todayIsoDate,
+  pageTitle
 } from "./app/appFormatting";
-import {
-  applyGeneratedCareToFlower,
-  getCareDiffRows,
-  getCarePillVisual,
-} from "./app/carePresentation";
+import { AppRouter } from "./app/AppRouter";
 import type { CarePreview } from "./app/carePresentation";
 import {
-  createInviteUrl,
   createSingleFlightInviteJoin,
-  inviteErrorMessage,
-  isActiveInvite,
-  isLikelyInviteToken,
-  joinInviteErrorMessage,
-  normalizeInviteTokenInput,
-  safeInviteDebugMessage,
+  normalizeInviteTokenInput
 } from "./app/householdInvites";
 import { buildHouseholdPeople } from "./app/householdPeople";
-import type { HouseholdPersonItem } from "./app/householdPeople";
 import {
   diagnosticsStorageKey,
-  flowerDiagnosticsCount,
-  readStoredDiagnostics,
-  riskLevelLabel,
+  readStoredDiagnostics
 } from "./app/localDiagnostics";
 import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
 import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
 import { AuthMessage, AuthPanel } from "./components/AuthPanel";
-import type { AuthNotice } from "./components/AuthPanel";
-import type { AuthMode } from "./lib/authRules";
-import { authPanelCopy, authPanelNoticeContent } from "./lib/authPanelCopy";
-import { invitationReturnLocation, readInvitationAuthContext } from "./lib/invitationAuthContext";
-import { LoggedOutMenu } from "./components/LoggedOutMenu";
-import { HouseholdPeopleList } from "./components/HouseholdPeopleList";
 import { HouseholdInvitationInbox, InvitationInboxButton } from "./components/HouseholdInvitationInbox";
 import { HouseholdInvitationReview } from "./components/HouseholdInvitationReview";
 import { InvitationCenterOverlay } from "./components/InvitationCenterOverlay";
-import { HouseholdSwitcher } from "./components/HouseholdSwitcher";
-import { SettingsSectionHeader } from "./components/SettingsSectionHeader";
 import { LoadingButton } from "./components/LoadingButton";
-import { PricingPage } from "./components/PricingPage";
-import { QrCode } from "./components/QrCode";
 import { HealthPage, LegalPageView, ReleaseChecklistPage } from "./components/ReleasePages";
-import { UpgradeModal } from "./components/UpgradeModal";
-import { flowers as builtInFlowers } from "./data/flowers";
 import type { Flower } from "./data/flowers";
-import { wateringIntervalsDays } from "./data/wateringIntervals";
+import { flowers as builtInFlowers } from "./data/flowers";
+import { useRecoveryActions } from "./features/auth/hooks/useRecoveryActions";
+import { useCareActions } from "./features/care/hooks/useCareActions";
+import { useDiagnosisActions } from "./features/diagnosis/hooks/useDiagnosisActions";
+import { HouseholdSheet } from "./features/households/components/HouseholdSheet";
+import { useHouseholdCreation } from "./features/households/hooks/useHouseholdCreation";
+import { useHouseholdManagement } from "./features/households/hooks/useHouseholdManagement";
+import { useHouseholdSelectionActions } from "./features/households/hooks/useHouseholdSelectionActions";
+import type { HouseholdLookupStatus, HouseholdNameEditSurface } from "./features/households/types";
+import { useInvitationActions } from "./features/invitations/hooks/useInvitationActions";
+import { useInvitationReviewActions } from "./features/invitations/hooks/useInvitationReviewActions";
+import { usePlantActions } from "./features/plants/hooks/usePlantActions";
+import { usePlantPersistence } from "./features/plants/hooks/usePlantPersistence";
+import { useAccountDeletion } from "./features/settings/hooks/useAccountDeletion";
 import { useAuth } from "./hooks/useAuth";
+import { useCustomFlowers } from "./hooks/useCustomFlowers";
+import type { FlowerRecords } from "./hooks/useFlowerRecords";
+import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import { useHouseholdDirectory } from "./hooks/useHouseholdDirectory";
 import { useHouseholdInvitation, useHouseholdInvitations } from "./hooks/useHouseholdInvitations";
-import { useCustomFlowers } from "./hooks/useCustomFlowers";
-import { useFlowerRecords } from "./hooks/useFlowerRecords";
-import { useSubscriptionState } from "./hooks/useSubscriptionState";
-import type { FlowerRecords } from "./hooks/useFlowerRecords";
-import { ImageSourcePicker } from "./components/ImageSourcePicker";
-import { PlantActionModal, PlantFormStatus, PlantImagePreview } from "./components/PlantActionModal";
-import type { ImageCaptureSource, ImagePickerLabels } from "./lib/imageCaptureService";
 import { useImageSelection } from "./hooks/useImageSelection";
+import { useSubscriptionState } from "./hooks/useSubscriptionState";
+import type { AiDiagnosisAccessResult } from "./lib/aiDiagnosisAccess";
+import { resolveAiDiagnosisAccess } from "./lib/aiDiagnosisAccess";
+import { authPanelCopy, authPanelNoticeContent } from "./lib/authPanelCopy";
+import { signOut } from "./lib/authService";
+import { isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
+import { browserStorage } from "./lib/browserStorage.js";
+import { normalizeDiagnosisConfidenceLevel } from "./lib/diagnosisConfidence";
+import { safeFailureMetadata } from "./lib/errorDiagnostics";
+import { householdInvitationCopy } from "./lib/householdInvitationCopy";
+import { canInviteHouseholdMember, usedHouseholdSlots as countUsedHouseholdSlots } from "./lib/householdMembershipRules";
+import { isCurrentHouseholdOperationScope } from "./lib/householdOperationScope";
+import { resolveHouseholdPermissions } from "./lib/householdPermissions";
+import { freeQrLabelLimit, PLAN_LIMITS } from "./lib/householdPlanRules";
+import { readSelectedHouseholdId, resolveHouseholdSelection, writeSelectedHouseholdId } from "./lib/householdSelection";
+import { householdSubscriptionCopy } from "./lib/householdSubscriptionCopy";
 import { createTranslator, translate } from "./lib/i18n";
+import type { OnboardingStep, PlantieLanguage } from "./lib/onboarding";
 import {
   getInitialOnboardingStep,
   hasCompletedOnboarding,
@@ -112,88 +85,35 @@ import {
   supportedLanguages,
   writeStoredLanguage,
 } from "./lib/onboarding";
-import type { OnboardingStep, PlantieLanguage } from "./lib/onboarding";
-import { finishPasswordRecovery, signOut } from "./lib/authService";
+import type { Household, HouseholdInvitation, HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
 import { isSupabaseConfigured } from "./lib/supabase";
+import type { SupabaseReadThroughState } from "./lib/supabaseReadThrough";
 import {
   detectDataSourceMode,
   invalidateSupabaseReadThroughCache,
   loadSupabaseReadThroughState,
 } from "./lib/supabaseReadThrough";
-import type { SupabaseReadThroughState } from "./lib/supabaseReadThrough";
 import {
-  createSupabaseDiagnosis,
-  PlantImageUploadError,
   detectSupabaseWriteMode,
   runRequiredSupabaseWrite,
-  runSupabaseWrite,
-  setSupabasePlantRemoved,
-  updateSupabaseCareRecord,
-  updateSupabaseDiagnosis,
-  upsertSupabasePlantFromFlower,
+  runSupabaseWrite
 } from "./lib/supabaseSourceOfTruth";
+import type { PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
 import {
-  createHousehold,
-  createHouseholdInvite,
-  getHouseholdInviteToken,
-  getHouseholdPlantById,
-  getPlantImageSignedUrl,
-  acceptHouseholdInvitation,
-  declineHouseholdInvitation,
-  isValidInviteEmail,
-  listHouseholdInvites,
-  listHouseholdMembers,
-  normalizeInviteEmail,
-  removeHouseholdMember,
-  renameHousehold,
-  revokeHouseholdInvite,
-  sendHouseholdInviteEmail,
-} from "./lib/plantieRepository";
-import type { Household, HouseholdInvitation, HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
-import { householdNameMaxLength, validateHouseholdName } from "./lib/householdNameValidation";
-import { resolveAiDiagnosisAccess } from "./lib/aiDiagnosisAccess";
-import type { AiDiagnosisAccessResult } from "./lib/aiDiagnosisAccess";
-import {
-  assertCanAddPlant,
-} from "./lib/householdPlanService";
-import { freeQrLabelLimit, PLAN_LIMITS } from "./lib/householdPlanRules";
-import { canInviteHouseholdMember, usedHouseholdSlots as countUsedHouseholdSlots } from "./lib/householdMembershipRules";
-import { householdSubscriptionCopy } from "./lib/householdSubscriptionCopy";
-import { resolveHouseholdPermissions } from "./lib/householdPermissions";
-import { householdInvitationCopy } from "./lib/householdInvitationCopy";
-import { householdInvitationsChangedEvent } from "./lib/householdInvitationRules";
-import { householdAfterInviteAcceptance, readSelectedHouseholdId, resolveHouseholdSelection, writeSelectedHouseholdId } from "./lib/householdSelection";
-import { isCurrentHouseholdOperationScope } from "./lib/householdOperationScope";
-import { clearInvitationAuthContext } from "./lib/invitationAuthContext";
-import {
-  createCustomFlowerId,
-  fetchGeneratedCare,
-  imageSourceToDataUrl,
-} from "./utils/customFlower";
-import { daysSince, formatDate } from "./utils/dates";
+  sanitizeDiagnosticEntries
+} from "./utils/diagnostics";
+import type { HouseholdSession } from "./utils/household";
 import {
   clearHouseholdSession,
   createHouseholdApiUrl,
-  createHouseholdUrl,
   getHouseholdTokenFromUrl,
   getStoredHouseholdSession,
   isValidHouseholdToken,
   removeHouseholdFromCurrentUrl,
-  storeHouseholdSession,
+  storeHouseholdSession
 } from "./utils/household";
-import type { HouseholdSession } from "./utils/household";
-import { flowerPath } from "./utils/links";
-import { exportQrLabelsPdf, validateQrLabelLayout, createQrLabelLayout, qrLabelSpec } from "./utils/qrPdf";
+import { createQrLabelLayout, exportQrLabelsPdf, validateQrLabelLayout } from "./utils/qrPdf";
 import { getWateringProgress } from "./utils/watering";
-import {
-  createDiagnosticId,
-  fetchPlantDiagnosis,
-  sanitizeDiagnosticNote,
-  sanitizeDiagnosticEntries,
-} from "./utils/diagnostics";
-import type { DiagnosisConfirmation, PlantDiagnosisDraft, PlantDiagnosticEntry } from "./utils/diagnostics";
-import { callBackendFunction, isLegacyNetlifyBackendEnabled, isSupabaseBackend } from "./lib/backendConfig";
-import { normalizeDiagnosisConfidenceLevel } from "./lib/diagnosisConfidence";
 
 const isSupabaseReadThroughEnabled = isSupabaseConfigured && import.meta.env.VITE_DISABLE_SUPABASE_READS !== "true";
 const isSupabaseWriteThroughEnvEnabled =
@@ -205,8 +125,6 @@ const supabaseWritesDisabledStorageKey = "plantie-disable-supabase-writes-v1";
 const pendingInviteStorageKey = "plantie-pending-household-invite-v1";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-type HouseholdNameEditSurface = "sheet" | "menu";
-
 const isUuid = (value: string) => uuidPattern.test(value);
 
 const getSupabaseDiagnosticId = (diagnostic: PlantDiagnosticEntry) =>
@@ -216,15 +134,10 @@ const logTechnicalError = (message: string, error: unknown) => {
   console.error(message, safeFailureMetadata(error));
 };
 
-type HouseholdLookupStatus = "idle" | "checking" | "complete";
-
 export const App = () => {
   const route = useHashRoute();
   const auth = useAuth();
-  const [authEntry, setAuthEntry] = useState<{ id: number; mode: AuthMode; email: string; notice?: AuthNotice } | null>(null);
-  const [isLeavingRecovery, setIsLeavingRecovery] = useState(false);
-  const [recoveryExitFailed, setRecoveryExitFailed] = useState(false);
-  useEffect(() => setRecoveryExitFailed(false), [auth.recoveryFlowId]);
+  const { authEntry, setAuthEntry, isLeavingRecovery, recoveryExitFailed, completeRecovery, requestNewRecoveryLink } = useRecoveryActions(auth);
   const householdDirectory = useHouseholdDirectory(auth.user?.id ?? null);
   const invitationInbox = useHouseholdInvitations(auth.user);
   const invitationMailboxRef = useRef<HTMLButtonElement>(null);
@@ -250,9 +163,9 @@ export const App = () => {
       isSupabaseOnlyDataMode
         ? []
         : [
-            ...customFlowers,
-            ...builtInFlowers.filter((flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id)),
-          ].filter((flower) => !removedFlowerIds.includes(flower.id)),
+          ...customFlowers,
+          ...builtInFlowers.filter((flower) => !customFlowers.some((customFlower) => customFlower.id === flower.id)),
+        ].filter((flower) => !removedFlowerIds.includes(flower.id)),
     [customFlowers, removedFlowerIds],
   );
   const legacyAllFlowersIncludingRemoved = useMemo(
@@ -397,9 +310,7 @@ export const App = () => {
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
   const [diagnosticHistoryStatus, setDiagnosticHistoryStatus] = useState("");
   const [pendingDiagnosticUpdateKey, setPendingDiagnosticUpdateKey] = useState("");
-  const [deleteAccountContact, setDeleteAccountContact] = useState(() => auth.user?.email ?? "");
-  const [deleteAccountStatus, setDeleteAccountStatus] = useState("");
-  const [isRequestingAccountDeletion, setIsRequestingAccountDeletion] = useState(false);
+  const { deleteAccountStatus, setDeleteAccountStatus, isRequestingAccountDeletion, requestAccountDeletion } = useAccountDeletion(auth.user?.id ?? null, selectedLanguage, t("account.deleteConfirm"));
   const [accountActionStatus, setAccountActionStatus] = useState("");
   const [healthEndpointStatus, setHealthEndpointStatus] = useState("");
   const [supabasePlantIdsByLegacyId, setSupabasePlantIdsByLegacyId] = useState<Record<string, string>>({});
@@ -602,24 +513,6 @@ export const App = () => {
   }, [route.page, "flowerId" in route ? route.flowerId : "", "panel" in route ? route.panel : ""]);
 
   useEffect(() => {
-    if (route.page !== "detail" || route.panel !== "diagnostics") {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      const panel = document.getElementById("diagnostic-history-panel");
-      if (!panel) {
-        return;
-      }
-
-      panel.scrollIntoView({ block: "start" });
-      panel.focus({ preventScroll: true });
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [route.page, "flowerId" in route ? route.flowerId : "", "panel" in route ? route.panel : ""]);
-
-  useEffect(() => {
     if (route.page === "detail") {
       const flower = flowerById.get(route.flowerId);
       document.title = pageTitle(flower?.displayName ?? t("detail.title"));
@@ -740,12 +633,6 @@ export const App = () => {
       setInviteStatus("");
     }
   }, [auth.isAuthenticated, auth.loading, inviteStatus, t]);
-
-  useEffect(() => {
-    if (!deleteAccountContact && auth.user?.email) {
-      setDeleteAccountContact(auth.user.email);
-    }
-  }, [auth.user?.email, deleteAccountContact]);
 
   useEffect(() => {
     if (!routeInviteToken) {
@@ -889,7 +776,7 @@ export const App = () => {
 
   const refreshPlanAfterSubscription = async () => {
     let nextSnapshot = await refreshSubscriptionState();
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0;attempt < 6;attempt += 1) {
       if (nextSnapshot.view !== "syncing") return nextSnapshot;
       if (attempt < 5) await new Promise((resolve) => window.setTimeout(resolve, 1500));
       nextSnapshot = await refreshSubscriptionState();
@@ -930,7 +817,6 @@ export const App = () => {
       setSupabaseReadError(true);
       return false;
     }
-
 
     try {
       await refreshSupabaseReadState();
@@ -1204,218 +1090,31 @@ export const App = () => {
     }
   };
 
-  const applyRenamedHousehold = (household: Household) => {
-    setSupabaseReadState((current) =>
-      current?.household.id === household.id
-        ? {
-            ...current,
-            household,
-          }
-        : current,
-    );
-    setActiveHousehold((current) => {
-      if (!current || (current.publicToken !== household.id && current.publicToken !== household.legacyPublicToken)) {
-        return current;
-      }
-
-      const next = { ...current, name: household.name };
-      storeHouseholdSession(next);
-      return next;
-    });
-    setHouseholdNameDraft(household.name);
-    invalidateSupabaseReadThroughCache();
-    void householdDirectory.refresh(true);
-  };
-
-  const startHouseholdNameEdit = (surface: HouseholdNameEditSurface) => {
-    setHouseholdNameEditDraft(householdDisplayName);
-    setHouseholdNameEditStatus("");
-    setHouseholdNameEditStatusTone("info");
-    setHouseholdNameEditSurface(surface);
-  };
-
-  const cancelHouseholdNameEdit = () => {
-    setHouseholdNameEditDraft("");
-    setHouseholdNameEditStatus("");
-    setHouseholdNameEditStatusTone("info");
-    setHouseholdNameEditSurface(null);
-  };
-
-  const handleSaveHouseholdName = async () => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (isSavingHouseholdName) {
-      return;
-    }
-
-    if (!activeSupabaseHouseholdId || !householdPermissions.canEditHousehold) {
-      setHouseholdNameEditStatus(t("household.renamePermission"));
-      setHouseholdNameEditStatusTone("error");
-      return;
-    }
-
-    const nameValidation = validateHouseholdName(householdNameEditDraft);
-    if (!nameValidation.valid && nameValidation.reason === "required") {
-      setHouseholdNameEditStatus(t("household.renameRequired"));
-      setHouseholdNameEditStatusTone("error");
-      return;
-    }
-
-    if (!nameValidation.valid && nameValidation.reason === "too_long") {
-      setHouseholdNameEditStatus(t("household.renameTooLong", { count: householdNameMaxLength }));
-      setHouseholdNameEditStatusTone("error");
-      return;
-    }
-
-    if (!nameValidation.valid) {
-      setHouseholdNameEditStatus(t("household.renameUnsafe"));
-      setHouseholdNameEditStatusTone("error");
-      return;
-    }
-
-    const feedbackGeneration = transientMessageGenerationRef.current;
-
-    try {
-      setIsSavingHouseholdName(true);
-      setHouseholdNameEditStatus(t("household.renameSaving"));
-      setHouseholdNameEditStatusTone("info");
-      const household = await renameHousehold(activeSupabaseHouseholdId, nameValidation.name);
-      if (!isHouseholdOperationCurrent()) return;
-      applyRenamedHousehold(household);
-      if (!isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        return;
-      }
-      setHouseholdNameEditStatus(t("household.renameSaved"));
-      setHouseholdNameEditStatusTone("success");
-      setHouseholdNameEditSurface(null);
-    } catch {
-      if (isHouseholdOperationCurrent() && isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setHouseholdNameEditStatus(t("household.renameFailed"));
-        setHouseholdNameEditStatusTone("error");
-      }
-    } finally {
-      if (isHouseholdOperationCurrent() && isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setIsSavingHouseholdName(false);
-      }
-    }
-  };
-
-  const renderHouseholdNameEditor = (surface: HouseholdNameEditSurface, headingId?: string, showTrigger = true) => {
-    const isEditing = householdNameEditSurface === surface;
-    const inputId = `household-name-${surface}`;
-    const statusId = `household-name-status-${surface}`;
-
-    if (isEditing) {
-      return (
-        <form
-          className="household-name-edit-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleSaveHouseholdName();
-          }}
-        >
-          <label className="sr-only" htmlFor={inputId}>
-            {t("household.renameLabel")}
-          </label>
-          <input
-            aria-describedby={householdNameEditStatus ? statusId : undefined}
-            aria-invalid={householdNameEditStatusTone === "error"}
-            autoFocus
-            disabled={isSavingHouseholdName}
-            id={inputId}
-            maxLength={householdNameMaxLength}
-            type="text"
-            value={householdNameEditDraft}
-            onChange={(event) => setHouseholdNameEditDraft(event.target.value)}
-          />
-          <div className="household-name-edit-actions">
-            <LoadingButton
-              className="household-icon-action household-icon-action-save"
-              type="submit"
-              isLoading={isSavingHouseholdName}
-              loadingLabel={<span className="sr-only">{t("household.renameSaving")}</span>}
-              aria-label={t("household.renameSave")}
-            >
-              <Check size={16} aria-hidden="true" />
-            </LoadingButton>
-            <button
-              className="household-icon-action"
-              type="button"
-              disabled={isSavingHouseholdName}
-              onClick={cancelHouseholdNameEdit}
-              aria-label={t("household.renameCancel")}
-            >
-              <X size={16} aria-hidden="true" />
-            </button>
-          </div>
-          {householdNameEditStatus ? (
-            <p id={statusId} className={householdNameEditStatusClass}>
-              {householdNameEditStatus}
-            </p>
-          ) : null}
-        </form>
-      );
-    }
-
-    return (
-      <div className="household-name-row">
-        {headingId ? (
-          <h2 id={headingId}>{householdDisplayName}</h2>
-        ) : (
-          <strong className="household-name-display">{householdDisplayName}</strong>
-        )}
-        {canRenameHousehold && showTrigger ? (
-          <button className="household-name-edit-trigger" type="button" onClick={() => startHouseholdNameEdit(surface)} aria-label={t("household.renameAction")}>
-            <Pencil size={15} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    );
-  };
-
-  const selectHousehold = (householdId: string) => {
-    const selected = householdDirectory.households.find((household) => household.id === householdId);
-    if (!selected || !auth.user?.id) return;
-    householdDataGenerationRef.current += 1;
-    invalidateSupabaseReadThroughCache();
-    clearTransientMessages();
-    resetHouseholdOperations();
-    setHouseholdLookupStatus("complete");
-    setIsAccessChecking(false);
-    setSupabaseReadState(null);
-    setSupabaseReadError(false);
-    setSupabasePlantIdsByLegacyId({});
-    setHouseholdMembers([]);
-    setHouseholdInvites([]);
-    setHouseholdPeopleError("");
-    setHouseholdNameEditSurface(null);
-    setIsInvitePanelOpen(false);
-    setInviteEmail("");
-    setIsAddPlantModalOpen(false);
-    setIsDiagnosisModalOpen(false);
-    setCarePreview(null);
-    setDeleteFlowerId("");
-    setEditingNameFlowerId("");
-    setOpenDiagnosticId("");
-    setQuery("");
-    setCloudSyncEnabled(false);
-    setCloudSyncReady(false);
-    const session = { name: selected.name, publicToken: selected.id };
-    storeHouseholdSession(session);
-    writeSelectedHouseholdId(browserStorage, auth.user.id, selected.id);
-    setActiveHousehold(session);
-    setBaseUrl(currentHouseholdBaseUrl(selected.id));
-    setIsHouseholdSheetOpen(false);
-    setIsInvitationInboxOpen(false);
-    setSelectedInboxInvitationId(null);
-    clearInvitationAuthContext(browserStorage);
-    window.history.replaceState(null, "", createHouseholdUrl(selected.id, "#/"));
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  };
-
-  const renderHouseholdSwitcher = () => auth.isAuthenticated ? <>
-    <HouseholdSwitcher households={householdDirectory.households} currentHouseholdId={activeHousehold?.publicToken ?? null} loading={householdDirectory.loading} label={t("household.myHouseholds")} onSelect={selectHousehold} />
-    {householdDirectory.error ? <p role="alert">{t("household.directoryLoadFailed")} <button className="text-action" type="button" onClick={() => void householdDirectory.refresh()}>{invitationCopy.retry}</button></p> : null}
-  </> : null;
+  const { applyRenamedHousehold, startHouseholdNameEdit, cancelHouseholdNameEdit, handleSaveHouseholdName, renderHouseholdNameEditor } = useHouseholdManagement({
+    setSupabaseReadState,
+    setActiveHousehold,
+    setHouseholdNameDraft,
+    householdDirectory,
+    setHouseholdNameEditDraft,
+    householdDisplayName,
+    setHouseholdNameEditStatus,
+    setHouseholdNameEditStatusTone,
+    setHouseholdNameEditSurface,
+    isHouseholdOperationCurrent,
+    isSavingHouseholdName,
+    activeSupabaseHouseholdId,
+    householdPermissions,
+    t,
+    householdNameEditDraft,
+    transientMessageGenerationRef,
+    setIsSavingHouseholdName,
+    isTransientMessageGenerationCurrent,
+    householdNameEditSurface,
+    householdNameEditStatus,
+    householdNameEditStatusTone,
+    householdNameEditStatusClass,
+    canRenameHousehold,
+  });
 
   useEffect(() => {
     if (!auth.isAuthenticated || householdDirectory.loading || householdDirectory.error || !activeHousehold) return;
@@ -1525,52 +1224,22 @@ export const App = () => {
 
   const renderHouseholdSheet = () =>
     isHouseholdSheetOpen ? (
-      <div className="modal-backdrop" role="presentation">
-        <section className="household-sheet" role="dialog" aria-modal="true" aria-labelledby="household-sheet-title">
-          <button className="modal-close" type="button" onClick={() => setIsHouseholdSheetOpen(false)} aria-label={t("action.close")}>
-            <X size={20} aria-hidden="true" />
-          </button>
-          <div className="household-sheet-hero">
-            <span className="household-sheet-avatar" aria-hidden="true">
-              <Home size={24} />
-            </span>
-            <div className="household-sheet-identity">
-              <p className="eyebrow">{t("account.household")}</p>
-              {renderHouseholdNameEditor("sheet", "household-sheet-title")}
-              <p className="household-sheet-email">{currentUserEmail}</p>
-              <span>{auth.isAuthenticated ? t("household.synced") : t("household.localGuest")}</span>
-              {householdNameEditStatus && householdNameEditSurface !== "sheet" ? (
-                <p className={householdNameEditStatusClass}>{householdNameEditStatus}</p>
-              ) : null}
-            </div>
-          </div>
-          {renderHouseholdSwitcher()}
-          <div className="household-sheet-meta" aria-label={t("household.summary")}>
-            <a href="#/menu?section=household" onClick={() => setIsHouseholdSheetOpen(false)}>
-              <UsersRound size={17} aria-hidden="true" />
-              <span>{householdMembers.length > 0 ? t("household.memberCount", { count: householdMembers.length }) : t("household.oneMember")}</span>
-              <ChevronRight size={16} aria-hidden="true" />
-            </a>
-            <div className="household-sheet-meta-tile" aria-label={t("dashboard.tracked", { count: allFlowers.length })}>
-              <Leaf size={17} aria-hidden="true" />
-              <span>{t("dashboard.tracked", { count: allFlowers.length })}</span>
-            </div>
-          </div>
-          <div className="household-sheet-actions">
-            <a href="#/menu?section=household" onClick={() => setIsHouseholdSheetOpen(false)}>
-              <Settings size={17} aria-hidden="true" />
-              {t("household.settings")}
-              <ChevronRight size={16} aria-hidden="true" />
-            </a>
-            {auth.isAuthenticated ? (
-              <LoadingButton type="button" onClick={() => void handleAccountSignOut()} isLoading={isSigningOut} loadingLabel={t("account.signingOut")}>
-                <UserRound size={17} aria-hidden="true" />
-                {t("account.signOut")}
-              </LoadingButton>
-            ) : null}
-          </div>
-        </section>
-      </div>
+      <HouseholdSheet
+        isSigningOut={isSigningOut}
+        isSavingHouseholdName={isSavingHouseholdName}
+        setIsHouseholdSheetOpen={setIsHouseholdSheetOpen}
+        t={t}
+        renderHouseholdNameEditor={renderHouseholdNameEditor}
+        currentUserEmail={currentUserEmail}
+        auth={auth}
+        householdNameEditStatus={householdNameEditStatus}
+        householdNameEditSurface={householdNameEditSurface}
+        householdNameEditStatusClass={householdNameEditStatusClass}
+        renderHouseholdSwitcher={renderHouseholdSwitcher}
+        householdMembers={householdMembers}
+        allFlowers={allFlowers}
+        handleAccountSignOut={handleAccountSignOut}
+      />
     ) : null;
 
   const renderHouseholdLoading = () => (
@@ -1596,345 +1265,58 @@ export const App = () => {
     </main>
   );
 
-  const updateCareRecord = async (flowerId: string, patch: Partial<FlowerRecords[string]>, message = "") => {
-    if (!isHouseholdOperationCurrent()) return false;
-    const supabasePlantId = supabasePlantIdsByLegacyId[flowerId];
-    let saved = false;
+  const { updateCareRecord, saveQuickRecord, saveFlower, addFlower, removeFlowerById } = usePlantPersistence({
+    isHouseholdOperationCurrent,
+    supabasePlantIdsByLegacyId,
+    supabaseWriteMode,
+    writeSupabaseFirst,
+    updateRecord,
+    setQuickRecordStatus,
+    t,
+    isSupabaseOnlyDataMode,
+    setSupabaseReadError,
+    isUsingSupabaseReadState,
+    setSupabaseReadState,
+    pendingQuickRecordKey,
+    setPendingQuickRecordKey,
+    supabaseReadState,
+    updateFlower,
+    refreshSupabaseReadState,
+    addCustomFlower,
+    removeFlower,
+  });
 
-    if (supabaseWriteMode === "supabase-first" && supabasePlantId) {
-      saved = await writeSupabaseFirst(
-        () => updateSupabaseCareRecord(supabasePlantId, patch),
-        () => updateRecord(flowerId, patch),
-      );
-      if (!isHouseholdOperationCurrent()) return false;
-      if (!saved) {
-        setQuickRecordStatus(t("sync.careWriteFallback"));
-      }
-    } else if (isSupabaseOnlyDataMode) {
-      setSupabaseReadError(true);
-      setQuickRecordStatus(t("sync.plantUnavailable"));
-    } else {
-      updateRecord(flowerId, patch);
-      saved = true;
-    }
-
-    if (saved && message) {
-      setQuickRecordStatus(message);
-    }
-
-    if (saved && isUsingSupabaseReadState) {
-      const emptyCareRecord = { lastFertilized: "", lastTransplanted: "", lastWatered: "", note: "" };
-      setSupabaseReadState((current) =>
-        current
-          ? {
-              ...current,
-              records: {
-                ...current.records,
-                [flowerId]: {
-                  ...emptyCareRecord,
-                  ...(current.records[flowerId] ?? {}),
-                  ...patch,
-                },
-              },
-            }
-          : current,
-      );
-    }
-
-    return saved;
-  };
-
-  const saveQuickRecord = async (actionKey: string, flowerId: string, patch: Partial<FlowerRecords[string]>, message: string) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (pendingQuickRecordKey) {
-      return;
-    }
-
-    setPendingQuickRecordKey(actionKey);
-    try {
-      await updateCareRecord(flowerId, patch, message);
-    } catch {
-      if (!isHouseholdOperationCurrent()) return;
-      setSupabaseReadError(true);
-      setQuickRecordStatus(t("sync.careWriteFallback"));
-    } finally {
-      if (isHouseholdOperationCurrent()) setPendingQuickRecordKey("");
-    }
-  };
-
-  const saveFlower = async (flower: Flower, message = "") => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
-      const result = await writeSupabaseFirst(
-        () => upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower),
-        () => updateFlower(flower),
-      );
-      if (isHouseholdOperationCurrent() && result && message) {
-        setQuickRecordStatus(message);
-      }
-      return;
-    }
-
-    if (isSupabaseOnlyDataMode) {
-      setSupabaseReadError(true);
-      setQuickRecordStatus(t("sync.householdUnavailable"));
-      return;
-    }
-
-    updateFlower(flower);
-    if (message) {
-      setQuickRecordStatus(message);
-    }
-  };
-
-  const addFlower = async (flower: Flower) => {
-    if (!isHouseholdOperationCurrent()) return false;
-    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
-      const saved = await upsertSupabasePlantFromFlower(supabaseReadState.household.id, flower);
-      if (!isHouseholdOperationCurrent()) return false;
-      const displayFlower = flower;
-      setSupabaseReadState((current) => current ? {
-        ...current,
-        allFlowers: [displayFlower, ...current.allFlowers.filter((item) => item.id !== flower.id)],
-        customFlowers: [displayFlower, ...current.customFlowers.filter((item) => item.id !== flower.id)],
-        supabasePlantIdsByLegacyId: { ...current.supabasePlantIdsByLegacyId, [flower.id]: saved.id },
-      } : current);
-      // Creation is committed. A later refresh failure must not invite a duplicate retry.
-      await refreshSupabaseReadState().catch(() => {
-        if (isHouseholdOperationCurrent()) setSupabaseReadError(true);
-      });
-      return true;
-    }
-    if (isSupabaseOnlyDataMode) throw new Error(t("sync.customPlantUnavailable"));
-    addCustomFlower(flower);
-    return true;
-  };
-
-  const removeFlowerById = async (flowerId: string) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (supabaseWriteMode === "supabase-first" && supabaseReadState) {
-      await writeSupabaseFirst(
-        () => setSupabasePlantRemoved(supabaseReadState.household.id, flowerId, true),
-        () => removeFlower(flowerId),
-      );
-      return;
-    }
-
-    if (isSupabaseOnlyDataMode) {
-      setSupabaseReadError(true);
-      setQuickRecordStatus(t("sync.removeUnavailable"));
-      return;
-    }
-
-    removeFlower(flowerId);
-  };
-
-  const refreshHouseholdPeople = async (showLoading = false) => {
-    if (!auth.isAuthenticated || !activeSupabaseHouseholdId || !isHouseholdOperationCurrent()) return false;
-    const householdId = activeSupabaseHouseholdId;
-    const requestId = ++householdPeopleRequestRef.current;
-    if (showLoading) {
-      setHouseholdPeopleLoading(true);
-      setHouseholdPeopleError("");
-    }
-    try {
-      const [members, invites] = await Promise.all([
-        listHouseholdMembers(householdId),
-        listHouseholdInvites(householdId),
-      ]);
-      if (!isHouseholdOperationCurrent() || householdPeopleScopeRef.current !== householdId || requestId !== householdPeopleRequestRef.current) return false;
-      setHouseholdMembers(members);
-      setHouseholdInvites(invites);
-      setHouseholdPeopleError("");
-      return true;
-    } catch {
-      if (isHouseholdOperationCurrent() && householdPeopleScopeRef.current === householdId && requestId === householdPeopleRequestRef.current) {
-        setHouseholdPeopleError(t("household.peopleLoadFailed"));
-      }
-      return false;
-    } finally {
-      if (isHouseholdOperationCurrent() && householdPeopleScopeRef.current === householdId && requestId === householdPeopleRequestRef.current) {
-        setHouseholdPeopleLoading(false);
-      }
-    }
-  };
-
-  const setInviteFeedback = (message: string, tone: "error" | "info" | "success" = "info") => {
-    setInviteStatusTone(tone);
-    setInviteStatus(message);
-  };
-
-  const inviteDeliveryErrorKey = (code?: string) => {
-    if (code === "INVITE_LINK_UNAVAILABLE") return "household.inviteLinkUnavailable";
-    if (code === "EMAIL_CONFIGURATION_ERROR" || code === "EMAIL_AUTH_ERROR") return "household.inviteEmailConfigError";
-    if (code === "EMAIL_SENDER_NOT_VERIFIED") return "household.inviteEmailSenderError";
-    if (code === "EMAIL_RATE_LIMITED") return "household.inviteEmailRateLimited";
-    return "household.inviteEmailRetryFailed";
-  };
-
-  const handleCreateInvite = async () => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (isCreatingInvite) {
-      return;
-    }
-
-    if (!auth.isAuthenticated) {
-      setInviteFeedback(t("household.inviteStatusNotSignedIn"), "error");
-      setOnboardingStep("welcome");
-      return;
-    }
-
-    if (!activeSupabaseHouseholdId) {
-      setInviteFeedback(t("household.inviteStatusNoHousehold"), "error");
-      return;
-    }
-    if (!canInviteToHousehold) {
-      setInviteFeedback(t("household.inviteStatusPermission"), "error");
-      return;
-    }
-
-    const normalizedEmail = normalizeInviteEmail(inviteEmail);
-    if (!isValidInviteEmail(normalizedEmail)) {
-      setInviteFeedback(t("household.inviteStatusInvalidEmail"), "error");
-      return;
-    }
-
-    if (householdMembers.some((member) => normalizeInviteEmail(member.email) === normalizedEmail)) {
-      setInviteFeedback(t("household.peopleAlreadyMember"), "error");
-      return;
-    }
-
-    if (householdInvites.some((invite) => isActiveInvite(invite) && normalizeInviteEmail(invite.inviteeEmail) === normalizedEmail)) {
-      setInviteFeedback(t("household.inviteStatusDuplicate"), "error");
-      return;
-    }
-
-    const feedbackGeneration = transientMessageGenerationRef.current;
-
-    try {
-      setIsCreatingInvite(true);
-      setInviteStatus("");
-      const invite = await createHouseholdInvite(activeSupabaseHouseholdId, normalizedEmail);
-      if (!isHouseholdOperationCurrent()) return;
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteEmail("");
-        setIsInvitePanelOpen(false);
-        setHouseholdInvites((current) => [invite, ...current]);
-        await refreshHouseholdPeople();
-        void refreshSubscriptionState();
-      }
-      try {
-        if (!isHouseholdOperationCurrent()) return;
-        const delivery = await sendHouseholdInviteEmail(invite.id);
-        if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-          setInviteFeedback(delivery.emailSent
-            ? t("household.invitationSent", { email: normalizedEmail })
-            : t(inviteDeliveryErrorKey(delivery.errorCode)), delivery.emailSent ? "success" : "error");
-        }
-      } catch {
-        if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-          setInviteFeedback(t("household.inviteEmailRetryFailed"), "error");
-        }
-      }
-    } catch (error) {
-      if (!isHouseholdOperationCurrent()) return;
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        const debugMessage = safeInviteDebugMessage(error);
-        setInviteFeedback(`${t(inviteErrorMessage(error))}${debugMessage ? ` (${debugMessage})` : ""}`, "error");
-      }
-      void refreshSubscriptionState();
-      void refreshHouseholdPeople();
-    } finally {
-      if (isHouseholdOperationCurrent()) setIsCreatingInvite(false);
-    }
-  };
-
-  const handleCopyInviteLink = async (item: HouseholdPersonItem) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (!item.inviteId || item.status !== "pending" || !householdPermissions.canRemoveMembers) return;
-    const feedbackGeneration = transientMessageGenerationRef.current;
-    try {
-      const token = await getHouseholdInviteToken(item.inviteId);
-      if (!isHouseholdOperationCurrent()) return;
-      const link = createInviteUrl(token);
-      await navigator.clipboard.writeText(link);
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteFeedback(t("household.inviteCopied"), "success");
-      }
-    } catch (error) {
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        const oldInvite = error instanceof Error && error.message.includes("Invite link cannot be recovered");
-        setInviteFeedback(t(oldInvite ? "household.inviteLinkUnavailable" : "household.inviteEmailRetryFailed"), "error");
-      }
-    }
-  };
-
-  const handleRetryInviteEmail = async (item: HouseholdPersonItem) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (!item.inviteId || item.status !== "pending" || !householdPermissions.canRemoveMembers || sendingInviteId) return;
-    const feedbackGeneration = transientMessageGenerationRef.current;
-    setSendingInviteId(item.inviteId);
-    try {
-      const delivery = await sendHouseholdInviteEmail(item.inviteId);
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteFeedback(delivery.emailSent
-          ? t("household.invitationSent", { email: item.email })
-          : t(inviteDeliveryErrorKey(delivery.errorCode)), delivery.emailSent ? "success" : "error");
-      }
-    } catch {
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteFeedback(t("household.inviteEmailRetryFailed"), "error");
-      }
-    } finally {
-      if (isHouseholdOperationCurrent()) setSendingInviteId(null);
-    }
-  };
-
-  const handleRemoveHouseholdPerson = async (item: HouseholdPersonItem) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (!activeSupabaseHouseholdId || removingPersonKeysRef.current.has(item.key)) return;
-    const householdId = activeSupabaseHouseholdId;
-    if (!householdPermissions.canRemoveMembers) return;
-    if (item.status !== "pending" && (!item.userId || item.role === "owner" || item.userId === auth.user?.id)) return;
-    if (item.status === "pending" && !item.inviteId) return;
-
-    removingPersonKeysRef.current.add(item.key);
-    setRemovingPersonKeys(new Set(removingPersonKeysRef.current));
-    const feedbackGeneration = transientMessageGenerationRef.current;
-    try {
-      if (item.status === "pending") await revokeHouseholdInvite(item.inviteId!);
-      else await removeHouseholdMember(householdId, item.userId!);
-
-      if (item.status === "pending") window.dispatchEvent(new Event(householdInvitationsChangedEvent));
-
-      if (!isHouseholdOperationCurrent() || householdPeopleScopeRef.current !== householdId) return;
-      setHouseholdPeopleError("");
-      if (item.status === "pending") setHouseholdInvites((current) => current.filter((invite) => invite.id !== item.inviteId));
-      else setHouseholdMembers((current) => current.filter((member) => member.userId !== item.userId));
-      if (isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setInviteFeedback(item.status === "pending" ? t("household.inviteRevoked") : t("household.peopleRemoved", { email: item.email }), "success");
-      }
-      void refreshHouseholdPeople();
-      void refreshSubscriptionState();
-    } catch {
-      if (isHouseholdOperationCurrent() && householdPeopleScopeRef.current === householdId) {
-        if (isTransientMessageGenerationCurrent(feedbackGeneration)) setInviteFeedback(t("household.peopleRemoveFailed"), "error");
-        void refreshHouseholdPeople();
-      }
-    } finally {
-      if (isHouseholdOperationCurrent()) {
-        removingPersonKeysRef.current.delete(item.key);
-        setRemovingPersonKeys(new Set(removingPersonKeysRef.current));
-      }
-    }
-  };
-
-  const leaveInvitationReview = () => {
-    clearInvitationAuthContext(browserStorage);
-    browserStorage.removeItem(pendingInviteStorageKey);
-    setJoinInviteInput("");
-    window.location.hash = "#/menu";
-  };
+  const { refreshHouseholdPeople, setInviteFeedback, inviteDeliveryErrorKey, handleCreateInvite, handleCopyInviteLink, handleRetryInviteEmail, handleRemoveHouseholdPerson } = useInvitationActions({
+    auth,
+    activeSupabaseHouseholdId,
+    isHouseholdOperationCurrent,
+    householdPeopleRequestRef,
+    setHouseholdPeopleLoading,
+    setHouseholdPeopleError,
+    householdPeopleScopeRef,
+    setHouseholdMembers,
+    setHouseholdInvites,
+    t,
+    setInviteStatusTone,
+    setInviteStatus,
+    isCreatingInvite,
+    setOnboardingStep,
+    canInviteToHousehold,
+    inviteEmail,
+    householdMembers,
+    householdInvites,
+    transientMessageGenerationRef,
+    setIsCreatingInvite,
+    isTransientMessageGenerationCurrent,
+    setInviteEmail,
+    setIsInvitePanelOpen,
+    refreshSubscriptionState,
+    householdPermissions,
+    sendingInviteId,
+    setSendingInviteId,
+    removingPersonKeysRef,
+    setRemovingPersonKeys,
+  });
 
   const handleAccountSignOut = async () => {
     if (signingOutRef.current) {
@@ -1969,206 +1351,72 @@ export const App = () => {
     }
   };
 
-  const handleJoinInvite = (input = joinInviteInput) => {
-    const token = normalizeInviteTokenInput(input);
-    if (!token || !isLikelyInviteToken(token)) {
-      setInviteStatus(t(token ? "household.inviteStatusInvalidInvite" : "household.inviteStatusMissingToken"));
-      return false;
-    }
-
-    setInviteStatus("");
-    window.location.hash = `#/join?invite=${encodeURIComponent(token)}`;
-    return true;
-  };
-
-  const handleAcceptInvitation = (invitation: HouseholdInvitation, source: "route" | "inbox" = "route") => joinInviteOnceRef.current(async () => {
-    const userId = auth.user?.id;
-    if (!userId || !auth.user?.email_confirmed_at || decliningInvitationRef.current) return false;
-    const reviewKey = invitationRouteKey;
-    const isCurrentAccount = () => householdOperationScopeRef.current.userId === userId;
-    const isCurrent = () => isCurrentAccount() && invitationRouteKeyRef.current === reviewKey;
-    const currentHousehold = activeHousehold;
-    const setActionError = source === "inbox" ? setInboxInvitationActionError : setInvitationActionError;
-    try {
-      setIsJoiningInvite(true);
-      setActionError("");
-      const household = await acceptHouseholdInvitation(invitation.id);
-      if (!isCurrentAccount()) return false;
-      householdDirectory.includeConfirmedHousehold(household);
-      invitationInbox.removeInvitation(invitation.id);
-      invitationReview.refresh();
-      inboxInvitationReview.refresh();
-      // Membership and inbox updates remain relevant when the review was closed.
-      window.dispatchEvent(new Event(householdInvitationsChangedEvent));
-      const [households] = await Promise.all([householdDirectory.refresh(true), invitationInbox.refresh()]);
-      if (!isCurrent()) return false;
-      // Joining adds a membership; it does not replace an existing household selection.
-      if (source === "route" && households && !currentHousehold && !getStoredHouseholdSession()) {
-        const preferred = readSelectedHouseholdId(browserStorage, userId);
-        const existing = resolveHouseholdSelection(households.filter((item) => item.id !== household.id), preferred);
-        const selected = householdAfterInviteAcceptance(existing, household);
-        const session = { name: selected.name, publicToken: selected.id };
-        householdDataGenerationRef.current += 1;
-        invalidateSupabaseReadThroughCache();
-        storeHouseholdSession(session);
-        writeSelectedHouseholdId(browserStorage, userId, selected.id);
-        setActiveHousehold(session);
-        setBaseUrl(currentHouseholdBaseUrl(session.publicToken));
-      }
-      browserStorage.removeItem(pendingInviteStorageKey);
-      clearInvitationAuthContext(browserStorage);
-      if (source === "inbox") setAcceptedInboxInvitationHousehold(household);
-      else setAcceptedInvitationHousehold(household);
-      return true;
-    } catch (error) {
-      if (isCurrent()) {
-        setActionError(t(joinInviteErrorMessage(error)));
-        (source === "inbox" ? inboxInvitationReview : invitationReview).refresh();
-      }
-      return false;
-    } finally {
-      setIsJoiningInvite(false);
-    }
+  const { leaveInvitationReview, handleJoinInvite, handleAcceptInvitation, handleDeclineInvitation, handleInvitationAccountChange } = useInvitationReviewActions({
+    pendingInviteStorageKey,
+    setJoinInviteInput,
+    joinInviteInput,
+    setInviteStatus,
+    t,
+    joinInviteOnceRef,
+    auth,
+    decliningInvitationRef,
+    invitationRouteKey,
+    householdOperationScopeRef,
+    invitationRouteKeyRef,
+    activeHousehold,
+    setInboxInvitationActionError,
+    setInvitationActionError,
+    setIsJoiningInvite,
+    householdDirectory,
+    invitationInbox,
+    invitationReview,
+    inboxInvitationReview,
+    householdDataGenerationRef,
+    setActiveHousehold,
+    setBaseUrl,
+    setAcceptedInboxInvitationHousehold,
+    setAcceptedInvitationHousehold,
+    isJoiningInvite,
+    setIsDecliningInvitation,
+    signingOutRef,
+    setSupabaseReadState,
   });
 
-  const handleDeclineInvitation = async (invitation: HouseholdInvitation, source: "route" | "inbox" = "route") => {
-    const userId = auth.user?.id;
-    if (!userId || !auth.user?.email_confirmed_at || decliningInvitationRef.current || isJoiningInvite) return;
-    const reviewKey = invitationRouteKey;
-    const isCurrentAccount = () => householdOperationScopeRef.current.userId === userId;
-    const isCurrent = () => isCurrentAccount() && invitationRouteKeyRef.current === reviewKey;
-    const setActionError = source === "inbox" ? setInboxInvitationActionError : setInvitationActionError;
-    decliningInvitationRef.current = true;
-    setIsDecliningInvitation(true);
-    setActionError("");
-    try {
-      await declineHouseholdInvitation(invitation.id);
-      if (!isCurrentAccount()) return;
-      invitationInbox.removeInvitation(invitation.id);
-      invitationReview.refresh();
-      inboxInvitationReview.refresh();
-      window.dispatchEvent(new Event(householdInvitationsChangedEvent));
-      await invitationInbox.refresh();
-      if (!isCurrent()) return;
-      clearInvitationAuthContext(browserStorage);
-    } catch (error) {
-      if (isCurrent()) setActionError(t(joinInviteErrorMessage(error)));
-    } finally {
-      decliningInvitationRef.current = false;
-      setIsDecliningInvitation(false);
-    }
-  };
-
-  const handleInvitationAccountChange = async (source: "route" | "inbox" = "route") => {
-    if (signingOutRef.current) return;
-    const userId = auth.user?.id ?? null;
-    signingOutRef.current = true;
-    try {
-      await signOut();
-      if (householdOperationScopeRef.current.userId && householdOperationScopeRef.current.userId !== userId) return;
-      clearHouseholdSession();
-      setActiveHousehold(null);
-      setSupabaseReadState(null);
-    } catch {
-      if (householdOperationScopeRef.current.userId !== userId) return;
-      (source === "inbox" ? setInboxInvitationActionError : setInvitationActionError)(t("account.signOutFailed"));
-    } finally {
-      signingOutRef.current = false;
-    }
-  };
-
-  const handleCreateHousehold = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!isHouseholdOperationCurrent()) return false;
-    if (isCreatingHousehold) {
-      return false;
-    }
-
-    if (!auth.isAuthenticated) {
-      setAccessStatus(t("household.createRequiresAuth"));
-      setOnboardingStep("welcome");
-      return false;
-    }
-
-    const nameValidation = validateHouseholdName(householdNameDraft);
-    if (!nameValidation.valid) {
-      setAccessStatus(
-        nameValidation.reason === "required"
-          ? t("household.renameRequired")
-          : nameValidation.reason === "too_long"
-            ? t("household.renameTooLong", { count: householdNameMaxLength })
-            : t("household.renameUnsafe"),
-      );
-      return false;
-    }
-
-    const feedbackGeneration = transientMessageGenerationRef.current;
-
-    try {
-      setIsCreatingHousehold(true);
-      setAccessStatus(t("household.creating"));
-      let household: HouseholdSession;
-
-      if (auth.isAuthenticated && isSupabaseBackend) {
-        const created = await createHousehold(nameValidation.name);
-        household = { name: created.name, publicToken: created.id };
-      } else if (isLegacyNetlifyBackendEnabled) {
-        const response = await fetch("/.netlify/functions/household-access", {
-          body: JSON.stringify({ name: nameValidation.name }),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-
-        if (!response.ok) {
-          throw new Error(t("household.createFailed"));
-        }
-
-        const data = (await response.json()) as { household?: HouseholdSession };
-        if (!data.household) {
-          throw new Error(t("household.invalidResponse"));
-        }
-        household = data.household;
-      } else {
-        throw new Error(t("household.createRequiresAuth"));
-      }
-
-      if (!isValidHouseholdToken(household.publicToken)) {
-        throw new Error(t("household.invalidResponse"));
-      }
-
-      if (!isHouseholdOperationCurrent()) return false;
-      if (isSupabaseBackend) await householdDirectory.refresh(true);
-      if (!isHouseholdOperationCurrent()) return false;
-      householdDataGenerationRef.current += 1;
-      invalidateSupabaseReadThroughCache();
-      resetHouseholdOperations();
-      setIsCreatingHousehold(false);
-      setHouseholdLookupStatus("complete");
-      setIsAccessChecking(false);
-      storeHouseholdSession(household);
-      if (auth.user?.id && isUuid(household.publicToken)) writeSelectedHouseholdId(browserStorage, auth.user.id, household.publicToken);
-      window.history.replaceState(null, "", createHouseholdUrl(household.publicToken));
-      setActiveHousehold(household);
-      setBaseUrl(currentHouseholdBaseUrl(household.publicToken));
-      setAccessStatus("");
-      return true;
-    } catch {
-      if (isHouseholdOperationCurrent() && isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setAccessStatus(t("household.createFailedRetry"));
-      }
-      return false;
-    } finally {
-      if (isHouseholdOperationCurrent() && isTransientMessageGenerationCurrent(feedbackGeneration)) {
-        setIsCreatingHousehold(false);
-        setIsAccessChecking(false);
-      }
-    }
-  };
-
-  const changeHousehold = () => {
-    setIsHouseholdSheetOpen(true);
-    void householdDirectory.refresh();
-  };
+  const { selectHousehold, renderHouseholdSwitcher, changeHousehold } = useHouseholdSelectionActions({
+    householdDirectory,
+    auth,
+    householdDataGenerationRef,
+    clearTransientMessages,
+    resetHouseholdOperations,
+    setHouseholdLookupStatus,
+    setIsAccessChecking,
+    setSupabaseReadState,
+    setSupabaseReadError,
+    setSupabasePlantIdsByLegacyId,
+    setHouseholdMembers,
+    setHouseholdInvites,
+    setHouseholdPeopleError,
+    setHouseholdNameEditSurface,
+    setIsInvitePanelOpen,
+    setInviteEmail,
+    setIsAddPlantModalOpen,
+    setIsDiagnosisModalOpen,
+    setCarePreview,
+    setDeleteFlowerId,
+    setEditingNameFlowerId,
+    setOpenDiagnosticId,
+    setQuery,
+    setCloudSyncEnabled,
+    setCloudSyncReady,
+    setActiveHousehold,
+    setBaseUrl,
+    setIsHouseholdSheetOpen,
+    setIsInvitationInboxOpen,
+    setSelectedInboxInvitationId,
+    activeHousehold,
+    t,
+    invitationCopy,
+  });
 
   const filteredFlowers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -2195,471 +1443,64 @@ export const App = () => {
     setPlantPage((currentPage) => Math.min(currentPage, plantPageCount));
   }, [plantPageCount]);
 
-  const handleAddCustomFlower = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!isHouseholdOperationCurrent()) return;
-    if (plantSubmissionRef.current || newImageSelection.isBusy()) {
-      return;
-    }
+  const { handleGenerateCarePreview, confirmCareUpdate, isApplyingCare } = useCareActions({
+    isHouseholdOperationCurrent,
+    isGeneratingCarePreview,
+    resolveCurrentAiDiagnosisAccess,
+    setCarePreviewStatus,
+    aiDiagnosisAccessMessage,
+    setIsGeneratingCarePreview,
+    t,
+    supabasePlantIdsByLegacyId,
+    auth,
+    activeSupabaseHouseholdId,
+    selectedLanguage,
+    setCarePreview,
+    carePreview,
+    flowerById,
+    saveFlower,
+  });
 
-    const plantName = newPlantName.trim();
-
-    if (!plantName || !newPlantImage) {
-      setNewPlantStatus(t("plantForm.nameAndImageRequired"));
-      return;
-    }
-
-    const submission = Symbol("plant-submission");
-    plantSubmissionRef.current = submission;
-    let savingPlant = false;
-    setIsAddingPlant(true);
-    setNewPlantStatus(t("image.validatingSafety"));
-
-    try {
-      const customFlower = await addPlantFromPhoto({
-        name: plantName, imageDataUrl: newPlantImage.dataUrl,
-        id: pendingPlantIdRef.current ?? (pendingPlantIdRef.current = createCustomFlowerId()),
-        householdId: activeSupabaseHouseholdId, language: selectedLanguage,
-      }, {
-        assertCanAdd: assertCanAddPlant, generateCare: fetchGeneratedCare, save: addFlower,
-        refreshUsage: refreshHouseholdPlanUsage, isCurrent: isHouseholdOperationCurrent,
-        onStage: stage => {
-          savingPlant = stage === "saving";
-          setNewPlantStatus(t(stage === "checking" ? "image.validatingSafety" : stage === "generating" ? "plantForm.generatingCare" : "image.uploading"));
-        },
-      });
-      if (!customFlower || !isHouseholdOperationCurrent()) return;
-      setNewPlantStatus(t("plantForm.added", { plant: customFlower.displayName }));
-      pendingPlantIdRef.current = null;
-      setNewPlantName("");
-      newImageSelection.clear();
-      setIsAddPlantModalOpen(false);
-    } catch (error) {
-      if (!isHouseholdOperationCurrent()) return;
-      setNewPlantStatus(imageErrorMessage(error, selectedLanguage) ?? (error instanceof PlantImageUploadError ? t("plantForm.uploadFailed")
-        : savingPlant ? t("plantForm.saveFailed") : t("plantForm.aiFailed", { reason: "" })));
-    } finally {
-      if (plantSubmissionRef.current === submission) plantSubmissionRef.current = null;
-      if (isHouseholdOperationCurrent()) setIsAddingPlant(false);
-    }
-  };
-
-  const handleGenerateCarePreview = async (flower: Flower) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (isGeneratingCarePreview) {
-      return;
-    }
-
-    const access = resolveCurrentAiDiagnosisAccess();
-    if (!access.allowed) {
-      setCarePreviewStatus(aiDiagnosisAccessMessage(access));
-      return;
-    }
-
-    setIsGeneratingCarePreview(true);
-    setCarePreviewStatus(t("detail.aiCarePreparing"));
-
-    try {
-      const supabasePlantId = supabasePlantIdsByLegacyId[flower.id];
-      if (auth.isAuthenticated && !supabasePlantId) {
-        throw new Error("Supabase plant is not available for AI care refresh.");
-      }
-      let imageSource = flower.image;
-      if (supabasePlantId) {
-        const plant = await getHouseholdPlantById(supabasePlantId);
-        if (!isHouseholdOperationCurrent()) return;
-        if (plant.imagePath) {
-          imageSource = await getPlantImageSignedUrl(plant.imagePath);
-        }
-      }
-      const imageDataUrl = await imageSourceToDataUrl(imageSource);
-      if (!isHouseholdOperationCurrent()) return;
-      const nextCare = await fetchGeneratedCare(flower.displayName, imageDataUrl, {
-        generationSource: "manual_refresh",
-        householdId: activeSupabaseHouseholdId,
-        language: selectedLanguage,
-        plantId: supabasePlantId,
-      });
-      if (!isHouseholdOperationCurrent()) return;
-      setCarePreview({ flowerId: flower.id, nextCare });
-      setCarePreviewStatus("");
-    } catch (error) {
-      if (!isHouseholdOperationCurrent()) return;
-      const reason = error instanceof Error ? error.message : t("detail.aiCareFailed");
-      setCarePreviewStatus(imageErrorMessage(error, selectedLanguage) ?? t("detail.aiGenerationFailed", { reason }));
-    } finally {
-      if (isHouseholdOperationCurrent()) setIsGeneratingCarePreview(false);
-    }
-  };
-
-  const confirmCareUpdate = () => {
-    if (!carePreview) {
-      return;
-    }
-
-    const currentFlower = flowerById.get(carePreview.flowerId);
-    if (!currentFlower) {
-      setCarePreview(null);
-      setCarePreviewStatus(t("detail.plantUnavailable"));
-      return;
-    }
-
-    void saveFlower(applyGeneratedCareToFlower(currentFlower, carePreview.nextCare), t("detail.careUpdated"));
-    setCarePreview(null);
-    setCarePreviewStatus(t("detail.careUpdated"));
-  };
-
-  const startNameEdit = (flower: Flower) => {
-    setEditingNameFlowerId(flower.id);
-    setDraftFlowerName(flower.displayName);
-  };
-
-  const cancelNameEdit = () => {
-    setEditingNameFlowerId("");
-    setDraftFlowerName("");
-  };
-
-  const confirmNameEdit = (flower: Flower) => {
-    const nextName = draftFlowerName.trim();
-    if (!nextName) {
-      return;
-    }
-
-    void saveFlower({ ...flower, displayName: nextName, source: "custom" });
-    cancelNameEdit();
-  };
-
-  const openDiagnosisModal = () => {
-    const access = resolveCurrentAiDiagnosisAccess();
-    if (!access.allowed) {
-      const message = aiDiagnosisAccessMessage(access);
-      setDiagnosisStatus(message);
-      if (access.status === "limit_reached") {
-        setDiagnosisUpgradeReason(message);
-      }
-      return;
-    }
-
-    diagnosisImageSelection.clear();
-    setDiagnosisDraft(null);
-    setDiagnosisSymptomNotes("");
-    setDiagnosisUserNote("");
-    setDiagnosisStatus("");
-    setDiagnosisUpgradeReason("");
-    setIsDiagnosisModalOpen(true);
-  };
-
-  const closeDiagnosisModal = () => {
-    if (isDiagnosing || isSavingDiagnosis) {
-      return;
-    }
-
-    diagnosisImageSelection.cancel();
-    setIsDiagnosisModalOpen(false);
-  };
-
-  const handleDiagnosisImageChange = async (source: ImageCaptureSource, file?: File, pickerLabels?: ImagePickerLabels) => {
-    if (!isHouseholdOperationCurrent() || isDiagnosing) return;
-    const access = resolveCurrentAiDiagnosisAccess();
-    if (!access.allowed) {
-      setDiagnosisStatus(aiDiagnosisAccessMessage(access));
-      return;
-    }
-    await diagnosisImageSelection.select(source, file, pickerLabels);
-  };
-
-  const runPlantDiagnosis = async (flower: Flower) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (!diagnosisImageDataUrl || isDiagnosing || diagnosisImageSelection.isBusy()) {
-      return;
-    }
-
-    setIsDiagnosing(true);
-    setDiagnosisStatus(t("diagnosis.accessChecking"));
-
-    try {
-      setDiagnosisStatus(t("image.validatingSafety"));
-      if (!isHouseholdOperationCurrent()) return;
-
-      if (auth.isAuthenticated && !activeSupabaseHouseholdId) {
-        const message = t("diagnosis.householdRequired");
-        setDiagnosisStatus(message);
-        return;
-      }
-
-      const access = resolveCurrentAiDiagnosisAccess();
-      if (!access.allowed) {
-        const message = aiDiagnosisAccessMessage(access);
-        if (access.status === "limit_reached") {
-          setDiagnosisUpgradeReason(message);
-        }
-        setDiagnosisStatus(message);
-        return;
-      }
-
-      setDiagnosisStatus(t("diagnosis.aiAnalyzing"));
-      const diagnosis = await fetchPlantDiagnosis(
-        flower.displayName,
-        diagnosisImageDataUrl,
-        diagnosisSymptomNotes,
-        activeSupabaseHouseholdId,
-        selectedLanguage,
-      );
-      if (!isHouseholdOperationCurrent()) return;
-      setDiagnosisDraft(diagnosis);
-      await refreshHouseholdPlanUsage().catch(() => null);
-      if (!isHouseholdOperationCurrent()) return;
-      setDiagnosisStatus(diagnosis.confidence < 45 ? t("diagnosis.lowConfidence") : "");
-    } catch (error) {
-      if (!isHouseholdOperationCurrent()) return;
-      setDiagnosisDraft(null);
-      setDiagnosisStatus(imageErrorMessage(error, selectedLanguage) ?? t("diagnosis.failed"));
-    } finally {
-      if (isHouseholdOperationCurrent()) setIsDiagnosing(false);
-    }
-  };
-
-  const upsertSupabaseDiagnosisInReadState = (entry: PlantDiagnosticEntry) => {
-    if (!isHouseholdOperationCurrent()) return;
-    setSupabaseReadState((current) =>
-      current
-        ? {
-            ...current,
-            diagnostics: [
-              entry,
-              ...current.diagnostics.filter(
-                (diagnostic) =>
-                  diagnostic.id !== entry.id &&
-                  (!entry.supabaseId || diagnostic.supabaseId !== entry.supabaseId) &&
-                  getSupabaseDiagnosticId(diagnostic) !== getSupabaseDiagnosticId(entry),
-              ),
-            ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-          }
-        : current,
-    );
-  };
-
-  const savePlantDiagnosis = async (flower: Flower, userConfirmation: DiagnosisConfirmation) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (!diagnosisDraft || !diagnosisImageDataUrl || !flowerById.has(flower.id)) {
-      setDiagnosisStatus(t("diagnosis.saveUnavailable"));
-      return;
-    }
-
-    if (isSavingDiagnosis) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const sanitizedNote = sanitizeDiagnosticNote(diagnosisUserNote);
-    const supabasePlantId = supabasePlantIdsByLegacyId[flower.id];
-    setIsSavingDiagnosis(true);
-    setDiagnosisStatus(t("diagnosis.saving"));
-
-    try {
-      if (supabaseWriteMode === "supabase-first") {
-        if (!supabasePlantId) {
-          setSupabaseReadError(true);
-          setDiagnosisStatus(t("diagnosis.saveUnavailable"));
-          return;
-        }
-
-        const legacyDiagnosisId = createDiagnosticId();
-        const saved = await createSupabaseDiagnosis({
-          diagnosis: diagnosisDraft,
-          imageDataUrl: diagnosisImageDataUrl,
-          legacyId: legacyDiagnosisId,
-          plantId: supabasePlantId,
-          userConfirmation,
-          userNote: sanitizedNote,
-        });
-        if (!isHouseholdOperationCurrent()) return;
-        const entry: PlantDiagnosticEntry = {
-          ...saved,
-          id: saved.legacyId ?? legacyDiagnosisId,
-          imageDataUrl: saved.imagePath ? "" : diagnosisImageDataUrl,
-          imagePath: saved.imagePath ?? undefined,
-          plantId: flower.id,
-          storageMode: "supabase",
-          supabaseId: saved.id,
-        };
-
-        upsertSupabaseDiagnosisInReadState(entry);
-        setOpenDiagnosticId(entry.id);
-        setDiagnosisDraft(null);
-        setIsDiagnosisModalOpen(false);
-        setDiagnosisStatus(t("diagnosis.saved"));
-
-        try {
-          await refreshSupabaseReadState();
-        } catch (error) {
-          if (!isHouseholdOperationCurrent()) return;
-          logTechnicalError("Supabase diagnosis history refresh failed after save.", error);
-          setDiagnosisStatus(t("diagnosis.savedRefreshFailed"));
-        }
-        return;
-      }
-
-      if (isSupabaseOnlyDataMode) {
-        setSupabaseReadError(true);
-        setDiagnosisStatus(t("diagnosis.saveFailed"));
-        return;
-      }
-
-      const entry: PlantDiagnosticEntry = {
-        ...diagnosisDraft,
-        createdAt: now,
-        id: createDiagnosticId(),
-        imageDataUrl: diagnosisImageDataUrl,
-        plantId: flower.id,
-        storageMode: "local",
-        updatedAt: now,
-        userConfirmation,
-        userNote: sanitizedNote,
-      };
-
-      setDiagnostics((current) => [entry, ...current.filter((diagnostic) => diagnostic.id !== entry.id)]);
-      setOpenDiagnosticId(entry.id);
-      setDiagnosisDraft(null);
-      setIsDiagnosisModalOpen(false);
-      setDiagnosisStatus(t("diagnosis.saved"));
-    } catch (error) {
-      if (!isHouseholdOperationCurrent()) return;
-      logTechnicalError("Supabase diagnosis save failed.", error);
-      if (isSupabaseOnlyDataMode || supabaseWriteMode === "supabase-first") {
-        setSupabaseReadError(true);
-      }
-      setDiagnosisStatus(t("diagnosis.saveFailed"));
-    } finally {
-      if (isHouseholdOperationCurrent()) setIsSavingDiagnosis(false);
-    }
-  };
-
-  const updateDiagnosticHistoryEntry = async (diagnosticId: string, patch: Partial<Pick<PlantDiagnosticEntry, "userConfirmation" | "userNote">>) => {
-    if (!isHouseholdOperationCurrent()) return false;
-    const sanitizedPatch = {
-      ...patch,
-      ...(patch.userNote !== undefined ? { userNote: sanitizeDiagnosticNote(patch.userNote) } : {}),
-    };
-    const diagnostic = diagnostics.find((item) => item.id === diagnosticId);
-
-    if (!diagnostic) {
-      setDiagnosisStatus(t("diagnosis.saveUnavailable"));
-      setDiagnosticHistoryStatus(t("diagnosis.saveUnavailable"));
-      return false;
-    }
-
-    const applyPatch = (item: PlantDiagnosticEntry): PlantDiagnosticEntry => ({
-      ...item,
-      ...sanitizedPatch,
-      updatedAt: new Date().toISOString(),
-    });
-
-    setDiagnostics((current) => current.map((item) => (item.id === diagnosticId ? applyPatch(item) : item)));
-    setSupabaseReadState((current) =>
-      current
-        ? {
-            ...current,
-            diagnostics: current.diagnostics.map((item) => (item.id === diagnosticId ? applyPatch(item) : item)),
-          }
-        : current,
-    );
-
-    if (diagnostic.storageMode === "supabase" && supabaseWriteMode === "supabase-first") {
-      const supabaseDiagnosticId = getSupabaseDiagnosticId(diagnostic);
-      if (!supabaseDiagnosticId) {
-        setDiagnosisStatus(t("diagnosis.saveUnavailable"));
-        setDiagnosticHistoryStatus(t("diagnosis.saveUnavailable"));
-        return false;
-      }
-
-      try {
-        await updateSupabaseDiagnosis(supabaseDiagnosticId, sanitizedPatch);
-        if (!isHouseholdOperationCurrent()) return false;
-        await refreshSupabaseReadState();
-      } catch (error) {
-        if (!isHouseholdOperationCurrent()) return false;
-        logTechnicalError("Supabase diagnosis update failed.", error);
-        setDiagnosisStatus(t("diagnosis.updateFailed"));
-        setDiagnosticHistoryStatus(t("diagnosis.updateFailed"));
-        await refreshSupabaseReadState().catch((refreshError) => {
-          logTechnicalError("Supabase diagnosis history refresh failed after update.", refreshError);
-        });
-        return false;
-      }
-    }
-
-    return isHouseholdOperationCurrent();
-  };
-
-  const updateDiagnosticConfirmation = async (diagnosticId: string, userConfirmation: DiagnosisConfirmation) => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (pendingDiagnosticUpdateKey) {
-      return;
-    }
-
-    const updateKey = `${diagnosticId}:${userConfirmation}`;
-    setPendingDiagnosticUpdateKey(updateKey);
-    setDiagnosticHistoryStatus(t("diagnosis.saving"));
-
-    try {
-      const saved = await updateDiagnosticHistoryEntry(diagnosticId, { userConfirmation });
-      if (!isHouseholdOperationCurrent()) return;
-      setDiagnosticHistoryStatus(saved ? t("diagnosis.saved") : t("diagnosis.updateFailed"));
-    } finally {
-      if (isHouseholdOperationCurrent()) setPendingDiagnosticUpdateKey("");
-    }
-  };
-
-  const confirmRemoveCustomFlower = async () => {
-    if (!isHouseholdOperationCurrent()) return;
-    if (!deleteFlowerId || isRemovingPlant) {
-      return;
-    }
-
-    try {
-      setIsRemovingPlant(true);
-      await removeFlowerById(deleteFlowerId);
-      if (!isHouseholdOperationCurrent()) return;
-      setDeleteFlowerId("");
-      window.location.hash = "#/";
-    } finally {
-      if (isHouseholdOperationCurrent()) setIsRemovingPlant(false);
-    }
-  };
-
-  const requestAccountDeletion = async () => {
-    if (isRequestingAccountDeletion) {
-      return;
-    }
-
-    const contact = deleteAccountContact.trim();
-    if (!contact) {
-      setDeleteAccountStatus("Enter the account email or user ID before requesting deletion review.");
-      return;
-    }
-    if (!window.confirm(t("account.deleteConfirm"))) return;
-
-    try {
-      setIsRequestingAccountDeletion(true);
-      setDeleteAccountStatus("Submitting deletion review request...");
-      const body = await callBackendFunction<{ message?: string }>({
-        allowNetlifyFallback: true,
-        body: {
-          contact,
-          userId: auth.user?.id ?? null,
-        },
-        functionName: "delete-account-request",
-        netlifyPath: "/.netlify/functions/delete-account-request",
-      });
-
-      setDeleteAccountStatus(body?.message ?? "Deletion request received for manual review.");
-    } catch (error) {
-      setDeleteAccountStatus(error instanceof Error ? error.message : "Deletion request could not be submitted.");
-    } finally {
-      setIsRequestingAccountDeletion(false);
-    }
-  };
+  const { openDiagnosisModal, closeDiagnosisModal, handleDiagnosisImageChange, runPlantDiagnosis, upsertSupabaseDiagnosisInReadState, savePlantDiagnosis, updateDiagnosticHistoryEntry, updateDiagnosticConfirmation } = useDiagnosisActions({
+    resolveCurrentAiDiagnosisAccess,
+    aiDiagnosisAccessMessage,
+    setDiagnosisStatus,
+    setDiagnosisUpgradeReason,
+    diagnosisImageSelection,
+    setDiagnosisDraft,
+    setDiagnosisSymptomNotes,
+    setDiagnosisUserNote,
+    setIsDiagnosisModalOpen,
+    isDiagnosing,
+    isSavingDiagnosis,
+    isHouseholdOperationCurrent,
+    diagnosisImageDataUrl,
+    setIsDiagnosing,
+    t,
+    auth,
+    activeSupabaseHouseholdId,
+    diagnosisSymptomNotes,
+    selectedLanguage,
+    refreshHouseholdPlanUsage,
+    setSupabaseReadState,
+    getSupabaseDiagnosticId,
+    diagnosisDraft,
+    flowerById,
+    diagnosisUserNote,
+    supabasePlantIdsByLegacyId,
+    setIsSavingDiagnosis,
+    supabaseWriteMode,
+    setSupabaseReadError,
+    setOpenDiagnosticId,
+    refreshSupabaseReadState,
+    logTechnicalError,
+    isSupabaseOnlyDataMode,
+    setDiagnostics,
+    diagnostics,
+    setDiagnosticHistoryStatus,
+    pendingDiagnosticUpdateKey,
+    setPendingDiagnosticUpdateKey,
+  });
 
   const selectOnboardingLanguage = (language: PlantieLanguage) => {
     writeStoredLanguage(browserStorage, language);
@@ -2677,18 +1518,28 @@ export const App = () => {
     setOnboardingStep("household");
   };
 
-  const handleCreateOnboardingHousehold = async (event: FormEvent<HTMLFormElement>) => {
-    const userId = auth.user?.id ?? null;
-    setIsNewOnboardingHousehold(true);
-    const created = await handleCreateHousehold(event);
-    if (householdOperationScopeRef.current.userId !== userId || !created && !isHouseholdOperationCurrent()) return;
-    if (created) {
-      markOnboardingComplete(browserStorage);
-      setOnboardingStep("complete");
-    } else {
-      setIsNewOnboardingHousehold(false);
-    }
-  };
+  const { handleCreateHousehold, handleCreateOnboardingHousehold } = useHouseholdCreation({
+    isHouseholdOperationCurrent,
+    isCreatingHousehold,
+    auth,
+    setAccessStatus,
+    t,
+    setOnboardingStep,
+    householdNameDraft,
+    transientMessageGenerationRef,
+    setIsCreatingHousehold,
+    householdDirectory,
+    householdDataGenerationRef,
+    resetHouseholdOperations,
+    setHouseholdLookupStatus,
+    setIsAccessChecking,
+    isUuid,
+    setActiveHousehold,
+    setBaseUrl,
+    isTransientMessageGenerationCurrent,
+    setIsNewOnboardingHousehold,
+    householdOperationScopeRef,
+  });
 
   const releaseEnv = {
     viteRevenueCatAndroidKey: import.meta.env.VITE_REVENUECAT_API_KEY_ANDROID,
@@ -2696,24 +1547,35 @@ export const App = () => {
     viteSupabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
     viteSupabaseUrl: import.meta.env.VITE_SUPABASE_URL,
   };
-  const openAddPlantModal = () => {
-    setNewPlantStatus("");
-    setIsAddPlantModalOpen(true);
-  };
 
-  const closeAddPlantModal = () => {
-    if (plantSubmissionRef.current) return;
-    newImageSelection.cancel();
-    setNewPlantStatus("");
-    setIsAddPlantModalOpen(false);
-  };
-
-  const openAddPlantFromMobileNav = () => {
-    openAddPlantModal();
-    if (route.page !== "dashboard") {
-      window.location.hash = "#/";
-    }
-  };
+  const { startNameEdit, cancelNameEdit, confirmNameEdit, confirmRemoveCustomFlower, handleAddCustomFlower, openAddPlantModal, closeAddPlantModal, openAddPlantFromMobileNav, isSavingPlantName, plantMutationStatus } = usePlantActions({
+    scopeKey: imageSelectionScope,
+    isHouseholdOperationCurrent,
+    plantSubmissionRef,
+    newImageSelection,
+    newPlantName,
+    newPlantImage,
+    setNewPlantStatus,
+    t,
+    setIsAddingPlant,
+    pendingPlantIdRef,
+    activeSupabaseHouseholdId,
+    selectedLanguage,
+    addFlower,
+    refreshHouseholdPlanUsage,
+    setNewPlantName,
+    setIsAddPlantModalOpen,
+    setEditingNameFlowerId,
+    setDraftFlowerName,
+    draftFlowerName,
+    saveFlower,
+    deleteFlowerId,
+    isRemovingPlant,
+    setIsRemovingPlant,
+    removeFlowerById,
+    setDeleteFlowerId,
+    route,
+  });
   const navigateBack = (fallbackHash = "#/") => (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     if (window.history.length > 1) {
@@ -2722,31 +1584,6 @@ export const App = () => {
     }
 
     window.location.hash = fallbackHash;
-  };
-
-  const completeRecovery = async (email: string | null) => {
-    const flowId = auth.beginPasswordRecoveryCompletion(auth.recoveryFlowId);
-    if (flowId === null) return;
-    await finishPasswordRecovery();
-    if (!auth.completePasswordRecovery(flowId)) return;
-    setAuthEntry({ id: Date.now(), mode: "login", email: email ?? "", notice: { key: "password_changed", severity: "success" } });
-    window.location.hash = "#/menu?section=account";
-  };
-  const requestNewRecoveryLink = async (email = auth.user?.email ?? "") => {
-    if (isLeavingRecovery) return;
-    const flowId = auth.recoveryFlowId;
-    setIsLeavingRecovery(true);
-    setRecoveryExitFailed(false);
-    try {
-      await finishPasswordRecovery();
-      if (!auth.completePasswordRecovery(flowId)) return;
-      setAuthEntry({ id: Date.now(), mode: "reset", email: email || auth.user?.email || "" });
-      window.location.hash = "#/menu?section=account";
-    } catch {
-      if (auth.isPasswordRecoveryFlowCurrent(flowId)) setRecoveryExitFailed(true);
-    } finally {
-      setIsLeavingRecovery(false);
-    }
   };
 
   if ((isSupabaseAuthIdentityTransition && !auth.isPasswordRecovery && !auth.invalidRecoveryLink) ||
@@ -2855,13 +1692,14 @@ export const App = () => {
           {renderHeroActions()}
         </header>
         {route.page === "legal" ? (
-        <LegalPageView
-          deleteRequestStatus={deleteAccountStatus}
-          isDeleteRequestPending={isRequestingAccountDeletion}
-          onRequestDeletion={auth.isAuthenticated ? requestAccountDeletion : undefined}
-          pageId={route.legalPageId}
-          requestEmail={deleteAccountContact}
-          setRequestEmail={setDeleteAccountContact}
+          <LegalPageView
+            deleteRequestStatus={deleteAccountStatus}
+            isDeleteRequestPending={isRequestingAccountDeletion}
+            onRequestDeletion={auth.isAuthenticated ? requestAccountDeletion : undefined}
+            pageId={route.legalPageId}
+            canRequestDeletion={auth.isAuthenticated}
+            language={selectedLanguage}
+            requestEmail={auth.user?.email ?? ""}
           />
         ) : route.page === "release-readiness" ? (
           <ReleaseChecklistPage />
@@ -3037,1243 +1875,184 @@ export const App = () => {
     );
   }
 
-  if (route.page === "detail") {
-    const flower = flowerById.get(route.flowerId);
-    if (!flower) {
-      return (
-        <main className="app-shell compact">
-          {renderHeroActions()}
-          {renderHouseholdSheet()}
-          <a className="nav-link" href="#/" onClick={navigateBack("#/")}>
-            <ArrowLeft size={18} aria-hidden="true" />
-            {t("nav.plants")}
-          </a>
-          <section className="empty-state">
-            <Leaf size={34} aria-hidden="true" />
-            <h1>{t("detail.missing")}</h1>
-            <p>{t("detail.missingQrBody")}</p>
-          </section>
-        </main>
-      );
-    }
-
-    const record = records[flower.id] ?? { lastFertilized: "", note: "", lastWatered: "", lastTransplanted: "" };
-    const elapsedDays = daysSince(record.lastWatered);
-    const detailUrl = publicFlowerUrl(baseUrl, flower.id);
-    const intervalDays = flower.wateringIntervalDays ?? wateringIntervalsDays[flower.id] ?? 7;
-    const wateringProgress = getWateringProgress(record.lastWatered, intervalDays);
-    const quickActionLabel = route.scan ? t("detail.scanned") : t("detail.quickAction");
-    const activeCarePreview = carePreview?.flowerId === flower.id ? carePreview : null;
-    const careDiffRows = activeCarePreview ? getCareDiffRows(flower, activeCarePreview.nextCare, intervalDays, t) : [];
-    const isEditingName = editingNameFlowerId === flower.id;
-    const diagnosisAccess = resolveCurrentAiDiagnosisAccess();
-    const diagnosisBlockedReason = aiDiagnosisAccessMessage(diagnosisAccess);
-    const diagnosisUsageLabel =
-      currentHouseholdPlanUsage && !currentHouseholdPlanUsage.isPremium
-        ? t("diagnosis.usageRemaining", {
-            limit: currentHouseholdPlanUsage.aiAnalyzesMonthlyLimit ?? freeAiDiagnosisMonthlyLimit,
-            remaining: currentHouseholdPlanUsage.aiAnalyzesRemaining ?? 0,
-          })
-        : "";
-    const diagnosisActionLabel = diagnosisAccess.allowed ? t("detail.diagnosisAction") : aiDiagnosisDisabledActionLabel(diagnosisAccess);
-    const diagnosisRunLabel = diagnosisAccess.allowed ? t("diagnosis.run") : aiDiagnosisDisabledActionLabel(diagnosisAccess);
-    const flowerDiagnostics = diagnostics
-      .filter((diagnosis) => diagnosis.plantId === flower.id)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-
-    return (
-      <main className="app-shell detail-shell">
-        <header className="detail-header">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
-          <div>
-            <p className="eyebrow">{t("detail.title")}</p>
-            {isEditingName ? (
-              <div className="plant-name-editor">
-                <input
-                  type="text"
-                  value={draftFlowerName}
-                  maxLength={70}
-                  aria-label={t("detail.nameInput")}
-                  onChange={(event) => setDraftFlowerName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      confirmNameEdit(flower);
-                    }
-                    if (event.key === "Escape") {
-                      cancelNameEdit();
-                    }
-                  }}
-                />
-                <button
-                  className="name-edit-action name-edit-save"
-                  type="button"
-                  onClick={() => confirmNameEdit(flower)}
-                  disabled={!draftFlowerName.trim()}
-                  aria-label={t("detail.saveName")}
-                >
-                  <Check size={18} aria-hidden="true" />
-                </button>
-                <button className="name-edit-action" type="button" onClick={cancelNameEdit} aria-label={t("detail.cancelNameEdit")}>
-                  <X size={18} aria-hidden="true" />
-                </button>
-              </div>
-            ) : (
-              <div className="plant-title-row">
-                <h1>{flower.displayName}</h1>
-                <button className="name-edit-button" type="button" onClick={() => startNameEdit(flower)} aria-label={t("detail.nameInput")}>
-                  <Pencil size={18} aria-hidden="true" />
-                </button>
-              </div>
-            )}
-            <p className="plant-latin-name">{flower.likelyName}</p>
-          </div>
-          {renderHeroActions()}
-        </header>
-
-        <AppTabNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
-
-        <img className="detail-photo" src={flower.image} alt={flower.displayName} />
-
-        <section className="scan-action-panel" aria-labelledby="quick-action-title">
-          <div>
-            <span>{quickActionLabel}</span>
-            <h2 id="quick-action-title">{t("detail.quickAction")}</h2>
-            <p>{t("detail.quickActionBody")}</p>
-            <div className={`quick-save-feedback ${quickRecordStatus ? "quick-save-feedback-visible" : ""}`} aria-live="polite">
-              {quickRecordStatus ? (
-                <>
-                  <Check size={16} aria-hidden="true" />
-                  {quickRecordStatus}
-                </>
-              ) : null}
-            </div>
-          </div>
-          <div className="scan-action-buttons">
-              <LoadingButton
-                className={`primary-action ${quickRecordStatus === t("detail.savedWatered") ? "quick-action-saved" : ""}`}
-                type="button"
-                onClick={() => void saveQuickRecord("watered", flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}
-                isLoading={pendingQuickRecordKey === "watered"}
-                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "watered")}
-                loadingLabel={t("detail.savingCare")}
-            >
-              <Droplets size={18} aria-hidden="true" />
-              {t("detail.todayWatered")}
-            </LoadingButton>
-              <LoadingButton
-                className={`ghost-action ${quickRecordStatus === t("detail.savedTransplanted") ? "quick-action-saved" : ""}`}
-                type="button"
-                onClick={() => void saveQuickRecord("transplanted", flower.id, { lastTransplanted: todayIsoDate() }, t("detail.savedTransplanted"))}
-                isLoading={pendingQuickRecordKey === "transplanted"}
-                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "transplanted")}
-                loadingLabel={t("detail.savingCare")}
-              >
-                <Sprout size={18} aria-hidden="true" />
-              {t("detail.todayTransplanted")}
-            </LoadingButton>
-            <LoadingButton
-              className={`ghost-action ${quickRecordStatus === t("detail.savedFertilized") ? "quick-action-saved" : ""}`}
-              type="button"
-              onClick={() => void saveQuickRecord("fertilized", flower.id, { lastFertilized: todayIsoDate() }, t("detail.savedFertilized"))}
-              isLoading={pendingQuickRecordKey === "fertilized"}
-              disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "fertilized")}
-              loadingLabel={t("detail.savingCare")}
-            >
-              <Leaf size={18} aria-hidden="true" />
-              {t("detail.todayFertilized")}
-            </LoadingButton>
-          </div>
-        </section>
-
-        <section className="diagnosis-panel" aria-labelledby="diagnosis-title">
-          <div>
-            <div className="section-title">
-              <Camera size={18} aria-hidden="true" />
-              <h2 id="diagnosis-title">{t("detail.diagnosisTitle")}</h2>
-            </div>
-            <p>{t("detail.diagnosisBody")}</p>
-            {diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
-          </div>
-          <button type="button" disabled={!diagnosisAccess.allowed} onClick={openDiagnosisModal}>
-            <Camera size={18} aria-hidden="true" />
-            {diagnosisActionLabel}
-          </button>
-        </section>
-
-        {flower.identification === "confident" ? null : (
-          <section className={`identity-note identity-note-${flower.identification}`}>
-            <BadgeCheck size={18} aria-hidden="true" />
-            <div>
-              <strong>{t(`plants.identification.${flower.identification}`)}</strong>
-              <span>{flower.identificationNote}</span>
-            </div>
-          </section>
-        )}
-
-        <section className="status-band">
-          <div>
-            <Droplets size={16} aria-hidden="true" />
-            <span>{t("detail.lastWatered")}</span>
-            <strong>{formatAppDate(record.lastWatered)}</strong>
-          </div>
-          <div>
-            <Droplets size={16} aria-hidden="true" />
-            <span>{t("detail.sinceWatering")}</span>
-            <strong>{formatAppElapsedDays(elapsedDays)}</strong>
-          </div>
-          <div>
-            <Sprout size={16} aria-hidden="true" />
-            <span>{t("detail.transplanted")}</span>
-            <strong>{formatAppDate(record.lastTransplanted)}</strong>
-          </div>
-          <div>
-            <Leaf size={16} aria-hidden="true" />
-            <span>{t("detail.fertilized")}</span>
-            <strong>{formatAppDate(record.lastFertilized)}</strong>
-          </div>
-        </section>
-
-        <section className={`watering-panel watering-panel-${wateringProgress.state}`}>
-          <div className="watering-panel-header">
-            <div>
-              <span>{t("detail.wateringStatus")}</span>
-              <strong>{Math.round(wateringProgress.percent)} %</strong>
-            </div>
-            <div>
-              <span>{t("detail.nextWatering")}</span>
-              <strong>{formatAppDate(wateringProgress.nextWatering)}</strong>
-            </div>
-          </div>
-          <div className="watering-progress-track" aria-label={t("detail.wateringProgressLabel", { percent: Math.round(wateringProgress.percent) })}>
-            <div
-              className="watering-progress-fill"
-              style={{ width: `${wateringProgress.percent}%` }}
-            />
-          </div>
-          <div className="watering-panel-footer">
-            <span>{t("detail.intervalDays", { count: intervalDays })}</span>
-            <strong>{formatAppWateringStatus(wateringProgress)}</strong>
-          </div>
-        </section>
-
-        <section className="care-panel" aria-labelledby="care-title">
-          <div className="section-title">
-            <Leaf size={18} aria-hidden="true" />
-            <h2 id="care-title">{t("detail.basicCare")}</h2>
-            <LoadingButton
-              className="ai-care-button"
-              type="button"
-              disabled={isGeneratingCarePreview || !diagnosisAccess.allowed}
-              onClick={() => handleGenerateCarePreview(flower)}
-              isLoading={isGeneratingCarePreview}
-              loadingLabel={t("detail.generating")}
-            >
-              <Sparkles size={16} aria-hidden="true" />
-              {diagnosisAccess.allowed ? t("detail.generateAi") : aiDiagnosisDisabledActionLabel(diagnosisAccess)}
-            </LoadingButton>
-          </div>
-          {carePreviewStatus ? <p className="care-preview-status">{carePreviewStatus}</p> : diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
-          <p className="care-summary">{flower.shortCare}</p>
-          <div className="care-pill-grid" aria-label={t("detail.careProfile")}>
-            {flower.carePills.map((pill) => (
-              <div className={`care-pill care-pill-${pill.tone}`} key={`${pill.label}-${pill.value}`}>
-                {getCarePillVisual(pill.label, pill.value, intervalDays)}
-                <div>
-                  <span>{pill.label}</span>
-                  <strong>{pill.value}</strong>
-                </div>
-              </div>
-            ))}
-          </div>
-          <dl className="care-list">
-            <div>
-              <dt>
-                {getCarePillVisual("Svetlo", flower.light, intervalDays)}
-                <span>{t("detail.light")}</span>
-              </dt>
-              <dd>{flower.light}</dd>
-            </div>
-            <div>
-              <dt>
-                {getCarePillVisual(t("plants.watering"), flower.watering, intervalDays)}
-                <span>{t("plants.watering")}</span>
-              </dt>
-              <dd>{flower.watering}</dd>
-            </div>
-            <div>
-              <dt>
-                {getCarePillVisual(t("detail.substrate"), flower.soil, intervalDays)}
-                <span>{t("detail.substrate")}</span>
-              </dt>
-              <dd>{flower.soil}</dd>
-            </div>
-          </dl>
-          <ul className="tip-list">
-            {flower.careTips.map((tip) => (
-              <li key={tip}>{tip}</li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="editor-panel" aria-labelledby="care-log-title">
-          <div className="section-title">
-            <Pencil size={18} aria-hidden="true" />
-            <h2 id="care-log-title">{t("detail.careLog")}</h2>
-          </div>
-          <label className="field">
-            <span>{t("detail.lastWateredDate")}</span>
-            <div className="date-row">
-              <input
-                type="date"
-                value={record.lastWatered}
-                max="9999-12-31"
-                onChange={(event) => void updateCareRecord(flower.id, { lastWatered: event.target.value })}
-              />
-              <LoadingButton
-                type="button"
-                onClick={() => void saveQuickRecord("log-watered", flower.id, { lastWatered: todayIsoDate() }, t("detail.savedWatered"))}
-                isLoading={pendingQuickRecordKey === "log-watered"}
-                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "log-watered")}
-                loadingLabel={t("detail.savingCare")}
-              >
-                {t("date.today")}
-              </LoadingButton>
-            </div>
-          </label>
-          <label className="field">
-            <span>{t("detail.transplantedDate")}</span>
-            <div className="date-row">
-              <input
-                type="date"
-                value={record.lastTransplanted}
-                max="9999-12-31"
-                onChange={(event) => void updateCareRecord(flower.id, { lastTransplanted: event.target.value })}
-              />
-              <LoadingButton
-                type="button"
-                onClick={() => void saveQuickRecord("log-transplanted", flower.id, { lastTransplanted: todayIsoDate() }, t("detail.savedTransplanted"))}
-                isLoading={pendingQuickRecordKey === "log-transplanted"}
-                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "log-transplanted")}
-                loadingLabel={t("detail.savingCare")}
-              >
-                {t("date.today")}
-              </LoadingButton>
-            </div>
-          </label>
-          <label className="field">
-            <span>{t("detail.fertilizedDate")}</span>
-            <div className="date-row">
-              <input
-                type="date"
-                value={record.lastFertilized}
-                max="9999-12-31"
-                onChange={(event) => void updateCareRecord(flower.id, { lastFertilized: event.target.value })}
-              />
-              <LoadingButton
-                type="button"
-                onClick={() => void saveQuickRecord("log-fertilized", flower.id, { lastFertilized: todayIsoDate() }, t("detail.savedFertilized"))}
-                isLoading={pendingQuickRecordKey === "log-fertilized"}
-                disabled={Boolean(pendingQuickRecordKey && pendingQuickRecordKey !== "log-fertilized")}
-                loadingLabel={t("detail.savingCare")}
-              >
-                {t("date.today")}
-              </LoadingButton>
-            </div>
-          </label>
-          <label className="field">
-            <span>{t("detail.note")}</span>
-            <textarea
-              rows={5}
-              placeholder={t("detail.notePlaceholder")}
-              value={record.note}
-              onChange={(event) => void updateCareRecord(flower.id, { note: event.target.value })}
-            />
-          </label>
-        </section>
-
-        <section className="diagnostic-history-panel" id="diagnostic-history-panel" tabIndex={-1} aria-labelledby="diagnostic-history-title">
-          <div className="section-title">
-            <Camera size={18} aria-hidden="true" />
-            <h2 id="diagnostic-history-title">{t("diagnosis.history")}</h2>
-          </div>
-          {flowerDiagnostics.length === 0 ? (
-            <p>{t("diagnosis.historyEmpty")}</p>
-          ) : (
-            <>
-              {diagnosticHistoryStatus ? <p className="care-preview-status diagnostic-history-status" aria-live="polite">{diagnosticHistoryStatus}</p> : null}
-              <div className="diagnostic-history-list">
-              {flowerDiagnostics.map((diagnosis) => {
-                const isOpen = openDiagnosticId === diagnosis.id;
-                const confirmUpdateKey = `${diagnosis.id}:confirmed`;
-                const rejectUpdateKey = `${diagnosis.id}:rejected`;
-                return (
-                  <article className={`diagnostic-history-card diagnostic-risk-${diagnosis.riskLevel}`} key={diagnosis.id}>
-                    {diagnosis.imageDataUrl ? (
-                      <img src={diagnosis.imageDataUrl} alt={t("diagnosis.historyImageAlt", { diagnosis: diagnosis.diagnosisTitle })} />
-                    ) : (
-                      <div className="diagnostic-image-placeholder">Supabase</div>
-                    )}
-                    <div>
-                      <span>{formatDate(diagnosis.createdAt.slice(0, 10))}</span>
-                      <h3>{diagnosis.diagnosisTitle}</h3>
-                      <div className="diagnostic-card-meta" aria-label={t("diagnosis.summary")}>
-                        <span>{t("diagnosis.confidenceShort", { percent: diagnosis.confidence })}</span>
-                        <span>{localizedConfidenceLabel(diagnosis.confidenceLabel)}</span>
-                        <span>{riskLevelLabel(diagnosis.riskLevel, t)}</span>
-                        <span>{diagnosis.userConfirmation === "confirmed" ? t("diagnosis.confirmed") : t("diagnosis.rejected")}</span>
-                      </div>
-                      <button className="text-action" type="button" onClick={() => setOpenDiagnosticId(isOpen ? "" : diagnosis.id)}>
-                        {isOpen ? t("diagnosis.hideDetail") : t("diagnosis.openDetail")}
-                      </button>
-                      {isOpen ? (
-                        <div className="diagnostic-detail">
-                          <section>
-                            <h4>{t("diagnosis.observed")}</h4>
-                            <ul>
-                              {diagnosis.observedSymptoms.map((symptom) => (
-                                <li key={symptom}>{symptom}</li>
-                              ))}
-                            </ul>
-                          </section>
-                          <section>
-                            <h4>{t("diagnosis.recommended")}</h4>
-                            <ol>
-                              {diagnosis.recommendedSteps.map((step) => (
-                                <li key={step}>{step}</li>
-                              ))}
-                            </ol>
-                          </section>
-                          <section>
-                            <h4>{t("diagnosis.reasoning")}</h4>
-                            <p>{diagnosis.reasoningSummary}</p>
-                          </section>
-                          <small>{diagnosis.disclaimer}</small>
-                          <label className="field">
-                            <span>{t("diagnosis.noteBeforeSave")}</span>
-                            <textarea
-                              rows={3}
-                              value={diagnosis.userNote}
-                              onChange={(event) => void updateDiagnosticHistoryEntry(diagnosis.id, { userNote: event.target.value })}
-                            />
-                          </label>
-                          <div className="modal-actions">
-                            <LoadingButton
-                              className="primary-action"
-                              type="button"
-                              onClick={() => void updateDiagnosticConfirmation(diagnosis.id, "confirmed")}
-                              isLoading={pendingDiagnosticUpdateKey === confirmUpdateKey}
-                              disabled={Boolean(pendingDiagnosticUpdateKey && pendingDiagnosticUpdateKey !== confirmUpdateKey)}
-                              loadingLabel={t("diagnosis.saving")}
-                            >
-                              {t("diagnosis.confirm")}
-                            </LoadingButton>
-                            <LoadingButton
-                              className="neutral-action"
-                              type="button"
-                              onClick={() => void updateDiagnosticConfirmation(diagnosis.id, "rejected")}
-                              isLoading={pendingDiagnosticUpdateKey === rejectUpdateKey}
-                              disabled={Boolean(pendingDiagnosticUpdateKey && pendingDiagnosticUpdateKey !== rejectUpdateKey)}
-                              loadingLabel={t("diagnosis.saving")}
-                            >
-                              {t("diagnosis.reject")}
-                            </LoadingButton>
-                          </div>
-                        </div>
-                      ) : (
-                        <ol>
-                          {diagnosis.recommendedSteps.slice(0, 3).map((step) => (
-                            <li key={step}>{step}</li>
-                          ))}
-                        </ol>
-                      )}
-                      {diagnosis.userNote && !isOpen ? <small>{t("diagnosis.noteInline", { note: diagnosis.userNote })}</small> : null}
-                    </div>
-                  </article>
-                );
-              })}
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="qr-panel" aria-labelledby="single-qr-title">
-          <div>
-            <div className="section-title">
-              <QrCodeIcon size={18} aria-hidden="true" />
-              <h2 id="single-qr-title">{t("detail.plantQr")}</h2>
-            </div>
-            <p>{t("detail.plantQrBody")}</p>
-          </div>
-          <QrCode value={detailUrl} label={flower.displayName} language={selectedLanguage} />
-        </section>
-
-        <section className="danger-panel" aria-labelledby="delete-plant-title">
-          <div>
-            <div className="section-title danger-title">
-              <Trash2 size={18} aria-hidden="true" />
-              <h2 id="delete-plant-title">{t("detail.deletePlant")}</h2>
-            </div>
-            <p>{t("detail.deletePlantBody")}</p>
-          </div>
-          <button type="button" onClick={() => setDeleteFlowerId(flower.id)}>
-            <Trash2 size={18} aria-hidden="true" />
-            {t("detail.deletePlant")}
-          </button>
-        </section>
-
-        {activeCarePreview ? (
-          <div className="modal-backdrop" role="presentation">
-            <section className="care-preview-modal" role="dialog" aria-modal="true" aria-labelledby="care-preview-title">
-              <button className="modal-close" type="button" onClick={() => setCarePreview(null)} aria-label={t("action.close")}>
-                <X size={20} aria-hidden="true" />
-              </button>
-              <div className="section-title">
-                <Sparkles size={20} aria-hidden="true" />
-                <h2 id="care-preview-title">{t("detail.aiCarePreview")}</h2>
-              </div>
-              <p>{t("detail.aiCarePreviewBody", { plant: flower.displayName })}</p>
-
-              {careDiffRows.length > 0 ? (
-                <div className="care-diff-list" aria-label={t("detail.careChanges")}>
-                  {careDiffRows.map((row) => (
-                    <article className="care-diff-row" key={row.label}>
-                      <h3>{row.label}</h3>
-                      <div>
-                        <span>{t("detail.currently")}</span>
-                        <p>{row.currentValue}</p>
-                      </div>
-                      <div>
-                        <span>{t("detail.replaceWith")}</span>
-                        <p>{row.nextValue}</p>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="care-diff-empty">
-                  <BadgeCheck size={18} aria-hidden="true" />
-                  {t("detail.noCareChanges")}
-                </div>
-              )}
-
-              <div className="care-update-question">
-                <strong>{t("detail.applyCareQuestion")}</strong>
-              </div>
-              <div className="modal-actions">
-                <button className="primary-action" type="button" onClick={confirmCareUpdate} disabled={careDiffRows.length === 0}>
-                  {t("detail.applyCare")}
-                </button>
-                <button className="neutral-action" type="button" onClick={() => setCarePreview(null)}>
-                  {t("action.no")}
-                </button>
-              </div>
-            </section>
-          </div>
-        ) : null}
-
-        {isDiagnosisModalOpen ? (
-          <PlantActionModal id="diagnosis-modal" title={t("detail.diagnosisAction")} description={t("diagnosis.modalBody")}
-            icon={<Camera size={20} aria-hidden="true" />} closeLabel={t("action.close")}
-            busy={isDiagnosing || isSavingDiagnosis} onClose={closeDiagnosisModal}>
-              {diagnosisUsageLabel ? <p className="care-preview-status">{diagnosisUsageLabel}</p> : null}
-              {diagnosisBlockedReason ? <p className="care-preview-status">{diagnosisBlockedReason}</p> : null}
-
-              <label className="field">
-                <span>{t("diagnosis.symptoms")}</span>
-                <textarea
-                  rows={3}
-                  value={diagnosisSymptomNotes}
-                  maxLength={600}
-                  placeholder={t("diagnosis.symptomsPlaceholder")}
-                  onChange={(event) => setDiagnosisSymptomNotes(event.target.value)}
-                />
-              </label>
-
-              <ImageSourcePicker
-                title={t("diagnosis.photoPrompt")} help={t("diagnosis.photoHelp")}
-                cameraLabel={t("action.camera")} galleryLabel={t("action.gallery")} cancelLabel={t("action.cancel")}
-                disabled={!diagnosisAccess.allowed || isDiagnosing} busy={isCapturingDiagnosisImage}
-                onSelect={handleDiagnosisImageChange}
-                onCancel={diagnosisImageSelection.cancel}
-              />
-
-              {diagnosisImageDataUrl ? <PlantImagePreview src={diagnosisImagePreviewUrl || diagnosisImageDataUrl} alt={t("diagnosis.previewAlt")} /> : null}
-              <PlantFormStatus>{diagnosisStatus}</PlantFormStatus>
-
-              <LoadingButton
-                className="primary-action diagnosis-run-button"
-                type="button"
-                disabled={!diagnosisImageDataUrl || isDiagnosing || isCapturingDiagnosisImage || !diagnosisAccess.allowed}
-                onClick={() => runPlantDiagnosis(flower)}
-                isLoading={isDiagnosing}
-                loadingLabel={t("diagnosis.analyzing")}
-              >
-                {diagnosisRunLabel}
-              </LoadingButton>
-
-              {diagnosisDraft ? (
-                <div className={`diagnosis-result diagnosis-risk-${diagnosisDraft.riskLevel}`}>
-                  <div className="diagnosis-result-head">
-                    <div>
-                      <span>{t("diagnosis.result")}</span>
-                      <h3>{diagnosisDraft.diagnosisTitle}</h3>
-                      <small>{riskLevelLabel(diagnosisDraft.riskLevel, t)}</small>
-                    </div>
-                    <strong>
-                      {t("diagnosis.confidence", {
-                        percent: diagnosisDraft.confidence,
-                        label: localizedConfidenceLabel(diagnosisDraft.confidenceLabel),
-                      })}
-                    </strong>
-                  </div>
-                  <div className="diagnosis-result-grid">
-                    <section>
-                      <h4>{t("diagnosis.observed")}</h4>
-                      <ul>
-                        {diagnosisDraft.observedSymptoms.map((symptom) => (
-                          <li key={symptom}>{symptom}</li>
-                        ))}
-                      </ul>
-                    </section>
-                    <section>
-                      <h4>{t("diagnosis.recommended")}</h4>
-                      <ol>
-                        {diagnosisDraft.recommendedSteps.map((step) => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                    </section>
-                  </div>
-                  <section>
-                    <h4>{t("diagnosis.reasoning")}</h4>
-                    <p>{diagnosisDraft.reasoningSummary}</p>
-                  </section>
-                  <small>{diagnosisDraft.disclaimer}</small>
-                  <label className="field">
-                    <span>{t("diagnosis.noteBeforeSave")}</span>
-                    <textarea
-                      rows={3}
-                      value={diagnosisUserNote}
-                      placeholder={t("diagnosis.notePlaceholder")}
-                      onChange={(event) => setDiagnosisUserNote(event.target.value)}
-                    />
-                  </label>
-                  <div className="modal-actions">
-                    <LoadingButton
-                      className="primary-action"
-                      type="button"
-                      isLoading={isSavingDiagnosis}
-                      loadingLabel={t("diagnosis.saving")}
-                      onClick={() => savePlantDiagnosis(flower, "confirmed")}
-                    >
-                      {t("diagnosis.save")}
-                    </LoadingButton>
-                    <LoadingButton
-                      className="neutral-action"
-                      type="button"
-                      isLoading={isSavingDiagnosis}
-                      loadingLabel={t("diagnosis.saving")}
-                      onClick={() => savePlantDiagnosis(flower, "rejected")}
-                    >
-                      {t("diagnosis.reject")}
-                    </LoadingButton>
-                  </div>
-                </div>
-              ) : null}
-          </PlantActionModal>
-        ) : null}
-
-        {diagnosisUpgradeReason ? (
-          <UpgradeModal
-            limitReason={diagnosisUpgradeReason}
-            language={selectedLanguage}
-            onClose={() => setDiagnosisUpgradeReason("")}
-            subscription={subscription}
-            onSubscriptionChanged={refreshPlanAfterSubscription}
-          />
-        ) : null}
-
-        {deleteFlowerId === flower.id ? (
-          <div className="modal-backdrop" role="presentation">
-            <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
-              <div className="section-title danger-title">
-                <Trash2 size={20} aria-hidden="true" />
-                <h2 id="delete-confirm-title">{t("detail.deleteConfirmTitle")}</h2>
-              </div>
-              <p>{t("detail.deleteConfirmBody", { plant: flower.displayName })}</p>
-              <div className="modal-actions">
-                <LoadingButton
-                  className="danger-action"
-                  type="button"
-                  onClick={() => void confirmRemoveCustomFlower()}
-                  isLoading={isRemovingPlant}
-                  loadingLabel={t("detail.deletingPlant")}
-                >
-                  {t("detail.deleteConfirmAction")}
-                </LoadingButton>
-                <button className="neutral-action" type="button" disabled={isRemovingPlant} onClick={() => setDeleteFlowerId("")}>
-                  {t("action.no")}
-                </button>
-              </div>
-            </section>
-          </div>
-        ) : null}
-        {renderHouseholdSheet()}
-      </main>
-    );
-  }
-
-  if (route.page === "menu") {
-    const openMenuSection = route.section === "household" ? "household" : "account";
-
-    if (!auth.isAuthenticated) {
-      return <LoggedOutMenu
-        key={authEntry?.id ?? "default-auth-entry"}
-        language={selectedLanguage}
-        onLanguageChange={selectOnboardingLanguage}
-        inviteInput={joinInviteInput}
-        onInviteInputChange={setJoinInviteInput}
-        onContinueInvite={() => { void handleJoinInvite(); }}
-        isJoiningInvite={isJoiningInvite}
-        inviteStatus={inviteStatus}
-        inviteStatusClass={inviteStatusClass}
-        onAuthSuccess={() => {
-          setAuthEntry(null);
-          if (normalizeInviteTokenInput(joinInviteInput)) void handleJoinInvite(joinInviteInput);
-          else {
-            try {
-              const invitationId = readInvitationAuthContext(browserStorage);
-              if (invitationId) window.location.hash = invitationReturnLocation(invitationId).slice(1);
-            } catch { /* Invitations remain available from the authenticated inbox. */ }
-          }
-        }}
-        initialSection={route.section === "household" ? "household" : "account"}
-        initialAuthMode={authEntry?.mode}
-        initialAuthEmail={authEntry?.email}
-        initialAuthNotice={authEntry?.notice}
-        onAuthNoticeConsumed={() => setAuthEntry((current) => current ? { ...current, notice: undefined } : current)}
-      />;
-    }
-
-    return (
-      <main className="app-shell compact">
-        <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
-          <div>
-            <p className="eyebrow">Plantie</p>
-            <h1>{t("menu.heading")}</h1>
-            <p className="topbar-copy">{t("menu.body")}</p>
-          </div>
-          {renderHeroActions()}
-        </header>
-        <AppTabNav currentPage="menu" onAddPlant={openAddPlantFromMobileNav} t={t} />
-        <section className="menu-stack" aria-label="Plantie menu">
-          <details className="menu-section" open={openMenuSection === "account"}>
-            <summary>
-              <SettingsSectionHeader icon={UserRound} title={t("menu.account")} description={t("menu.accountDescription")} />
-            </summary>
-            {auth.isAuthenticated ? (
-              <div className="menu-section-body">
-                <div className="account-summary-list">
-                  <div>
-                    <span>{t("account.emailAddress")}</span>
-                    <strong>{auth.user?.email ?? "—"}</strong>
-                  </div>
-                  <div>
-                    <span>{t("account.authProvider")}</span>
-                    <strong>{String(auth.user?.app_metadata?.provider ?? "email").replace(/^./, (letter) => letter.toUpperCase())}</strong>
-                  </div>
-                </div>
-                <div className="menu-action-row">
-                  <LoadingButton
-                    className="neutral-action"
-                    type="button"
-                    onClick={() => void handleAccountSignOut()}
-                    isLoading={isSigningOut}
-                    loadingLabel={t("account.signingOut")}
-                  >
-                    {t("account.signOut")}
-                  </LoadingButton>
-                </div>
-                <div className="account-danger-zone"><a className="danger-action" href="#/delete-account"><Trash2 size={17} aria-hidden="true" />{t("account.delete")}</a></div>
-                {accountActionStatus ? <p className="report-status">{accountActionStatus}</p> : null}
-              </div>
-            ) : (
-              <div className="menu-section-body">
-                <p>{t("account.loginRequiredBody")}</p>
-                <AuthPanel compact language={selectedLanguage} />
-              </div>
-            )}
-          </details>
-
-          <details className="menu-section household-management" open={openMenuSection === "household"} onToggle={(event) => {
-            if (event.currentTarget.open) void refreshHouseholdPeople();
-          }}>
-            <summary>
-              <SettingsSectionHeader icon={Home} title={t("menu.household")} description={t("household.managementSubtitle")} />
-            </summary>
-            <div className="menu-section-body">
-              {activeHousehold || supabaseReadState ? <>
-                <div className="household-management-toolbar">
-                  <span className="household-management-mobile-name">{householdDisplayName}</span>
-                  {canRenameHousehold && householdNameEditSurface !== "menu" ? <button className="household-edit-button" type="button" onClick={() => startHouseholdNameEdit("menu")}>
-                    <Pencil size={16} aria-hidden="true" />{t("household.editHousehold")}
-                  </button> : null}
-                </div>
-                <div className={`household-overview-card ${householdNameEditSurface === "menu" ? "is-editing" : ""}`}>
-                  <div className="household-overview-name"><span>{t("household.name")}</span>{renderHouseholdNameEditor("menu", undefined, false)}</div>
-                  <div className="household-overview-metric"><UsersRound size={19} aria-hidden="true" /><span><small>{t("household.members")}</small><strong>{householdEntitlement?.activeMemberCount ?? t("household.loading")}</strong></span></div>
-                  <div className="household-overview-metric"><Mail size={19} aria-hidden="true" /><span><small>{t("household.pendingInvites")}</small><strong>{householdEntitlement?.pendingInviteCount ?? t("household.loading")}</strong></span></div>
-                  <div className="household-overview-metric"><UsersRound size={19} aria-hidden="true" /><span><small>{invitationCopy.occupiedSlots}</small><strong>{householdEntitlement ? `${usedHouseholdSlots} / ${householdEntitlement.maxMembers}` : t("household.loading")}</strong></span></div>
-                </div>
-              </> : null}
-              {renderHouseholdSwitcher()}
-              {activeSupabaseHouseholdId && auth.isAuthenticated ? (
-                <>
-                  <HouseholdPeopleList
-                    key={activeSupabaseHouseholdId}
-                    items={householdPeople}
-                    loading={householdPeopleLoading}
-                    error={householdPeopleError}
-                    currentUserId={auth.user?.id ?? null}
-                    currentRole={currentHouseholdMember?.role ?? null}
-                    removingKeys={removingPersonKeys}
-                    language={selectedLanguage}
-                    t={t}
-                    canInvite={canInviteToHousehold}
-                    capacityLabel={householdEntitlement ? `${usedHouseholdSlots} / ${householdEntitlement.maxMembers}` : null}
-                    inviteOpen={isInvitePanelOpen}
-                    onInvite={() => setIsInvitePanelOpen((open) => !open)}
-                    onRemove={(item) => void handleRemoveHouseholdPerson(item)}
-                    onRetry={() => void refreshHouseholdPeople(true)}
-                    onRetryInvite={(item) => void handleRetryInviteEmail(item)}
-                    onCopyInvite={(item) => void handleCopyInviteLink(item)}
-                    sendingInviteId={sendingInviteId}
-                  />
-                  {subscription.status === "ready" && !householdEntitlement?.isPremium ? <p className="household-sharing-note">{subscriptionCopy.sharingRequiresPremium}{householdEntitlement?.suspendedMemberCount ? ` ${subscriptionCopy.suspended(householdEntitlement.suspendedMemberCount)}` : ""}</p> : null}
-                  {subscription.status === "ready" && householdEntitlement?.isPremium && usedHouseholdSlots >= householdEntitlement.maxMembers ? <p className="household-sharing-note">{subscriptionCopy.memberLimitReached}</p> : null}
-                  {canInviteToHousehold && isInvitePanelOpen ? <section className="household-invite-panel" id="household-invite-panel" aria-labelledby="household-invite-title">
-                    <div className="household-invite-panel-heading">
-                      <div><h3 id="household-invite-title">{t("household.invitePanelTitle")}</h3><p>{t("household.invitePanelBody")}</p></div>
-                      <button type="button" className="household-invite-close" onClick={() => setIsInvitePanelOpen(false)} aria-label={t("household.inviteClose")} disabled={isCreatingInvite}><X size={18} aria-hidden="true" /></button>
-                    </div>
-                  <form className="household-invite-form" onSubmit={(event) => { event.preventDefault(); void handleCreateInvite(); }}>
-                    <label className="field">
-                      <span>{t("household.emailAddress")}</span>
-                      <input
-                        type="email"
-                        value={inviteEmail}
-                        placeholder="rodina@example.com"
-                        onChange={(event) => setInviteEmail(event.target.value)}
-                        disabled={isCreatingInvite}
-                        autoFocus
-                      />
-                    </label>
-                    <LoadingButton
-                      className="primary-action household-invite-submit"
-                      type="submit"
-                      isLoading={isCreatingInvite}
-                      loadingLabel={t("household.inviteSending")}
-                    >
-                      {t("household.sendInvitation")}
-                    </LoadingButton>
-                  </form>
-                  </section> : null}
-                </>
-              ) : auth.isAuthenticated && isSupabaseBackend ? (
-                <div className="menu-form-grid">
-                  <p>{t("household.createFirstBody")}</p>
-                  <form className="menu-form-grid" onSubmit={handleCreateHousehold}>
-                    <label className="field">
-                      <span>{t("household.name")}</span>
-                      <input
-                        type="text"
-                        value={householdNameDraft}
-                        onChange={(event) => setHouseholdNameDraft(event.target.value)}
-                        placeholder="Petzvalova"
-                      />
-                    </label>
-                    <LoadingButton className="primary-action" type="submit" isLoading={isCreatingHousehold} loadingLabel={t("household.creatingShort")}>
-                      {t("household.create")}
-                    </LoadingButton>
-                  </form>
-                  <label className="field">
-                    <span>{t("household.inviteToken")}</span>
-                    <input
-                      value={joinInviteInput}
-                      onChange={(event) => setJoinInviteInput(event.target.value)}
-                      placeholder="#/join?invite=..."
-                    />
-                  </label>
-                  <LoadingButton
-                    className="neutral-action"
-                    type="button"
-                    onClick={() => void handleJoinInvite()}
-                    isLoading={isJoiningInvite}
-                    loadingLabel={t("household.joining")}
-                  >
-                    {t("household.join")}
-                  </LoadingButton>
-                </div>
-              ) : (
-                <p>{t("household.inviteRequiresSupabase")}</p>
-              )}
-              {auth.isAuthenticated && (activeHousehold || supabaseReadState) ? <button className="household-switch-action" type="button" onClick={changeHousehold}>
-                <UsersRound size={16} aria-hidden="true" />{t("household.switchOrJoin")}
-              </button> : null}
-              {route.page === "menu" && (inviteStatus || householdNameEditStatus && householdNameEditSurface !== "menu") ? <div className={`household-toast household-toast-${inviteStatus ? inviteStatusTone : householdNameEditStatusTone}`} role={(inviteStatus ? inviteStatusTone : householdNameEditStatusTone) === "error" ? "alert" : "status"} aria-live="polite">
-                <span>{inviteStatus || householdNameEditStatus}</span>
-                <button type="button" onClick={() => { setInviteStatus(""); setHouseholdNameEditStatus(""); }} aria-label={t("household.toastDismiss")}><X size={16} aria-hidden="true" /></button>
-              </div> : null}
-            </div>
-          </details>
-          <details className="menu-section" onToggle={(event) => { if (event.currentTarget.open) void refreshSubscriptionState(); }}>
-            <summary>
-              <SettingsSectionHeader icon={Crown} title={t("menu.subscription")} description={subscriptionCopy.subtitle} premium />
-            </summary>
-            <div className="menu-section-body">
-              <PricingPage
-                language={selectedLanguage}
-                subscription={subscription}
-                householdMemberCount={householdEntitlement?.activeMemberCount ?? 0}
-                onSubscriptionChanged={refreshPlanAfterSubscription}
-              />
-            </div>
-          </details>
-
-          <details className="menu-section">
-            <summary>
-              <SettingsSectionHeader icon={Languages} title={t("menu.settings")} description={t("menu.settingsDescription")} />
-            </summary>
-            <div className="menu-section-body">
-              <h3>{t("account.language")}</h3>
-              <div className="onboarding-language-grid compact-language-grid">
-                {supportedLanguages.map((language) => (
-                  <button
-                    type="button"
-                    key={language.code}
-                    className={selectedLanguage === language.code ? "selected-language" : ""}
-                    onClick={() => selectOnboardingLanguage(language.code)}
-                  >
-                    <strong>{language.nativeName}</strong>
-                    <span>{language.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </details>
-
-          <details className="menu-section">
-            <summary>
-              <SettingsSectionHeader icon={CircleHelp} title={t("menu.supportLegal")} description={t("menu.supportDescription")} />
-            </summary>
-            <div className="menu-section-body">
-              <div className="menu-link-grid">
-                <a href="#/privacy">{t("account.privacy")}</a>
-                <a href="#/terms">{t("account.terms")}</a>
-                <a href="#/support">{t("account.support")}</a>
-                <a href="#/subscription-terms">Subscription Terms</a>
-                <a href="#/health">Release Health</a>
-              </div>
-            </div>
-          </details>
-        </section>
-        {renderHouseholdSheet()}
-        <MobileBottomNav currentPage="menu" onAddPlant={openAddPlantFromMobileNav} t={t} />
-      </main>
-    );
-  }
-
-  if (route.page === "diagnose") {
-    return (
-      <main className="app-shell compact">
-        <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
-          <div>
-            <p className="eyebrow">{t("diagnosis.premiumReady")}</p>
-            <h1>{t("diagnosis.heading")}</h1>
-            <p className="topbar-copy">{t("diagnosis.headingBody")}</p>
-          </div>
-          {renderHeroActions()}
-        </header>
-        <AppTabNav currentPage="diagnose" onAddPlant={openAddPlantFromMobileNav} t={t} />
-        <section className="toolbar diagnose-toolbar" aria-label={t("dashboard.search")}>
-          <label className="search-field">
-            <Search size={18} aria-hidden="true" />
-            <span className="sr-only">{t("dashboard.search")}</span>
-            <input
-              type="search"
-              placeholder={t("dashboard.search")}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        </section>
-        <section className="diagnose-picker" aria-labelledby="diagnose-picker-title">
-          <div className="section-title">
-            <Camera size={18} aria-hidden="true" />
-            <h2 id="diagnose-picker-title">{t("diagnosis.pick")}</h2>
-          </div>
-          <p>{t("diagnosis.pickBody")}</p>
-          {filteredFlowers.length > 0 ? (
-            <div className="diagnose-picker-list">
-              {visibleFlowers.map((flower) => (
-                <a className="diagnose-picker-card" href={flowerPath(flower.id, false, "diagnostics")} key={flower.id}>
-                  <img src={flower.image} alt={flower.displayName} loading="lazy" />
-                  <div>
-                    <strong>{flower.displayName}</strong>
-                    <span>{t("diagnosis.savedCount", { count: flowerDiagnosticsCount(flower.id, diagnostics) })}</span>
-                  </div>
-                  <ChevronRight className="diagnose-picker-open-icon" size={18} aria-hidden="true" />
-                </a>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state empty-state-card">
-              <Sprout size={34} aria-hidden="true" />
-              <h2>{allFlowers.length > 0 ? t("dashboard.emptySearch") : t("diagnosis.empty")}</h2>
-              <p>{allFlowers.length > 0 ? t("dashboard.emptySearchBody") : t("diagnosis.emptyBody")}</p>
-              {allFlowers.length > 0 ? null : <a className="primary-action" href="#/">{t("qr.openDashboard")}</a>}
-            </div>
-          )}
-        </section>
-        {filteredFlowers.length > plantPageSize ? (
-          <nav className="plant-pagination" aria-label="Plant pages">
-            <button type="button" disabled={plantPage === 1} onClick={() => setPlantPage(1)} aria-label="First page">
-              <ArrowLeft size={16} aria-hidden="true" />
-              <ArrowLeft size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={plantPage === 1}
-              onClick={() => setPlantPage((currentPage) => Math.max(1, currentPage - 1))}
-              aria-label="Previous page"
-            >
-              <ArrowLeft size={18} aria-hidden="true" />
-            </button>
-            <span>
-              {plantPage} / {plantPageCount}
-            </span>
-            <button
-              type="button"
-              disabled={plantPage === plantPageCount}
-              onClick={() => setPlantPage((currentPage) => Math.min(plantPageCount, currentPage + 1))}
-              aria-label="Next page"
-            >
-              <ArrowRight size={18} aria-hidden="true" />
-            </button>
-            <button type="button" disabled={plantPage === plantPageCount} onClick={() => setPlantPage(plantPageCount)} aria-label="Last page">
-              <ArrowRight size={16} aria-hidden="true" />
-              <ArrowRight size={16} aria-hidden="true" />
-            </button>
-          </nav>
-        ) : null}
-        {renderHouseholdSheet()}
-        <MobileBottomNav currentPage="diagnose" onAddPlant={openAddPlantFromMobileNav} t={t} />
-      </main>
-    );
-  }
-
-  if (route.page === "qr") {
-    return (
-      <main className="app-shell qr-shell">
-        <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
-          <div>
-            <p className="eyebrow">{t("qr.printable")}</p>
-            <h1>{t("qr.heading")}</h1>
-            <p className="topbar-copy">Generate and print plant labels that open each plant profile.</p>
-          </div>
-          <div className="topbar-actions">
-            <LoadingButton
-              className="icon-button"
-              type="button"
-              onClick={handleQrPdfExport}
-              aria-label={t("qr.exportPdf")}
-              isLoading={isExportingQrPdf}
-              loadingLabel={<span className="sr-only">{t("qr.exportGenerating")}</span>}
-            >
-              <FileDown size={21} aria-hidden="true" />
-            </LoadingButton>
-            <button className="icon-button" type="button" onClick={() => window.print()} aria-label={t("qr.printCodes")}>
-              <Printer size={21} aria-hidden="true" />
-            </button>
-            {renderHeroActions()}
-          </div>
-        </header>
-        <AppTabNav currentPage="qr" onAddPlant={openAddPlantFromMobileNav} t={t} />
-
-        <section className="base-url-panel">
-          <label className="field">
-            <span>{t("qr.publicUrl")}</span>
-            <input
-              type="url"
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder="https://tvoja-cloud-aplikacia.example"
-            />
-          </label>
-          <p>{t("qr.publicUrlBody")}</p>
-        </section>
-
-        <section className="pdf-export-panel" aria-labelledby="pdf-export-title">
-          <div className="section-title">
-            <FileDown size={18} aria-hidden="true" />
-            <h2 id="pdf-export-title">{t("qr.print")}</h2>
-          </div>
-          {allFlowers.length > 0 ? (
-            <>
-              <p>
-                {t("qr.pdfBody", {
-                  labelSize: qrLabelSpec.labelSizeMm,
-                  qrSize: qrLabelSpec.qrSizeMm,
-                  quietZone: qrLabelSpec.quietZoneMm,
-                })}
-              </p>
-              <p className="print-note">{t("qr.printNote")}</p>
-              <div className="pdf-export-actions">
-                <LoadingButton type="button" onClick={handleQrPdfExport} isLoading={isExportingQrPdf} loadingLabel={t("qr.exportGenerating")}>
-                  <FileDown size={18} aria-hidden="true" />
-                  {t("qr.exportPdf")}
-                </LoadingButton>
-                <span>{qrLabelValidation.message}</span>
-              </div>
-              {qrExportStatus ? <div className="report-status">{qrExportStatus}</div> : null}
-            </>
-          ) : (
-            <p>{t("qr.noPlantsExport")}</p>
-          )}
-        </section>
-
-        {allFlowers.length > 0 ? (
-          <section className="qr-grid" aria-label="QR labels for all plants">
-            {allFlowers.map((flower) => (
-              <article className="qr-label" key={flower.id}>
-                <QrCode value={publicFlowerUrl(baseUrl, flower.id)} label={flower.displayName} language={selectedLanguage} size={148} />
-                <div>
-                  <strong>{flower.displayName}</strong>
-                  <span>{flower.id.replace("flower-", "#")}</span>
-                </div>
-              </article>
-            ))}
-          </section>
-        ) : (
-          <section className="empty-state empty-state-card">
-            <QrCodeIcon size={34} aria-hidden="true" />
-            <h2>{t("qr.empty")}</h2>
-            <p>{t("qr.emptyBody")}</p>
-            <a className="primary-action" href="#/">{t("qr.openDashboard")}</a>
-          </section>
-        )}
-        {renderHouseholdSheet()}
-        <MobileBottomNav currentPage="qr" onAddPlant={openAddPlantFromMobileNav} t={t} />
-      </main>
-    );
-  }
-
-  return (
-    <main className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">{t("dashboard.tracked", { count: allFlowers.length })}</p>
-          <h1>{t("dashboard.hero")}</h1>
-          <p className="hero-copy">{t("dashboard.heroBody")}</p>
-        </div>
-        {renderHeroActions()}
-      </header>
-      <AppTabNav currentPage={isAddPlantModalOpen ? "add" : "plants"} onAddPlant={openAddPlantFromMobileNav} t={t} />
-      <section className="toolbar" aria-label={t("dashboard.tools")}>
-        <label className="search-field">
-          <Search size={18} aria-hidden="true" />
-          <span className="sr-only">{t("dashboard.search")}</span>
-          <input
-            type="search"
-            placeholder={t("dashboard.search")}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-      </section>
-
-      {renderHouseholdSheet()}
-
-      {isAddPlantModalOpen ? (
-        <AddPlantModal t={t} newPlantName={newPlantName} setNewPlantName={setNewPlantName}
-          newPlantStatus={newPlantStatus} isAddingPlant={isAddingPlant} plantLimitReached={plantLimitReached}
-          newImageSelection={newImageSelection} handleAddCustomFlower={handleAddCustomFlower} closeAddPlantModal={closeAddPlantModal} />
-      ) : null}
-
-      {isNewOnboardingHousehold && customFlowers.length === 0 ? (
-        <section className="empty-state onboarding-empty-dashboard" aria-labelledby="empty-dashboard-title">
-          <Sprout size={36} aria-hidden="true" />
-          <h2 id="empty-dashboard-title">{t("household.ready")}</h2>
-          <p>{t("household.readyBody")}</p>
-          <div className="onboarding-empty-actions">
-            <button className="primary-action" type="button" onClick={openAddPlantModal}>
-              <Plus size={18} aria-hidden="true" />
-              {t("plantForm.addFirst")}
-            </button>
-            <a className="neutral-action" href="#/qr">
-              <QrCodeIcon size={18} aria-hidden="true" />
-              {t("qr.scan")}
-            </a>
-            <a className="neutral-action" href="#/menu">
-              <FileDown size={18} aria-hidden="true" />
-              {t("menu.open")}
-            </a>
-          </div>
-        </section>
-      ) : (
-      <PlantGrid t={t} visibleFlowers={visibleFlowers} records={records}
-        formatAppWateringStatus={formatAppWateringStatus} updateCareRecord={updateCareRecord} />
-      )}
-
-      {!isNewOnboardingHousehold && filteredFlowers.length > plantPageSize ? (
-        <nav className="plant-pagination" aria-label="Plant pages">
-          <button type="button" disabled={plantPage === 1} onClick={() => setPlantPage(1)} aria-label="First page">
-            &lt;&lt;
-          </button>
-          <button
-            type="button"
-            disabled={plantPage === 1}
-            onClick={() => setPlantPage((currentPage) => Math.max(1, currentPage - 1))}
-            aria-label="Previous page"
-          >
-            &lt;
-          </button>
-          <span>
-            {plantPage} / {plantPageCount}
-          </span>
-          <button
-            type="button"
-            disabled={plantPage === plantPageCount}
-            onClick={() => setPlantPage((currentPage) => Math.min(plantPageCount, currentPage + 1))}
-            aria-label="Next page"
-          >
-            &gt;
-          </button>
-          <button type="button" disabled={plantPage === plantPageCount} onClick={() => setPlantPage(plantPageCount)} aria-label="Last page">
-            &gt;&gt;
-          </button>
-        </nav>
-      ) : null}
-
-      {!isNewOnboardingHousehold && filteredFlowers.length === 0 ? (
-        <section className="empty-state">
-          <Home size={34} aria-hidden="true" />
-          <h2>{t("dashboard.emptySearch")}</h2>
-          <p>{t("dashboard.emptySearchBody")}</p>
-        </section>
-      ) : null}
-      <MobileBottomNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
-    </main>
-  );
+  return <AppRouter route={route} shared={{ t, renderHeroActions, renderHouseholdSheet, openAddPlantFromMobileNav }}
+    detail={{
+      flowerById,
+      navigateBack,
+      records,
+      baseUrl,
+      carePreview,
+      editingNameFlowerId,
+      resolveCurrentAiDiagnosisAccess,
+      aiDiagnosisAccessMessage,
+      currentHouseholdPlanUsage,
+      freeAiDiagnosisMonthlyLimit,
+      aiDiagnosisDisabledActionLabel,
+      diagnostics,
+      draftFlowerName,
+      setDraftFlowerName,
+      confirmNameEdit,
+      cancelNameEdit,
+      startNameEdit,
+      quickRecordStatus,
+      saveQuickRecord,
+      pendingQuickRecordKey,
+      openDiagnosisModal,
+      formatAppDate,
+      formatAppElapsedDays,
+      formatAppWateringStatus,
+      isGeneratingCarePreview,
+      handleGenerateCarePreview,
+      carePreviewStatus,
+      updateCareRecord,
+      diagnosticHistoryStatus,
+      openDiagnosticId,
+      localizedConfidenceLabel,
+      setOpenDiagnosticId,
+      updateDiagnosticHistoryEntry,
+      updateDiagnosticConfirmation,
+      pendingDiagnosticUpdateKey,
+      selectedLanguage,
+      setDeleteFlowerId,
+      setCarePreview,
+      confirmCareUpdate,
+      isApplyingCare,
+      isDiagnosisModalOpen,
+      isDiagnosing,
+      isSavingDiagnosis,
+      closeDiagnosisModal,
+      diagnosisSymptomNotes,
+      setDiagnosisSymptomNotes,
+      isCapturingDiagnosisImage,
+      handleDiagnosisImageChange,
+      diagnosisImageSelection,
+      diagnosisImageDataUrl,
+      diagnosisImagePreviewUrl,
+      diagnosisStatus,
+      runPlantDiagnosis,
+      diagnosisDraft,
+      diagnosisUserNote,
+      setDiagnosisUserNote,
+      savePlantDiagnosis,
+      diagnosisUpgradeReason,
+      setDiagnosisUpgradeReason,
+      subscription,
+      refreshPlanAfterSubscription,
+      deleteFlowerId,
+      confirmRemoveCustomFlower,
+      isRemovingPlant,
+      isSavingPlantName,
+      plantMutationStatus,
+    }}
+    menu={{
+      auth,
+      authEntry,
+      selectedLanguage,
+      selectOnboardingLanguage,
+      joinInviteInput,
+      setJoinInviteInput,
+      handleJoinInvite,
+      isJoiningInvite,
+      inviteStatus,
+      inviteStatusClass,
+      setAuthEntry,
+      navigateBack,
+      handleAccountSignOut,
+      isSigningOut,
+      accountActionStatus,
+      refreshHouseholdPeople,
+      activeHousehold,
+      supabaseReadState,
+      householdDisplayName,
+      canRenameHousehold,
+      householdNameEditSurface,
+      startHouseholdNameEdit,
+      renderHouseholdNameEditor,
+      householdEntitlement,
+      invitationCopy,
+      usedHouseholdSlots,
+      renderHouseholdSwitcher,
+      activeSupabaseHouseholdId,
+      householdPeople,
+      householdPeopleLoading,
+      householdPeopleError,
+      currentHouseholdMember,
+      removingPersonKeys,
+      canInviteToHousehold,
+      isInvitePanelOpen,
+      setIsInvitePanelOpen,
+      handleRemoveHouseholdPerson,
+      handleRetryInviteEmail,
+      handleCopyInviteLink,
+      sendingInviteId,
+      subscription,
+      subscriptionCopy,
+      isCreatingInvite,
+      handleCreateInvite,
+      inviteEmail,
+      setInviteEmail,
+      handleCreateHousehold,
+      householdNameDraft,
+      setHouseholdNameDraft,
+      isCreatingHousehold,
+      changeHousehold,
+      householdNameEditStatus,
+      inviteStatusTone,
+      householdNameEditStatusTone,
+      setInviteStatus,
+      setHouseholdNameEditStatus,
+      refreshSubscriptionState,
+      refreshPlanAfterSubscription,
+    }}
+    diagnose={{
+      navigateBack,
+      query,
+      setQuery,
+      filteredFlowers,
+      visibleFlowers,
+      diagnostics,
+      allFlowers,
+      plantPageSize,
+      plantPage,
+      setPlantPage,
+      plantPageCount,
+    }}
+    qr={{
+      navigateBack,
+      handleQrPdfExport,
+      isExportingQrPdf,
+      baseUrl,
+      setBaseUrl,
+      allFlowers,
+      qrLabelValidation,
+      qrExportStatus,
+      selectedLanguage,
+    }}
+    dashboard={{
+      allFlowers,
+      isAddPlantModalOpen,
+      query,
+      setQuery,
+      newPlantName,
+      setNewPlantName,
+      newPlantStatus,
+      isAddingPlant,
+      plantLimitReached,
+      newImageSelection,
+      handleAddCustomFlower,
+      closeAddPlantModal,
+      isNewOnboardingHousehold,
+      customFlowers,
+      openAddPlantModal,
+      visibleFlowers,
+      records,
+      formatAppWateringStatus,
+      updateCareRecord,
+      filteredFlowers,
+      plantPageSize,
+      plantPage,
+      setPlantPage,
+      plantPageCount,
+    }}
+  />;
 };

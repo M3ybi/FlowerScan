@@ -1,4 +1,7 @@
 import { BadgeCheck, FileDown, Mail, Trash2 } from "lucide-react";
+import { accountDeletionCopy } from "../features/settings/accountDeletionCopy.js";
+import type { PlantieLanguage } from "../lib/onboarding.js";
+import type { LegalPageId, ReleaseEnvSnapshot } from "../lib/releaseReadiness.js";
 import {
   getReleaseHealthChecks,
   legalPageById,
@@ -8,7 +11,6 @@ import {
   storeMetadata,
   summarizeReleaseHealth,
 } from "../lib/releaseReadiness.js";
-import type { LegalPageId, ReleaseEnvSnapshot } from "../lib/releaseReadiness.js";
 import { LoadingButton } from "./LoadingButton.js";
 
 const iconByPage: Record<LegalPageId, typeof BadgeCheck> = {
@@ -21,20 +23,24 @@ const iconByPage: Record<LegalPageId, typeof BadgeCheck> = {
 
 export const LegalPageView = ({
   deleteRequestStatus,
+  canRequestDeletion = false,
   isDeleteRequestPending = false,
+  language = "en",
   onRequestDeletion,
   pageId,
   requestEmail,
-  setRequestEmail,
 }: {
   deleteRequestStatus?: string;
+  canRequestDeletion?: boolean;
   isDeleteRequestPending?: boolean;
+  language?: PlantieLanguage | null;
   onRequestDeletion?: () => void;
   pageId: LegalPageId;
   requestEmail?: string;
   setRequestEmail?: (value: string) => void;
 }) => {
   const page = legalPageById.get(pageId);
+  const deletionCopy = accountDeletionCopy(language);
   if (!page) {
     return null;
   }
@@ -65,24 +71,26 @@ export const LegalPageView = ({
           }}
         >
           <label className="field">
-            <span>Account email or user ID</span>
+            <span>{deletionCopy.account}</span>
             <input
               type="text"
               value={requestEmail ?? ""}
               maxLength={120}
               placeholder="you@example.com"
-              onChange={(event) => setRequestEmail?.(event.target.value)}
+              readOnly
             />
           </label>
           <LoadingButton
             className="danger-action"
             type="submit"
             isLoading={isDeleteRequestPending}
-            loadingLabel="Submitting deletion review request..."
+            disabled={!canRequestDeletion}
+            loadingLabel={deletionCopy.pending}
           >
-            Request account deletion review
+            {deletionCopy.action}
           </LoadingButton>
-          {deleteRequestStatus ? <p className="report-status">{deleteRequestStatus}</p> : null}
+          {!canRequestDeletion ? <p><a href="#/menu?section=account">{deletionCopy.signIn}</a></p> : null}
+          {deleteRequestStatus ? <p className="report-status" role="status">{deleteRequestStatus}</p> : null}
         </form>
       ) : null}
     </section>
