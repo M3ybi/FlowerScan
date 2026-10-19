@@ -24,6 +24,7 @@ jobs:
           deno-version: 2.9.6
       - run: npm run check:edge-types
       - run: npm run test:auth-signature
+      - run: npm run test:revenuecat-mode
       - run: npm run check
       - run: npm run check:client-secrets
       - run: npm run check:source-graph

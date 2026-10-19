@@ -41,6 +41,15 @@ test("local web uses the Web Billing sandbox without changing mobile or preview 
   assert.equal(selectRevenueCatApiKey("web", "production", { ...keys, web: "rcb_sb_public" }), "");
 });
 
+test("explicit Test Store billing wins over live and Web Billing sandbox keys on every runtime", () => {
+  const keys = { billingMode: "test_store", testStore: "test_public", webSandbox: "rcb_sb_public", web: "rcb_live_public", ios: "appl_public", android: "goog_public" };
+  for (const runtime of ["web", "ios", "android"] as const) {
+    for (const mode of ["production", "test", "development"]) assert.equal(selectRevenueCatApiKey(runtime, mode, keys), "test_public");
+    for (const testStore of ["", "test_", "rcb_live_public"]) assert.equal(selectRevenueCatApiKey(runtime, "production", { ...keys, testStore }), "");
+    assert.equal(selectRevenueCatApiKey(runtime, "production", { ...keys, billingMode: "unknown" }), "");
+  }
+});
+
 const customerInfo = {
   entitlements: {
     active: {

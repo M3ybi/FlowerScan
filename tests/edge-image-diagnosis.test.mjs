@@ -10,7 +10,7 @@ const fixtureBundle = await build({ entryPoints: ["tests/fixtures/imagePayload.t
 const { fixtureDataUrl, jpegFixtureAtSize } = await import(`data:text/javascript;base64,${Buffer.from(fixtureBundle.outputFiles[0].text).toString("base64")}`);
 const imageDataUrl = fixtureDataUrl();
 const bundles = new Map();
-const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploadError = null, serviceOverride, signingSecret, admissionError = null, userId = imageId, allowSandbox = false } = {}) => {
+const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploadError = null, serviceOverride, signingSecret, admissionError = null, userId = imageId, allowSandbox = false, billingMode } = {}) => {
   if (!bundles.has(name)) {
     const result = await build({
       entryPoints: [`supabase/functions/${name}/index.ts`], bundle: true, write: false, format: "iife",
@@ -45,7 +45,7 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
   };
   let handler;
   vm.runInNewContext(bundles.get(name), {
-    Deno: { env: { get: (name) => name === "IMAGE_VALIDATION_SIGNING_SECRET" ? signingSecret : name === "REVENUECAT_ALLOW_SANDBOX_EVENTS" ? String(allowSandbox) : "fixture-key" }, serve: (fn) => { handler = fn; } },
+    Deno: { env: { get: (name) => name === "IMAGE_VALIDATION_SIGNING_SECRET" ? signingSecret : name === "REVENUECAT_BILLING_MODE" ? billingMode : name === "REVENUECAT_ALLOW_SANDBOX_EVENTS" ? String(allowSandbox) : "fixture-key" }, serve: (fn) => { handler = fn; } },
     fixture: { auth: signedIn ? { user: { id: userId }, client: user } : null, service: serviceOverride ?? service },
     crypto: webcrypto, btoa, TextEncoder, Request, Response, Headers, AbortSignal, AbortController, Uint8Array, TextDecoder, Error, TypeError, SyntaxError, DOMException, atob, setTimeout, clearTimeout,
     fetch: fetch ?? (async () => { throw new Error("Unexpected provider call"); }),
@@ -267,4 +267,26 @@ test("primary webhook ignores signed sandbox/Test Store purchases before accessi
     assert.equal((await response.json()).reason, "environment_not_allowed");
   }
   assert.deepEqual(calls, []);
+});
+
+test("explicit Test Store mode applies household test purchases while rejecting other stores", async () => {
+  const applied = [];
+  const serviceOverride = {
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }),
+    rpc: async (_name, args) => { applied.push(args); return { data: true, error: null }; },
+  };
+  const { invoke } = await loadHandler("revenuecat-webhook", { serviceOverride, billingMode: "test_store", allowSandbox: true });
+  const event = { app_user_id: `hh_${householdId}`, id: "test-store-event", type: "INITIAL_PURCHASE", entitlement_ids: ["premium"],
+    original_transaction_id: "fixture-test-receipt", product_id: "plantie_premium_monthly", store: "TEST_STORE", environment: "SANDBOX",
+    purchased_at_ms: 1000, expiration_at_ms: 2000, event_timestamp_ms: 1001 };
+  for (const store of ["APP_STORE", "PLAY_STORE"]) {
+    const rejected = await invoke({ event: { ...event, store } });
+    assert.equal((await rejected.json()).reason, "environment_not_allowed");
+  }
+  assert.equal(applied.length, 0);
+  const response = await invoke({ event });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).updatesApplied, true);
+  assert.equal(applied.length, 1);
+  assert.equal(applied[0].provider_event_id, "test-store-event");
 });

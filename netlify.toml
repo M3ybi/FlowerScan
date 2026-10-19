@@ -2,6 +2,9 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  VITE_REVENUECAT_BILLING_MODE = "test_store"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

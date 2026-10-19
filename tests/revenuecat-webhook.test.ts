@@ -10,6 +10,16 @@ test("sandbox and Test Store events require explicit server opt-in", () => {
   assert.equal(isRevenueCatEnvironmentAllowed({ store: "APP_STORE" }, false), true);
   assert.equal(isRevenueCatEnvironmentAllowed({ environment: "unrecognized" }, true), false);
 });
+
+test("Test Store server mode accepts only its sandbox events, independently of broad sandbox opt-in", () => {
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "SANDBOX", store: "TEST_STORE" }, false, "test_store"), true);
+  for (const event of [
+    { environment: "SANDBOX", store: "APP_STORE" }, { environment: "PRODUCTION", store: "PLAY_STORE" },
+    { environment: "PRODUCTION", store: "TEST_STORE" }, { store: "TEST_STORE" },
+    { environment: "unrecognized", store: "TEST_STORE" }, { environment: "SANDBOX" },
+  ]) assert.equal(isRevenueCatEnvironmentAllowed(event, true, "test_store"), false);
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "PRODUCTION", store: "APP_STORE" }, true, "unknown"), false);
+});
 import {
   handler,
   mapRevenueCatStoreToPlatform,
@@ -23,9 +33,11 @@ import type { RevenueCatWebhookEvent, SupabaseAdminClient } from "../netlify/fun
 test("compatibility webhook ignores signed sandbox events before privileged I/O", async () => {
   const originalSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
   const originalSandbox = process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS;
+  const originalMode = process.env.REVENUECAT_BILLING_MODE;
   const originalFetch = globalThis.fetch;
   process.env.REVENUECAT_WEBHOOK_SECRET = "synthetic-webhook-secret";
   delete process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS;
+  delete process.env.REVENUECAT_BILLING_MODE;
   globalThis.fetch = async () => { assert.fail("sandbox event reached privileged I/O"); };
   try {
     const result = await handler({ httpMethod: "POST", headers: { authorization: "Bearer synthetic-webhook-secret" },
@@ -36,6 +48,7 @@ test("compatibility webhook ignores signed sandbox events before privileged I/O"
   } finally {
     if (originalSecret === undefined) delete process.env.REVENUECAT_WEBHOOK_SECRET; else process.env.REVENUECAT_WEBHOOK_SECRET = originalSecret;
     if (originalSandbox === undefined) delete process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS; else process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS = originalSandbox;
+    if (originalMode === undefined) delete process.env.REVENUECAT_BILLING_MODE; else process.env.REVENUECAT_BILLING_MODE = originalMode;
     globalThis.fetch = originalFetch;
   }
 });

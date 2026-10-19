@@ -30,6 +30,19 @@ test("missing targets, environment overrides, legacy paths and wrong billing fai
   assert.equal(releaseEndpoint("http://127.0.0.1:54321"), "http://127.0.0.1:54321");
 });
 
+test("the live web release can explicitly use Test Store without relaxing its database target", () => {
+  const live = { ...staging, CONTEXT: "production", VITE_SUPABASE_URL: staging.PLANTIE_PRODUCTION_SUPABASE_URL,
+    VITE_REVENUECAT_BILLING_MODE: "test_store" };
+  assert.equal(validateReleaseEnvironment(live, "production"), "production");
+  for (const key of ["", "test_", "rcb_sb_fixture", "goog_fixture"]) {
+    assert.throws(() => validateReleaseEnvironment({ ...live, VITE_REVENUECAT_API_KEY_TEST_STORE: key }, "production"), /RELEASE_TEST_BILLING_REQUIRED/);
+  }
+  assert.throws(() => validateReleaseEnvironment({ ...live, VITE_SUPABASE_URL: staging.VITE_SUPABASE_URL }, "production"), /RELEASE_PRODUCTION_TARGET_MISMATCH/);
+  assert.throws(() => validateReleaseEnvironment({ ...live, VITE_REVENUECAT_BILLING_MODE: "unknown" }, "production"), /RELEASE_BILLING_MODE_INVALID/);
+  for (const platform of ["android", "ios"]) assert.throws(() => validateReleaseEnvironment({ ...live, PLANTIE_RELEASE_PLATFORM: platform }, "production"), /RELEASE_TEST_STORE_NATIVE_DEBUG_REQUIRED/);
+  assert.throws(() => validateReleaseEnvironment({ ...staging, VITE_REVENUECAT_BILLING_MODE: "production" }, "test"), /RELEASE_TEST_BILLING_REQUIRED/);
+});
+
 test("a preview build cannot select the same approved test and production database", async () => {
   const values = { CONTEXT: "deploy-preview", PLANTIE_TEST_SUPABASE_URL: "https://production.example.invalid",
     PLANTIE_PRODUCTION_SUPABASE_URL: "https://production.example.invalid", VITE_SUPABASE_URL: "https://production.example.invalid",

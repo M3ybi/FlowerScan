@@ -2,6 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import type { CustomerInfo, PurchasesPlugin, PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import type { CustomerInfo as WebCustomerInfo, Package as WebPackage, Purchases as WebPurchases } from "@revenuecat/purchases-js";
 import { getRevenueCatPlan, revenueCatProductIds } from "./revenueCatProducts.js";
+import { isRevenueCatTestStoreKey } from "./revenueCatEnvironment.js";
 import { supabase } from "./supabase.js";
 
 export const revenueCatEntitlementId = "premium";
@@ -104,6 +105,7 @@ type BillingDependencies = {
 
 const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
 type RevenueCatApiKeys = {
+  billingMode?: string;
   android?: string;
   ios?: string;
   testStore?: string;
@@ -127,10 +129,12 @@ export const detectBillingRuntime = (): BillingRuntime => {
 };
 
 export const selectRevenueCatApiKey = (runtime: BillingRuntime, mode: string, keys: RevenueCatApiKeys): string => {
-  if (mode === "development" && runtime === "web" && keys.webSandbox) {
+  if (keys.billingMode === "test_store") return isRevenueCatTestStoreKey(keys.testStore) ? keys.testStore : "";
+  if (keys.billingMode && keys.billingMode !== "production") return "";
+  if (!keys.billingMode && mode === "development" && runtime === "web" && keys.webSandbox) {
     return keys.webSandbox.startsWith("rcb_sb_") && keys.webSandbox.length > "rcb_sb_".length ? keys.webSandbox : "";
   }
-  if (mode !== "production") return keys.testStore ?? "";
+  if (!keys.billingMode && mode !== "production") return keys.testStore ?? "";
   if (runtime === "web") {
     const webKey = keys.web ?? "";
     return webKey.startsWith("rcb_") && !webKey.startsWith("rcb_sb_") ? webKey : "";
@@ -141,6 +145,7 @@ export const selectRevenueCatApiKey = (runtime: BillingRuntime, mode: string, ke
 };
 
 const getApiKeyFromEnv = (runtime: BillingRuntime) => selectRevenueCatApiKey(runtime, env?.MODE ?? "", {
+  billingMode: env?.VITE_REVENUECAT_BILLING_MODE,
   android: env?.VITE_REVENUECAT_API_KEY_ANDROID,
   ios: env?.VITE_REVENUECAT_API_KEY_IOS,
   testStore: env?.VITE_REVENUECAT_API_KEY_TEST_STORE,

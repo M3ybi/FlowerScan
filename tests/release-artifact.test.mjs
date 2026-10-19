@@ -6,17 +6,19 @@ import test from "node:test";
 import { build } from "vite";
 import { containsClientSecret } from "../scripts/check-client-secrets.mjs";
 
-test("release metadata hashes the final emitted production entry bytes", async () => {
+for (const billingMode of ["production", "test_store"]) test(`release metadata hashes final entries and records ${billingMode} billing`, async () => {
   const values = { PLANTIE_RELEASE_ENV: "production", PLANTIE_RELEASE_PLATFORM: "web", CONTEXT: "production",
     PLANTIE_PRODUCTION_SUPABASE_URL: "https://production.example.invalid", VITE_SUPABASE_URL: "https://production.example.invalid",
-    VITE_SUPABASE_ANON_KEY: "synthetic-public-fixture", VITE_REVENUECAT_API_KEY_WEB: "rcb_synthetic_fixture" };
+    VITE_SUPABASE_ANON_KEY: "synthetic-public-fixture", VITE_REVENUECAT_API_KEY_WEB: "rcb_synthetic_fixture",
+    VITE_REVENUECAT_BILLING_MODE: billingMode, VITE_REVENUECAT_API_KEY_TEST_STORE: "test_synthetic_fixture" };
   const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
-  const directory = path.resolve(".tmp-tests/release-artifact");
+  const directory = path.resolve(`.tmp-tests/release-artifact-${billingMode}`);
   Object.assign(process.env, values);
   try {
     await build({ mode: "production", logLevel: "silent", build: { outDir: directory } });
     const manifest = JSON.parse(await readFile(path.join(directory, "plantie-release.json"), "utf8"));
     assert.equal(manifest.environment, "production");
+    assert.equal(manifest.billingMode, billingMode);
     assert.ok(manifest.entries.length > 0);
     for (const entry of manifest.entries) assert.equal(createHash("sha256").update(await readFile(path.join(directory, entry.file))).digest("hex"), entry.sha256);
     const visit = async root => {

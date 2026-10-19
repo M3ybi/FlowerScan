@@ -11,6 +11,7 @@ const steps = [
   ["auth-browser", ["run", "test:auth-flow-browser"]], ["audit-all", ["audit"]], ["audit-production", ["audit", "--omit=dev"]],
   ["edge-types", ["exec", "--yes", "--package=deno@2.9.6", "--", "npm", "run", "check:edge-types"]],
   ["auth-signature", ["exec", "--yes", "--package=deno@2.9.6", "--", "npm", "run", "test:auth-signature"]],
+  ["revenuecat-mode", ["exec", "--yes", "--package=deno@2.9.6", "--", "npm", "run", "test:revenuecat-mode"]],
   ["source-graph", ["run", "check:source-graph"]], ["bundle-secrets", ["run", "check:client-secrets"]],
 ];
 for (const [index, [name, args]] of steps.entries()) {

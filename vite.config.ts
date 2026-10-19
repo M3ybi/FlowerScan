@@ -7,6 +7,7 @@ import { releaseEndpoint, validateReleaseEnvironment } from "./scripts/lib/relea
 export default defineConfig(({ mode, command }) => {
   const env = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
   const environment = command === "build" ? validateReleaseEnvironment(env, mode) : "local";
+  const billingMode = env.VITE_REVENUECAT_BILLING_MODE || (mode === "development" && env.VITE_REVENUECAT_API_KEY_WEB_SANDBOX ? "web_sandbox" : mode === "production" ? "production" : "test_store");
   return {
     base: process.env.VITE_BASE_PATH ?? "/",
     build: { sourcemap: false },
@@ -19,7 +20,7 @@ export default defineConfig(({ mode, command }) => {
         const dirty = execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim().length > 0;
         const entries = Object.values(bundle).flatMap(item => item.type === "chunk" && item.isEntry
           ? [{ file: item.fileName, sha256: createHash("sha256").update(item.code).digest("hex") }] : []);
-        this.emitFile({ type: "asset", fileName: "plantie-release.json", source: JSON.stringify({ schemaVersion: 1, revision, dirty, environment,
+        this.emitFile({ type: "asset", fileName: "plantie-release.json", source: JSON.stringify({ schemaVersion: 1, revision, dirty, environment, billingMode,
           backendFingerprint: releaseEndpoint(env.VITE_SUPABASE_URL) ? createHash("sha256").update(releaseEndpoint(env.VITE_SUPABASE_URL)).digest("hex") : null,
           entries, generatedAtUtc: new Date().toISOString() }, null, 2) });
       } },

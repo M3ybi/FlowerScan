@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   readonly VITE_REVENUECAT_API_KEY_WEB?: string;
   readonly VITE_REVENUECAT_API_KEY_WEB_SANDBOX?: string;
   readonly VITE_REVENUECAT_API_KEY_TEST_STORE?: string;
+  readonly VITE_REVENUECAT_BILLING_MODE?: string;
   readonly VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED?: string;
 }
 

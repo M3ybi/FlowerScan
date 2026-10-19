@@ -1,5 +1,7 @@
 # V4 production deployment - 2026-10-19
 
+**Later billing decision:** the user confirmed that only a Test Store key exists and explicitly selected Test Store for the release. See [Test Store billing configuration and execution](test-store-billing.md). Production RevenueCat keys are no longer a requirement for the live web release; the production-key blockers below record the earlier deployment attempt. Native store publication remains incompatible with Test Store keys.
+
 The user's direct-production request superseded the earlier local-only scope. V3/V4 application code was pushed directly to the existing `M3ybi/FlowerScan` main branch, four production database migrations were applied, and all nine Supabase Edge functions were deployed. **The web/native release remains incomplete.** No new branch, PR, hosted project, site or staging environment was created. No force push, branch-protection bypass, database reset, historical migration replay, secret replacement, subscription change or unsolicited email was performed.
 
 Application source: `93992572890033edc001851fdec308268f38d2`, included in delivery commit `159b2df87e68c1666dd1197f6b16803e9e37d134`. The subsequent CI diagnostic change affects verification only. This document is committed separately; the final delivery SHA is verified against `refs/heads/main` after its push.

@@ -348,6 +348,8 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  const billingMode = process.env.REVENUECAT_BILLING_MODE ?? "production";
+  if (!["production", "test_store"].includes(billingMode)) return { body: JSON.stringify({ error: "RevenueCat webhook is not configured." }), headers, statusCode: 503 };
   const payload = parseRevenueCatPayload(event.body);
   if (!payload) {
     return {
@@ -357,7 +359,7 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  if (!isRevenueCatEnvironmentAllowed(payload, process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS === "true")) {
+  if (!isRevenueCatEnvironmentAllowed(payload, process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS === "true", billingMode)) {
     return { body: JSON.stringify({ status: "ignored", reason: "environment_not_allowed" }), headers, statusCode: 200 };
   }
 

@@ -81,6 +81,7 @@
     "test:postgres-migrations": "node scripts/test-postgres-migrations.mjs",
     "test:supabase-local": "node scripts/test-supabase-local.mjs",
     "test:auth-signature": "deno test --node-modules-dir=none --no-lock --allow-env tests/auth-email-signature.deno.ts",
+    "test:revenuecat-mode": "deno test --node-modules-dir=none --no-lock --allow-env tests/revenuecat-test-store.deno.ts",
     "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {

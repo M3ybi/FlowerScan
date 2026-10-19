@@ -128,10 +128,12 @@ Deno.serve(observeOperation("subscription_webhook", async (request) => {
   const secret = verifySecret(request);
   if (!secret.isConfigured) return json(503, { error: "RevenueCat webhook is not configured." });
   if (!secret.isValid) return json(401, { error: "Unauthorized." });
+  const billingMode = Deno.env.get("REVENUECAT_BILLING_MODE") ?? "production";
+  if (!["production", "test_store"].includes(billingMode)) return json(503, { error: "RevenueCat webhook is not configured." });
 
   const event = await parsePayload(request);
   if (!event) return json(400, { error: "Invalid RevenueCat webhook payload." });
-  if (!isRevenueCatEnvironmentAllowed(event, Deno.env.get("REVENUECAT_ALLOW_SANDBOX_EVENTS") === "true")) {
+  if (!isRevenueCatEnvironmentAllowed(event, Deno.env.get("REVENUECAT_ALLOW_SANDBOX_EVENTS") === "true", billingMode)) {
     return json(200, { status: "ignored", reason: "environment_not_allowed" });
   }
 

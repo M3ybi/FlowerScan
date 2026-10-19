@@ -5,6 +5,12 @@ def releaseSigningRequested = gradle.startParameter.taskNames.any { taskName ->
     normalized.contains("bundlerelease") || normalized.contains("assemblerelease")
 }
 
+def webReleaseManifest = file("src/main/assets/public/plantie-release.json")
+if (releaseSigningRequested && webReleaseManifest.exists()
+        && new groovy.json.JsonSlurper().parse(webReleaseManifest).billingMode == "test_store") {
+    throw new GradleException("RevenueCat Test Store requires a debug APK. Do not build or submit a store release with a Test Store key.")
+}
+
 def signingProperties = new Properties()
 def signingPropertyFiles = [
     rootProject.file("key.properties"),
