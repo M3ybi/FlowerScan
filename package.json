@@ -77,7 +77,7 @@
     "test:application-webkit": "node scripts/test-application-browser.mjs --webkit",
     "check:source-graph": "node scripts/analyze-source-graph.mjs",
     "check:edge-types": "deno check --node-modules-dir=none --no-lock supabase/functions/delete-account-request/index.ts supabase/functions/plant-care-ai/index.ts supabase/functions/plant-diagnosis-ai/index.ts supabase/functions/revenuecat-webhook/index.ts supabase/functions/send-auth-email/index.ts supabase/functions/send-household-invite-email/index.ts supabase/functions/send-test-email/index.ts supabase/functions/upload-validated-image/index.ts supabase/functions/validate-plant-image/index.ts",
-    "test:v4-release": "node --test tests/release-environment.test.mjs tests/invitation-delivery-client.test.mjs tests/operational-observability.test.mjs tests/release-verification.test.mjs",
+    "test:v4-release": "node --test tests/release-environment.test.mjs tests/release-artifact.test.mjs tests/invitation-delivery-client.test.mjs tests/operational-observability.test.mjs tests/release-verification.test.mjs",
     "test:postgres-migrations": "node scripts/test-postgres-migrations.mjs",
     "test:supabase-local": "node scripts/test-supabase-local.mjs",
     "test:auth-signature": "deno test --node-modules-dir=none --no-lock --allow-env tests/auth-email-signature.deno.ts",

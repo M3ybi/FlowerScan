@@ -12,7 +12,9 @@ export default defineConfig(({ mode, command }) => {
     build: { sourcemap: false },
     plugins: [react(), {
       name: "plantie-release-manifest",
-      generateBundle(_options, bundle) {
+      // Vite's normal generateBundle hooks can still rewrite entry imports.
+      // Hash only after those transforms, matching the bytes Rollup writes.
+      generateBundle: { order: "post", handler(_options, bundle) {
         const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
         const dirty = execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim().length > 0;
         const entries = Object.values(bundle).flatMap(item => item.type === "chunk" && item.isEntry
@@ -20,7 +22,7 @@ export default defineConfig(({ mode, command }) => {
         this.emitFile({ type: "asset", fileName: "plantie-release.json", source: JSON.stringify({ schemaVersion: 1, revision, dirty, environment,
           backendFingerprint: releaseEndpoint(env.VITE_SUPABASE_URL) ? createHash("sha256").update(releaseEndpoint(env.VITE_SUPABASE_URL)).digest("hex") : null,
           entries, generatedAtUtc: new Date().toISOString() }, null, 2) });
-      },
+      } },
     }],
   };
 });
