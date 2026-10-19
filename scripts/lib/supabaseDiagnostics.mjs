@@ -16,6 +16,8 @@ export const supabaseFailureSummary = ({ stdout, stderr, error }) => {
   if (error?.code === "ENOENT") categories.push("EXECUTABLE_UNAVAILABLE");
   if (error?.code === "ETIMEDOUT") categories.push("COMMAND_TIMEOUT");
   if (error?.code === "ENOBUFS") categories.push("OUTPUT_BUFFER_LIMIT");
+  // Structured CLI error class names contain code identifiers, not message data.
+  for (const match of output.matchAll(/"(?:_tag|code)"\s*:\s*"([A-Z][A-Za-z]{0,70}Error)"/g)) categories.push(`CLI_${match[1]}`);
   return categories.length ? [...new Set(categories)].join(",") : "UNCLASSIFIED_CLI_FAILURE";
 };
 

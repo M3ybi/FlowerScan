@@ -10,6 +10,7 @@ test("Supabase startup diagnostics identify failures without echoing CLI credent
   assert.equal(supabaseFailureSummary({ stdout: "postgresql://private-user:private-password@host/db", stderr: "eyJ-private-token" }), "UNCLASSIFIED_CLI_FAILURE");
   assert.equal(supabaseFailureSummary({ stderr: "container unhealthy\nno space left on device" }), "CONTAINER_HEALTH_FAILED,DISK_CAPACITY");
   assert.equal(supabaseFailureSummary({ error: { code: "ENOBUFS" } }), "OUTPUT_BUFFER_LIMIT");
+  assert.equal(supabaseFailureSummary({ stderr: '{"error":{"code":"MissingFileError","message":"private-value"}}' }), "CLI_MissingFileError");
   assert.equal(supabaseFailureSignals({ stderr: "unexpected image digest\nsecret=private-key-value" }), "unexpected,image,digest");
   assert.equal(supabaseFailureSignals({ stderr: "https://user:private-password@example.invalid/path" }), "NO_KNOWN_SIGNALS");
 });
