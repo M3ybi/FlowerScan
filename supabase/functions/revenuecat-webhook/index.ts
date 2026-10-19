@@ -1,3 +1,4 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { getRevenueCatAccessExpiration, isRevenueCatRefundRevocation } from "../../../src/lib/revenueCatWebhookRules.ts";
 import { isRevenueCatEnvironmentAllowed } from "../../../src/lib/revenueCatEnvironment.ts";
 ﻿import { createServiceClient } from "../_shared/auth.ts";
@@ -122,7 +123,7 @@ const createSanitizedPayload = (event: RevenueCatEvent) => ({
   store: event.store,
 });
 
-Deno.serve(async (request) => {
+Deno.serve(observeOperation("subscription_webhook", async (request) => {
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
   const secret = verifySecret(request);
   if (!secret.isConfigured) return json(503, { error: "RevenueCat webhook is not configured." });
@@ -184,5 +185,4 @@ Deno.serve(async (request) => {
   } catch {
     return json(500, { error: "RevenueCat webhook processing failed." });
   }
-});
-
+}));

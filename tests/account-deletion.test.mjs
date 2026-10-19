@@ -1,3 +1,4 @@
+import { webcrypto } from "node:crypto";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -51,8 +52,8 @@ test("deletion endpoint ignores forged account targets and never acknowledges fa
   for (const [signedIn, failure, expected] of [[false, false, 401], [true, true, 503], [true, false, 202]]) {
     let handler;
     let calls = 0;
-    vm.runInNewContext(bundle.outputFiles[0].text, {
-      Deno: { serve: value => { handler = value; } }, Response,
+    vm.runInNewContext(bundle.outputFiles[0].text, { crypto: webcrypto, console: { info() {} },
+      Deno: { serve: value => { handler = value; } }, Response, Headers,
       auth: signedIn ? { user: { id: user }, client: { rpc: async (...args) => {
         calls++; assert.deepEqual(Array.from(args), ["request_account_deletion"]);
         return { error: failure ? { message: "private database detail" } : null,

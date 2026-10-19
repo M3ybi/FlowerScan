@@ -1,10 +1,11 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { Resend } from "npm:resend";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 
 const defaultFromEmail = "onboarding@resend.dev";
 
-Deno.serve(async (request) => {
+Deno.serve(observeOperation("operator_email", async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { message: "Use POST to send a test email." });
 
@@ -43,4 +44,4 @@ Deno.serve(async (request) => {
 
     return json(202, { id: data?.id ?? null, message: "Test email sent." });
   } catch { return json(502, { message: "Test email could not be sent." }); }
-});
+}));

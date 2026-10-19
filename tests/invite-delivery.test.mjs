@@ -1,3 +1,4 @@
+import { webcrypto } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
@@ -16,9 +17,9 @@ const setup = ({ signedIn = true, allowed = true, denied = false, fail = false }
   const calls = [];
   const delivery = { invite_id: inviteId, household_id: inviteId, household_name: "Fixture", invitee_email: "recipient@example.invalid", token: "A".repeat(43), expires_at: "2027-01-01T00:00:00Z" };
   const env = { RESEND_API_KEY: "synthetic", RESEND_FROM_EMAIL: "Plantie <sender@example.invalid>", APP_PUBLIC_URL: "https://fixture.invalid" };
-  vm.runInNewContext(bundle.outputFiles[0].text, {
-    Deno: { env: { get: key => env[key] }, serve: fn => { handler = fn; } }, Response, AbortSignal,
-    URL, Date: class extends Date { static now() { return 1792350000000; } }, console: { error() {} },
+  vm.runInNewContext(bundle.outputFiles[0].text, { crypto: webcrypto,
+    Deno: { env: { get: key => env[key] }, serve: fn => { handler = fn; } }, Response, Headers, AbortSignal,
+    URL, Date: class extends Date { static now() { return 1792350000000; } }, console: { info() {}, error() {} },
     boundary: { auth: signedIn ? { user: { email: "owner@example.invalid" }, client: { rpc: (name, args) => {
       calls.push(name);
       if (name === "get_household_invite_delivery") {

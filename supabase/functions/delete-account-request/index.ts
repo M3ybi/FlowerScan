@@ -1,8 +1,9 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { submitAccountDeletionReview } from "../_shared/accountDeletion.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 
-Deno.serve(async (request) => {
+Deno.serve(observeOperation("deletion_review", async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { message: "Use POST to request account deletion review." });
   try {
@@ -14,4 +15,4 @@ Deno.serve(async (request) => {
   } catch {
     return json(503, { message: "Deletion review could not be submitted. Please retry." });
   }
-});
+}));

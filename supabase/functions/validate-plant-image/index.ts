@@ -1,3 +1,4 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { requireImageAdmission } from "../_shared/imageAdmission.ts";
 import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
 import { requireUser } from "../_shared/auth.ts";
@@ -5,7 +6,7 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 import { validateImageSafety } from "../_shared/plantImageValidation.ts";
 import { issueImageValidationReceipt } from "../_shared/imageValidationReceipt.ts";
 
-Deno.serve(async (request) => {
+Deno.serve(observeOperation("image_validation", async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
 
@@ -35,4 +36,4 @@ Deno.serve(async (request) => {
   if (!validation) return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
   const receipt = await issueImageValidationReceipt(parsedImage.bytes, auth.user.id, Deno.env.get("IMAGE_VALIDATION_SIGNING_SECRET"));
   return json(200, { validation, ...(receipt ? { receipt } : {}) });
-});
+}));

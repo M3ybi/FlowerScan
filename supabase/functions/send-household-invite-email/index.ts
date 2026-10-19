@@ -1,3 +1,4 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildInviteUrl, classifyEmailError, parseSender, renderHouseholdInvitationEmail } from "../_shared/householdInviteEmail.ts";
@@ -13,7 +14,7 @@ type InviteDelivery = {
   expires_at: string;
 };
 
-Deno.serve(async (request) => {
+Deno.serve(observeOperation("invitation_email", async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { message: "Use POST to send a household invite email." });
 
@@ -112,4 +113,4 @@ Deno.serve(async (request) => {
     });
     return json(200, { invitationCreated: true, emailSent: false, errorCode: "EMAIL_PROVIDER_UNAVAILABLE" });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { Webhook } from "npm:standardwebhooks@1.0.0";
 import { createAuthEmailHookHandler } from "../_shared/authEmail.ts";
 
@@ -7,7 +8,7 @@ const from = Deno.env.get("RESEND_AUTH_FROM_EMAIL") ?? Deno.env.get("RESEND_FROM
 
 // Auth hooks do not carry a user JWT. Every payload must pass Standard Webhooks
 // signature and timestamp verification before recipients or tokens are trusted.
-Deno.serve(createAuthEmailHookHandler({
+Deno.serve(observeOperation("auth_email", createAuthEmailHookHandler({
   configured: Boolean(signingSecret && apiKey),
   sender: from,
   supabaseUrl: Deno.env.get("SUPABASE_URL"),
@@ -29,4 +30,4 @@ Deno.serve(createAuthEmailHookHandler({
     return { ok: response.ok, status: response.status, providerMessageId };
   },
   diagnostic: (event) => console.info("Plantie authentication email", event),
-}));
+})));

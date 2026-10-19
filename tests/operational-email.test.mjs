@@ -1,3 +1,4 @@
+import { webcrypto } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
@@ -16,8 +17,8 @@ const invoke = async ({ enabled, operator = false, signedIn = true, denied = fal
   let handler;
   let sent = 0;
   const env = { ENABLE_TEST_EMAIL: enabled, TEST_EMAIL_OPERATOR_IDS: operator ? "operator" : "", RESEND_API_KEY: "synthetic", RESEND_TEST_EMAIL: "test@example.invalid" };
-  vm.runInNewContext(bundled.outputFiles[0].text, {
-    Deno: { env: { get: key => env[key] }, serve: value => { handler = value; } }, Response,
+  vm.runInNewContext(bundled.outputFiles[0].text, { crypto: webcrypto, console: { info() {} },
+    Deno: { env: { get: key => env[key] }, serve: value => { handler = value; } }, Response, Headers,
     boundary: { auth: signedIn ? { user: { id: "operator" }, client: { rpc: async () => ({ error: denied ? {} : null }) } } : null,
       send: async () => { sent++; return fail ? { error: { private: "provider detail" } } : { data: { id: "sent" } }; } },
   });

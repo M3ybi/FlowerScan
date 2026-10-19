@@ -1,3 +1,4 @@
+import { observeOperation } from "../_shared/observability.ts";
 import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
 import { createServiceClient, requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
@@ -75,7 +76,7 @@ const parseDiagnosis = (outputText: string) => {
 
 const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-Deno.serve(async (request) => {
+Deno.serve(observeOperation("plant_diagnosis", async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
 
@@ -195,4 +196,4 @@ Deno.serve(async (request) => {
     }
     return json(502, { error: "AI returned invalid JSON." });
   }
-});
+}));

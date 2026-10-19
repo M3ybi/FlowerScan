@@ -1,4 +1,6 @@
 import { browserStorage } from "./browserStorage.js";
+import { deliverInvitation } from "./invitationDelivery.js";
+import type { InvitationDeliveryResult } from "./invitationDelivery.js";
 import { uploadWithValidationRecovery } from "./validatedImageUpload.js";
 import { supabase } from "./supabase.js";
 import { withRequestTimeout } from "./requestTimeout.js";
@@ -1009,22 +1011,12 @@ export const declineHouseholdInvitation = async (invitationId: string) => {
   if (error) throw error;
 };
 
-export type HouseholdInviteEmailResult = {
-  invitationCreated: boolean;
-  emailSent: boolean;
-  errorCode?: string;
-  providerMessageId?: string | null;
-};
+export type HouseholdInviteEmailResult = InvitationDeliveryResult;
 
 export const sendHouseholdInviteEmail = async (inviteId: string): Promise<HouseholdInviteEmailResult> => {
-  const { data, error } = await getClient().functions.invoke<HouseholdInviteEmailResult>("send-household-invite-email", {
-    body: { inviteId },
-  });
-  if (error) throw error;
-  if (!data || typeof data.emailSent !== "boolean" || data.invitationCreated !== true) {
-    throw new Error("Invite email service returned an invalid response.");
-  }
-  return data;
+  return deliverInvitation(signal => getClient().functions.invoke<HouseholdInviteEmailResult>("send-household-invite-email", {
+    body: { inviteId }, signal,
+  }));
 };
 
 export const createHouseholdPlant = async (input: CreateHouseholdPlantInput) => {

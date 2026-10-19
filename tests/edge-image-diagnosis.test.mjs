@@ -47,7 +47,7 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
   vm.runInNewContext(bundles.get(name), {
     Deno: { env: { get: (name) => name === "IMAGE_VALIDATION_SIGNING_SECRET" ? signingSecret : name === "REVENUECAT_ALLOW_SANDBOX_EVENTS" ? String(allowSandbox) : "fixture-key" }, serve: (fn) => { handler = fn; } },
     fixture: { auth: signedIn ? { user: { id: userId }, client: user } : null, service: serviceOverride ?? service },
-    crypto: webcrypto, btoa, TextEncoder, Request, Response, AbortSignal, AbortController, Uint8Array, TextDecoder, Error, TypeError, SyntaxError, DOMException, atob, setTimeout, clearTimeout,
+    crypto: webcrypto, btoa, TextEncoder, Request, Response, Headers, AbortSignal, AbortController, Uint8Array, TextDecoder, Error, TypeError, SyntaxError, DOMException, atob, setTimeout, clearTimeout,
     fetch: fetch ?? (async () => { throw new Error("Unexpected provider call"); }),
     console: { error() {}, warn() {}, info() {}, log() {} },
   });
