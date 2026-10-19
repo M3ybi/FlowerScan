@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import type { FocusEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, Check, CircleHelp, Crown, Globe2, Home, Leaf, Mail, Minus, Plus, ShieldCheck, Sprout, UserRound, UsersRound } from "lucide-react";
@@ -7,6 +7,8 @@ import { createTranslator } from "../lib/i18n";
 import { loggedOutMenuCopy } from "../lib/loggedOutMenuCopy";
 import { menuProductInfo } from "../lib/menuProductInfo";
 import { useAppVersion } from "../hooks/useAppVersion";
+import { useMenuAccordion } from "../hooks/useMenuAccordion";
+import type { MenuInformationSection } from "../hooks/useMenuAccordion";
 import { AuthPanel } from "./AuthPanel";
 import type { AuthNotice } from "./AuthPanel";
 import type { AuthMode } from "../lib/authRules";
@@ -23,7 +25,7 @@ export type LoggedOutMenuProps = {
   inviteStatus: string;
   inviteStatusClass: string;
   onAuthSuccess: () => void;
-  initialSection?: "account" | "household";
+  initialSection?: string;
   initialAuthMode?: AuthMode;
   initialAuthEmail?: string;
   initialAuthNotice?: AuthNotice;
@@ -49,8 +51,8 @@ export const LoggedOutMenu = ({ language, onLanguageChange, inviteInput, onInvit
   const version = useAppVersion();
   const id = useId();
   const menu = useRef<HTMLElement>(null);
-  const accountHeader = useRef<HTMLButtonElement>(null);
-  const [expandedSection, setExpandedSection] = useState<MenuSection | null>(initialSection);
+  const accountHeading = useRef<HTMLHeadingElement>(null);
+  const { expandedSection, toggleSection } = useMenuAccordion(initialSection);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -64,25 +66,23 @@ export const LoggedOutMenu = ({ language, onLanguageChange, inviteInput, onInvit
     return () => viewport?.removeEventListener("resize", revealFocusedInput);
   }, []);
 
-  const toggleSection = (section: MenuSection) => setExpandedSection((current) => current === section ? null : section);
   const openAccount = () => {
-    setExpandedSection("account");
-    accountHeader.current?.focus();
-    accountHeader.current?.scrollIntoView({ block: "nearest", behavior: "auto" });
+    accountHeading.current?.focus({ preventScroll: true });
+    accountHeading.current?.scrollIntoView({ block: "nearest", behavior: "auto" });
   };
   const revealInput = (event: FocusEvent<HTMLElement>) => {
     if (window.matchMedia("(max-width: 900px)").matches && event.target instanceof HTMLInputElement) {
       event.target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
     }
   };
-  const header = (section: MenuSection, Icon: LucideIcon, title: string, description: string, premium = false) => <button
-    ref={section === "account" ? accountHeader : undefined} className="menu-hub-section-header" type="button"
+  const header = (section: MenuInformationSection, Icon: LucideIcon, title: string, description: string, premium = false) => <button
+    className="menu-hub-section-header" type="button"
     id={`${id}-${section}-heading`} aria-expanded={expandedSection === section} aria-controls={`${id}-${section}-panel`} onClick={() => toggleSection(section)}>
     <span className={`menu-hub-section-icon${premium ? " is-premium" : ""}`}><Icon size={25} aria-hidden="true" /></span>
     <span className="menu-hub-section-title"><strong>{title}</strong><small>{description}</small></span>
     <span className="menu-hub-section-toggle" aria-hidden="true">{expandedSection === section ? <Minus size={18} /> : <Plus size={18} />}</span>
   </button>;
-  const panel = (section: MenuSection) => ({ id: `${id}-${section}-panel`, hidden: expandedSection !== section, "aria-labelledby": `${id}-${section}-heading` });
+  const panel = (section: MenuSection) => ({ id: `${id}-${section}-panel`, hidden: section !== "account" && expandedSection !== section, "aria-labelledby": `${id}-${section}-heading` });
   const free = menuProductInfo.limits.free;
   const householdIcons = [UsersRound, Crown, Home];
   const previewDate = new Date();
@@ -95,8 +95,11 @@ export const LoggedOutMenu = ({ language, onLanguageChange, inviteInput, onInvit
       <button className="menu-hub-auth-state" type="button" onClick={openAccount}><span><Leaf size={23} aria-hidden="true" /></span><span><strong>{copy.signedOutTitle}</strong><small>{copy.signedOutBody}</small></span><ArrowRight size={18} aria-hidden="true" /></button>
     </header>
     <div className="menu-hub-layout">
-      <section className="menu-hub-section menu-hub-account" data-section="account" data-expanded={expandedSection === "account"}>
-        {header("account", UserRound, t("menu.account"), copy.accountDescription)}
+      <section className="menu-hub-section menu-hub-account" data-section="account" data-expanded="true">
+        <div className="menu-hub-section-header menu-hub-account-header">
+          <span className="menu-hub-section-icon"><UserRound size={25} aria-hidden="true" /></span>
+          <div className="menu-hub-section-title"><h2 id={`${id}-account-heading`} ref={accountHeading} tabIndex={-1}>{t("menu.account")}</h2><small>{copy.accountDescription}</small></div>
+        </div>
         <div className="menu-hub-section-body" {...panel("account")}><AuthPanel compact appearance="menu" language={language} onSuccess={onAuthSuccess} initialMode={initialAuthMode} initialEmail={initialAuthEmail} initialNotice={initialAuthNotice} onNoticeConsumed={onAuthNoticeConsumed} /></div>
       </section>
       <div className="menu-hub-information">

@@ -14,6 +14,8 @@ Authenticated bottom navigation:
 
 The old `#/account` route is treated as a compatibility alias for `#/menu`.
 
+After session initialization, signed-out root visits replace their URL with `#/menu?section=account`, without displaying legacy onboarding first. Protected deep-link URLs are retained for authentication return. Callback and recovery flows retain priority. See [entry/menu fixes and verification](frontend-entry-menu-fixes.md).
+
 ## Menu Sections
 
 - Account: sign in/create account when logged out; email/provider, sign out, and delete account when logged in.
@@ -24,7 +26,9 @@ The old `#/account` route is treated as a compatibility alias for `#/menu`.
 
 ## Logged-out Menu
 
-`LoggedOutMenu` presents six expandable sections in this order: Account, Household / Family, Subscription, Language, Help & Support, and About Plantie. One nullable section state permits at most one open panel at every width. Account opens initially unless the household entry route takes priority. Above 900 CSS pixels, Account sits on the left and the information sections on the right; narrower layouts stack them. Whole headers are semantic buttons with associated panels, visible focus, and expansion state. Hidden panels stay mounted so language and accordion changes preserve account input. Opening a real invitation still uses the existing invitation review and authentication routes.
+`LoggedOutMenu` presents permanent Account content followed by five information sections: Household / Family, Subscription, Language, Help & Support, and About Plantie. One nullable information-section state permits at most one of those five panels open alongside Account at every width. Account uses a static heading with no collapse control; its form remains mounted and visible. The information headers are semantic buttons with associated panels, visible focus and expansion state. URL-driven Household or another supported section opens alongside Account; `settings` is a Language alias. Above 900 CSS pixels, Account sits on the left and the information sections on the right; narrower layouts stack them. The signed-in menu also keeps Account permanent and allows one other section open. Opening a real invitation still uses the existing invitation review and authentication routes.
+
+The hero tagline stays visible at compact widths. Its dark green text has a small translucent gradient layer over the desktop foliage. Rendered-background contrast, wrapping and clipping are covered by the browser checks in the linked verification report.
 
 The logged-out component renders neither application navigation variant, mailbox, household chip, nor switcher. The existing authenticated App branch restores the normal navigation and real account data after authentication; navigation styles are not hidden globally. Without a sticky bottom bar, the public Menu uses ordinary bottom padding. Focused inputs scroll into view on compact layouts and visual-viewport resize, while mobile input text uses 16px to avoid automatic zoom.
 

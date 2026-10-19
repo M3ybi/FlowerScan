@@ -10,8 +10,9 @@ const artifacts = path.resolve(`.tmp-tests/application-${engine}`);
 await mkdir(artifacts, { recursive: true });
 await build({ entryPoints: ["tests/fixtures/application-browser.tsx"], outdir: artifacts, entryNames: "fixture",
   bundle: true, splitting: true, format: "esm", jsx: "automatic", platform: "browser", logLevel: "warning",
-  define: { "import.meta.env": JSON.stringify({ DEV: true, VITE_BACKEND_PROVIDER: "netlify" }) }, plugins: [{
+  define: { "import.meta.env": JSON.stringify({ DEV: true, VITE_BACKEND_PROVIDER: "netlify", VITE_SUPABASE_URL: "https://fixture.example.invalid", VITE_SUPABASE_ANON_KEY: "fixture-public-key", VITE_DISABLE_SUPABASE_READS: "true" }) }, plugins: [{
     name: "offline-purchase-boundaries", setup(builder) {
+      builder.onResolve({ filter: /\/authService(?:\.js|\.ts)?$/ }, () => ({ path: path.resolve("tests/fixtures/application-auth-boundary.ts") }));
       builder.onResolve({ filter: /\/billingService(?:\.js)?$/ }, () => ({ path: "billing", namespace: "fixture" }));
       builder.onLoad({ filter: /billing/, namespace: "fixture" }, () => ({ contents: `
         export class BillingConfirmationPendingError extends Error {}
@@ -85,7 +86,7 @@ try {
     await page.setViewportSize({ width, height });
     for (const hash of ["/", "/flower/fixture-plant", "/diagnose", "/qr", "/menu"]) {
       await page.evaluate(value => { location.hash = value; }, hash);
-      const selector = hash === "/" ? ".flower-grid" : hash.startsWith("/flower") ? ".detail-shell" : hash === "/diagnose" ? "#diagnose-picker-title" : hash === "/qr" ? ".qr-shell" : ".menu-hub";
+      const selector = hash === "/" ? ".flower-grid" : hash.startsWith("/flower") ? ".detail-shell" : hash === "/diagnose" ? "#diagnose-picker-title" : hash === "/qr" ? ".qr-shell" : ".menu-stack";
       await page.locator(selector).waitFor();
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${hash} overflows ${width}`);
     }

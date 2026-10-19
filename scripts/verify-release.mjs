@@ -8,6 +8,7 @@ const steps = [
   ["install", ["ci"]], ["application", ["run", "check"]],
   ["image-chromium", ["run", "test:image-browser"]], ["image-webkit", ["run", "test:image-webkit"]],
   ["application-chromium", ["run", "test:application-browser"]], ["application-webkit", ["run", "test:application-webkit"]],
+  ["menu-entry-chromium", ["run", "test:menu-entry-browser"]], ["menu-entry-webkit", ["run", "test:menu-entry-webkit"]],
   ["auth-browser", ["run", "test:auth-flow-browser"]], ["audit-all", ["audit"]], ["audit-production", ["audit", "--omit=dev"]],
   ["edge-types", ["exec", "--yes", "--package=deno@2.9.6", "--", "npm", "run", "check:edge-types"]],
   ["auth-signature", ["exec", "--yes", "--package=deno@2.9.6", "--", "npm", "run", "test:auth-signature"]],

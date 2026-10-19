@@ -45,7 +45,7 @@ const waitFor = async (condition: () => unknown, label: string) => {
   throw new Error(`Timed out waiting for ${label}`);
 };
 const panel = (name: Section) => document.querySelector<HTMLDivElement>(`[id$="-${name}-panel"]`)!;
-const header = (name: Section) => document.querySelector<HTMLButtonElement>(`button[aria-controls$="-${name}-panel"]`)!;
+const header = (name: Section) => document.querySelector<HTMLElement>(name === "account" ? '[id$="-account-heading"]' : `button[aria-controls$="-${name}-panel"]`)!;
 const authPanel = () => document.querySelector<HTMLElement>(".auth-panel-menu")!;
 const authForm = () => authPanel().querySelector<HTMLFormElement>("form")!;
 const authStatus = () => authPanel().querySelector<HTMLElement>(".auth-message-content > p")?.textContent ?? "";
@@ -61,8 +61,9 @@ const setInput = async (input: HTMLInputElement, value: string) => {
 };
 const sections: Section[] = ["account", "household", "subscription", "language", "support", "about"];
 const assertSingleExpanded = () => {
-  assert(sections.filter(name => !panel(name).hidden).length <= 1, "More than one section is expanded");
-  for (const name of sections) assert(header(name).getAttribute("aria-expanded") === String(!panel(name).hidden), `${name} expansion ARIA disagrees with visibility`);
+  assert(!panel("account").hidden && !header("account").hasAttribute("aria-expanded"), "Account is hidden or falsely advertises collapsibility");
+  assert(sections.filter(name => name !== "account" && !panel(name).hidden).length <= 1, "More than one information section is expanded");
+  for (const name of sections.filter(name => name !== "account")) assert(header(name).getAttribute("aria-expanded") === String(!panel(name).hidden), `${name} expansion ARIA disagrees with visibility`);
 };
 const openSection = async (name: Section) => {
   if (panel(name).hidden) { header(name).click(); await waitFor(() => !panel(name).hidden, `open ${name}`); }
@@ -106,12 +107,13 @@ const assertRequestDisabled = (mode: "register" | "login" | "reset") => {
 const run = async () => {
   createRoot(document.getElementById("root")!).render(<StrictMode><Fixture /></StrictMode>);
   await waitFor(() => controls && document.querySelectorAll(".menu-hub-section-header").length === 6, "Menu mount");
-  check("six ordered semantic accordion headers have unique accessible panel relationships", () => {
-    const headers = Array.from(document.querySelectorAll<HTMLButtonElement>(".menu-hub-section-header"));
-    assert(headers.length === 6 && headers.every((control, index) => control === header(sections[index])), "Section order changed");
-    for (const name of sections) assert(header(name).type === "button" && panel(name).getAttribute("aria-labelledby") === header(name).id
-      && header(name).getAttribute("aria-expanded") === String(!panel(name).hidden), `${name} ARIA relationship invalid`);
-    for (const name of sections) {
+  check("one static Account heading and five ordered accordion buttons have accessible panel relationships", () => {
+    const headers = Array.from(document.querySelectorAll<HTMLElement>(".menu-hub-section-header"));
+    assert(headers.length === 6 && headers.every((control, index) => control === header(sections[index]) || control.contains(header(sections[index]))), "Section order changed");
+    assert(header("account").tagName === "H2" && !headers[0].querySelector("button"), "Account has a collapse control or no heading");
+    for (const name of sections) assert(panel(name).getAttribute("aria-labelledby") === header(name).id, `${name} label relationship invalid`);
+    for (const name of sections.filter(name => name !== "account")) {
+      assert((header(name) as HTMLButtonElement).type === "button" && header(name).getAttribute("aria-expanded") === String(!panel(name).hidden), `${name} ARIA relationship invalid`);
       header(name).focus(); assert(document.activeElement === header(name), `${name} header cannot receive keyboard focus`);
       const bounds = header(name).getBoundingClientRect();
       assert(bounds.height >= 44 && bounds.width >= 44, `${name} header is not a usable touch target`);
@@ -123,8 +125,8 @@ const run = async () => {
     assert(!document.querySelector(".app-tab-nav,.mobile-bottom-nav,nav,.invitation-inbox-trigger,.household-switcher,.household-invitation-inbox"), "Authenticated controls are mounted");
     assert(!document.querySelector('a[href="#/"],a[href="#/diagnose"],a[href="#/qr"]'), "Signed-out Menu links into authenticated app areas");
   });
-  check("default entry opens exactly Account, while invitation entry prioritizes exactly Household", () => {
-    const expected: Section = scene === "initial-household" ? "household" : "account";
+  check("Account always starts open, with invitation entry also opening Household", () => {
+    const expected = scene === "initial-household" ? "account,household" : "account";
     assert(sections.filter(name => !panel(name).hidden).join() === expected, "Initial section is inaccurate");
     assertSingleExpanded();
   });
@@ -233,12 +235,14 @@ const run = async () => {
   }
   for (const name of sections) {
     await openSection(name);
-    check(`${name} opens alone and automatically collapses every other section`, () => {
-      assert(header(name).getAttribute("aria-expanded") === "true" && !panel(name).hidden, "Accordion did not open"); assertSingleExpanded();
+    check(`${name} remains visible alongside the permanent Account section`, () => {
+      assert(!panel(name).hidden && (name === "account" || header(name).getAttribute("aria-expanded") === "true"), "Section did not open"); assertSingleExpanded();
     });
     check(`${name} has no horizontal overflow at ${innerWidth}px`, () => assertNoOverflow(name));
     header(name).click(); await tick();
-    check(`${name} collapses without unmounting its panel`, () => { assert(panel(name).hidden && header(name).getAttribute("aria-expanded") === "false", "Accordion did not close"); assertSingleExpanded(); });
+    check(`${name} ${name === "account" ? "cannot collapse" : "collapses without unmounting its panel"}`, () => {
+      assert(name === "account" ? !panel(name).hidden : panel(name).hidden && header(name).getAttribute("aria-expanded") === "false", "Incorrect section visibility"); assertSingleExpanded();
+    });
   }
   await openSection("account");
   if (!unavailable) check("selected login mode and typed password survive all six sections", () => assert(tab("login").getAttribute("aria-selected") === "true"
@@ -342,13 +346,13 @@ const run = async () => {
   }
   frame.style.height = originalHeight; await tick();
   await openSection("household"); header("household").focus();
-  check("hidden mounted Account fields are outside keyboard focus while its header stays usable", () => {
+  check("Account fields remain keyboard-accessible while another section is open", () => {
     email().focus();
-    assert(document.activeElement === header("household") && email().getClientRects().length === 0, "Collapsed auth fields remained focusable");
+    assert((unavailable || document.activeElement === email()) && email().getClientRects().length > 0, "Account field became hidden or inaccessible");
   });
   document.querySelector<HTMLButtonElement>(".menu-hub-auth-state")!.click(); await tick();
-  check("hero auth action opens only Account and returns focus to its header", () => {
-    assert(!panel("account").hidden && document.activeElement === header("account"), "Hero account focus did not return"); assertSingleExpanded();
+  check("hero auth action focuses the permanent Account heading and preserves the open information section", () => {
+    assert(!panel("account").hidden && !panel("household").hidden && document.activeElement === header("account"), "Hero account focus or information state changed"); assertSingleExpanded();
   });
   await openSection("support");
   check("support exposes only the real in-app destination, without invented contact channels", () => {

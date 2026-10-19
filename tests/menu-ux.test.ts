@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { resolveEntryRoute } from "../src/app/routes.js";
 
 const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n");
 const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
@@ -66,8 +67,8 @@ test("menu has expandable production sections", () => {
   for (const key of ["menu.account", "menu.household", "menu.subscription", "menu.supportLegal"]) {
     assert.match(appSource, new RegExp(`t\\("${key.replace(".", "\\.")}"\\)`));
   }
-  assert.match(appSource, /openMenuSection === "account"/);
-  assert.match(appSource, /openMenuSection === "household"/);
+  assert.match(appSource, /className="menu-section menu-account-section" aria-labelledby="menu-account-heading"/);
+  assert.match(appSource, /expandedSection === "household"/);
   assert.match(appSource, /#\/menu\?section=household/);
 });
 
@@ -218,8 +219,11 @@ test("pending invite route has accept and decline actions", () => {
 });
 
 test("dashboard remains blocked before auth and household", () => {
-  assert.match(appSource, /!activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold/);
-  assert.match(appSource, /<AuthPanel compact language=\{selectedLanguage\} onSuccess=\{continueToHouseholdSetup\}/);
+  assert.match(appSource, /auth\.isAuthenticated && !activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold/);
+  assert.deepEqual(resolveEntryRoute({ pathname: "/", search: "", hash: "#/" }, {
+    loading: false, isAuthenticated: false, isPasswordRecovery: false, invalidRecoveryLink: false, callbackError: false,
+  }).route, { page: "menu", section: "account" });
+  assert.doesNotMatch(appSource, /<AuthPanel compact language=\{selectedLanguage\} onSuccess=\{continueToHouseholdSetup\}/);
   assert.match(appSource, /setAccessStatus/);
 });
 

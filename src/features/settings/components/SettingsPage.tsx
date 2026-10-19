@@ -22,6 +22,8 @@ import type { AuthNotice } from "../../../components/AuthPanel";
 import { AuthPanel } from "../../../components/AuthPanel";
 import { HouseholdPeopleList } from "../../../components/HouseholdPeopleList";
 import { LoadingButton } from "../../../components/LoadingButton";
+import { useMenuAccordion } from "../../../hooks/useMenuAccordion";
+import type { MenuInformationSection } from "../../../hooks/useMenuAccordion";
 import { LoggedOutMenu } from "../../../components/LoggedOutMenu";
 import { PricingPage } from "../../../components/PricingPage";
 import { SettingsSectionHeader } from "../../../components/SettingsSectionHeader";
@@ -175,8 +177,12 @@ export const SettingsPage = ({
   refreshPlanAfterSubscription,
   renderHouseholdSheet
 }: Props) => {
+  const { expandedSection, toggleSection } = useMenuAccordion(route.page === "menu" ? route.section : "", auth.isAuthenticated);
+  const toggleMenuSection = (event: MouseEvent<HTMLElement>, section: MenuInformationSection) => {
+    event.preventDefault();
+    toggleSection(section);
+  };
   if (route.page === "menu") {
-    const openMenuSection = route.section === "household" ? "household" : "account";
 
     if (!auth.isAuthenticated) {
       return <LoggedOutMenu
@@ -199,7 +205,7 @@ export const SettingsPage = ({
             } catch { /* Invitations remain available from the authenticated inbox. */ }
           }
         }}
-        initialSection={route.section === "household" ? "household" : "account"}
+        initialSection={route.section}
         initialAuthMode={authEntry?.mode}
         initialAuthEmail={authEntry?.email}
         initialAuthNotice={authEntry?.notice}
@@ -222,10 +228,10 @@ export const SettingsPage = ({
         </header>
         <AppTabNav currentPage="menu" onAddPlant={openAddPlantFromMobileNav} t={t} />
         <section className="menu-stack" aria-label="Plantie menu">
-          <details className="menu-section" open={openMenuSection === "account"}>
-            <summary>
+          <section className="menu-section menu-account-section" aria-labelledby="menu-account-heading">
+            <h2 className="menu-account-header" id="menu-account-heading">
               <SettingsSectionHeader icon={UserRound} title={t("menu.account")} description={t("menu.accountDescription")} />
-            </summary>
+            </h2>
             {auth.isAuthenticated ? (
               <div className="menu-section-body">
                 <div className="account-summary-list">
@@ -258,12 +264,12 @@ export const SettingsPage = ({
                 <AuthPanel compact language={selectedLanguage} />
               </div>
             )}
-          </details>
+          </section>
 
-          <details className="menu-section household-management" open={openMenuSection === "household"} onToggle={(event) => {
+          <details className="menu-section household-management" open={expandedSection === "household"} onToggle={(event) => {
             if (event.currentTarget.open) void refreshHouseholdPeople();
           }}>
-            <summary>
+            <summary onClick={(event) => toggleMenuSection(event, "household")}>
               <SettingsSectionHeader icon={Home} title={t("menu.household")} description={t("household.managementSubtitle")} />
             </summary>
             <div className="menu-section-body">
@@ -381,8 +387,8 @@ export const SettingsPage = ({
               </div> : null}
             </div>
           </details>
-          <details className="menu-section" onToggle={(event) => { if (event.currentTarget.open) void refreshSubscriptionState(); }}>
-            <summary>
+          <details className="menu-section" open={expandedSection === "subscription"} onToggle={(event) => { if (event.currentTarget.open) void refreshSubscriptionState(); }}>
+            <summary onClick={(event) => toggleMenuSection(event, "subscription")}>
               <SettingsSectionHeader icon={Crown} title={t("menu.subscription")} description={subscriptionCopy.subtitle} premium />
             </summary>
             <div className="menu-section-body">
@@ -395,8 +401,8 @@ export const SettingsPage = ({
             </div>
           </details>
 
-          <details className="menu-section">
-            <summary>
+          <details className="menu-section" open={expandedSection === "language"}>
+            <summary onClick={(event) => toggleMenuSection(event, "language")}>
               <SettingsSectionHeader icon={Languages} title={t("menu.settings")} description={t("menu.settingsDescription")} />
             </summary>
             <div className="menu-section-body">
@@ -417,8 +423,8 @@ export const SettingsPage = ({
             </div>
           </details>
 
-          <details className="menu-section">
-            <summary>
+          <details className="menu-section" open={expandedSection === "support"}>
+            <summary onClick={(event) => toggleMenuSection(event, "support")}>
               <SettingsSectionHeader icon={CircleHelp} title={t("menu.supportLegal")} description={t("menu.supportDescription")} />
             </summary>
             <div className="menu-section-body">

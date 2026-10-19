@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { LegalPageId } from "../lib/releaseReadiness";
+import type { LegalPageId } from "../lib/releaseReadiness.js";
 import { isInvitationId } from "../lib/householdInvitationRules.js";
 
 export type AppRoute =
@@ -67,16 +67,30 @@ export const parseHashRoute = (hash: string): AppRoute => {
   return { page: "dashboard" };
 };
 
-export const useHashRoute = () => {
-  const [hash, setHash] = useState(() => window.location.hash || "#/");
+const readRouteLocation = (): RouteLocation => ({ pathname: window.location.pathname, search: window.location.search, hash: window.location.hash });
+
+export const useHashRoute = (auth: EntryAuthState) => {
+  const [location, setLocation] = useState(readRouteLocation);
+  const { route, replaceHash } = resolveEntryRoute(location, auth);
 
   useEffect(() => {
-    const handleHashChange = () => setHash(window.location.hash || "#/");
+    const handleHashChange = () => setLocation(readRouteLocation());
     window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
+    window.addEventListener("popstate", handleHashChange);
+    handleHashChange();
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      window.removeEventListener("popstate", handleHashChange);
+    };
   }, []);
 
-  return parseHashRoute(hash);
+  useEffect(() => {
+    if (!replaceHash || resolveEntryRoute(readRouteLocation(), auth).replaceHash !== replaceHash) return;
+    window.history.replaceState(window.history.state, "", `${location.pathname}${location.search}${replaceHash}`);
+    window.dispatchEvent(new Event("hashchange"));
+  }, [replaceHash, location, auth]);
+
+  return route;
 };
 
 export const isRouteAllowedWithoutHousehold = (route: AppRoute) =>
@@ -85,3 +99,24 @@ export const isRouteAllowedWithoutHousehold = (route: AppRoute) =>
   route.page === "legal" ||
   route.page === "release-readiness" ||
   route.page === "health";
+
+type EntryAuthState = {
+  loading: boolean; isAuthenticated: boolean; isPasswordRecovery: boolean;
+  invalidRecoveryLink: boolean; callbackError: boolean;
+};
+type RouteLocation = Pick<Location, "pathname" | "search" | "hash">;
+const accountEntryHash = "#/menu?section=account";
+
+export const resolveEntryRoute = (location: RouteLocation, auth: EntryAuthState): { route: AppRoute; replaceHash: string | null } => {
+  const route = parseHashRoute(location.hash);
+  const params = new URLSearchParams(location.search);
+  const authCallback = /^\/auth\/(?:callback|recovery)\/?$/.test(location.pathname)
+    || ["code", "token", "token_hash", "error", "error_code"].some(key => params.has(key));
+  if (auth.loading || auth.isAuthenticated || auth.isPasswordRecovery || auth.invalidRecoveryLink || auth.callbackError) {
+    return { route, replaceHash: null };
+  }
+  const root = ["", "/"].includes(location.hash.replace(/^#/, "").split("?")[0]);
+  // Keep protected deep-link URLs for the existing Auth return flow, displaying
+  // the same account entry while signed out. Only a legacy root is replaced.
+  return { route: isRouteAllowedWithoutHousehold(route) ? route : { page: "menu", section: "account" }, replaceHash: root && !authCallback ? accountEntryHash : null };
+};

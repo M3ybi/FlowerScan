@@ -24,6 +24,7 @@ localStorage.setItem("plantie-onboarding-v1", "complete");
 localStorage.setItem("flowscan-active-household-v1", JSON.stringify({ name: "Fixture household", publicToken: "fixture-household-token-12345" }));
 localStorage.setItem("flowscan-custom-flowers-v1", JSON.stringify([plant]));
 localStorage.setItem("flowscan-removed-flower-ids-v1", JSON.stringify(flowers.map(value => value.id)));
+window.__entryFixtureAuth.setAuthenticated(true);
 const calls: Record<string, number> = {};
 const originalFetch = window.fetch;
 window.fetch = async (input, options) => {

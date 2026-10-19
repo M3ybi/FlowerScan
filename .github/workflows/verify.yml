@@ -37,6 +37,8 @@ jobs:
       - run: npm run test:image-webkit
       - run: npm run test:application-browser
       - run: npm run test:application-webkit
+      - run: npm run test:menu-entry-browser
+      - run: npm run test:menu-entry-webkit
       - run: npm run test:auth-flow-browser
       - run: npm audit --omit=dev
 

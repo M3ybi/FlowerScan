@@ -127,7 +127,7 @@ These functions use the browser Supabase client and rely on RLS. The Supabase ba
 
 ## Auth infrastructure
 
-Optional Supabase Auth infrastructure is available. First-run onboarding now asks users to choose language, sign in or create an account, then explicitly create a household or accept a valid invite before the dashboard appears. Guest mode is not exposed in production UI.
+Supabase Auth infrastructure is available. Signed-out root visits open `#/menu?section=account` after session initialization. Users can sign in or create an account and choose their language from Menu, then explicitly create a household or accept a valid invite before the dashboard appears. Authenticated household setup and callback/recovery flows remain available. Guest mode is not exposed in production UI. See [entry/menu behavior](frontend-entry-menu-fixes.md).
 
 Files:
 

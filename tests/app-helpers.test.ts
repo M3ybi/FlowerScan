@@ -10,10 +10,44 @@ import {
   safeInviteDebugMessage,
 } from "../src/app/householdInvites.js";
 import { areStringRecordsEqual, mergeCloudRecords } from "../src/app/records.js";
-import { isRouteAllowedWithoutHousehold, parseHashRoute } from "../src/app/routes.js";
+import { isRouteAllowedWithoutHousehold, parseHashRoute, resolveEntryRoute } from "../src/app/routes.js";
 import type { FlowerRecords } from "../src/hooks/useFlowerRecords.js";
 import { householdAfterInviteAcceptance, readSelectedHouseholdId, resolveHouseholdSelection, writeSelectedHouseholdId } from "../src/lib/householdSelection.js";
 import type { Household } from "../src/lib/plantieRepository.js";
+
+const signedOut = { loading: false, isAuthenticated: false, isPasswordRecovery: false, invalidRecoveryLink: false, callbackError: false };
+test("signed-out legacy roots resolve immediately to the account menu with URL replacement", () => {
+  for (const hash of ["", "#", "#/", "#/?legacy=1"]) for (const pathname of ["/", "/index.html", "/FlowerScan/"]) {
+    assert.deepEqual(resolveEntryRoute({ pathname, search: "", hash }, signedOut), {
+      route: { page: "menu", section: "account" }, replaceHash: "#/menu?section=account",
+    });
+  }
+  assert.deepEqual(resolveEntryRoute({ pathname: "/", search: "", hash: "#/menu?section=account" }, signedOut), {
+    route: { page: "menu", section: "account" }, replaceHash: null,
+  });
+});
+
+test("entry routing waits for sessions and preserves OAuth, recovery and authenticated roots", () => {
+  const root = { pathname: "/", search: "", hash: "#/" };
+  for (const flag of Object.keys(signedOut) as Array<keyof typeof signedOut>) {
+    assert.deepEqual(resolveEntryRoute(root, { ...signedOut, [flag]: true }), { route: { page: "dashboard" }, replaceHash: null });
+  }
+  for (const pathname of ["/auth/callback", "/auth/recovery"]) {
+    assert.equal(resolveEntryRoute({ ...root, pathname, search: "?code=fixture" }, signedOut).replaceHash, null);
+  }
+  for (const search of ["?code=fixture", "?token_hash=fixture", "?error_code=expired"]) {
+    assert.deepEqual(resolveEntryRoute({ ...root, search }, signedOut), { route: { page: "menu", section: "account" }, replaceHash: null });
+  }
+});
+
+test("entry routing preserves public and protected deep-link URLs for sign-in return", () => {
+  for (const hash of ["#/menu?section=about", "#/join?invite=fixture", "#/terms", "#/health"]) {
+    assert.deepEqual(resolveEntryRoute({ pathname: "/", search: "", hash }, signedOut), { route: parseHashRoute(hash), replaceHash: null });
+  }
+  const location = { pathname: "/", search: "?householdId=fixture-household-token-12345", hash: "#/flower/monstera?panel=diagnostics" };
+  assert.deepEqual(resolveEntryRoute(location, signedOut), { route: { page: "menu", section: "account" }, replaceHash: null });
+  assert.deepEqual(resolveEntryRoute(location, { ...signedOut, isAuthenticated: true }), { route: parseHashRoute(location.hash), replaceHash: null });
+});
 
 test("malformed percent-encoded plant routes safely return to the dashboard", () => {
   for (const hash of ["#/flower/%", "#/flower/%ZZ", "#/flower/%E0%A4%A"]) {

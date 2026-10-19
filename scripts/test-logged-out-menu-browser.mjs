@@ -12,7 +12,7 @@ const workspace = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const artifacts = path.join(workspace, ".tmp-tests", "logged-out-menu-browser");
 // A source wiring assertion complements the isolated component fixture. It does
 // not claim to exercise a live session transition or the complete App router.
-const appPath = path.join(workspace, "src", "App.tsx");
+const appPath = path.join(workspace, "src", "features", "settings", "components", "SettingsPage.tsx");
 const app = ts.createSourceFile(appPath, await readFile(appPath, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const descendants = (node, predicate) => {
   const matches = [];

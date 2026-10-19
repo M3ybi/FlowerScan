@@ -135,8 +135,8 @@ const logTechnicalError = (message: string, error: unknown) => {
 };
 
 export const App = () => {
-  const route = useHashRoute();
   const auth = useAuth();
+  const route = useHashRoute(auth);
   const { authEntry, setAuthEntry, isLeavingRecovery, recoveryExitFailed, completeRecovery, requestNewRecoveryLink } = useRecoveryActions(auth);
   const householdDirectory = useHouseholdDirectory(auth.user?.id ?? null);
   const invitationInbox = useHouseholdInvitations(auth.user);
@@ -1715,7 +1715,7 @@ export const App = () => {
     return renderHouseholdLoading();
   }
 
-  if (onboardingStep !== "complete" && !activeHousehold && !supabaseReadState) {
+  if (auth.isAuthenticated && route.page !== "menu" && onboardingStep !== "complete" && !activeHousehold && !supabaseReadState) {
     if (onboardingStep === "language") {
       return (
         <main className="app-shell access-shell onboarding-shell">
@@ -1752,13 +1752,9 @@ export const App = () => {
             </div>
             <p>{t("onboarding.valueProp")}</p>
             <div className="onboarding-actions">
-              {auth.isAuthenticated ? (
-                <button className="primary-action" type="button" onClick={continueToHouseholdSetup}>
-                  {t("onboarding.continueHousehold")}
-                </button>
-              ) : (
-                <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
-              )}
+              <button className="primary-action" type="button" onClick={continueToHouseholdSetup}>
+                {t("onboarding.continueHousehold")}
+              </button>
             </div>
             <button className="text-button" type="button" onClick={() => setOnboardingStep("language")}>
               {t("onboarding.changeLanguage")}{selectedLanguage ? ` (${selectedLanguage})` : ""}
@@ -1779,10 +1775,7 @@ export const App = () => {
             <h1 id="household-title">{t("household.createOrJoin")}</h1>
           </div>
           <p>{t("household.privateBody")}</p>
-          {!auth.isAuthenticated ? (
-            <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
-          ) : (
-            <form className="access-form" onSubmit={handleCreateOnboardingHousehold}>
+          <form className="access-form" onSubmit={handleCreateOnboardingHousehold}>
               <label className="field">
                 <span>{t("household.name")}</span>
                 <input
@@ -1796,15 +1789,14 @@ export const App = () => {
                 <Plus size={18} aria-hidden="true" />
                 {t("household.create")}
               </LoadingButton>
-            </form>
-          )}
+          </form>
           {accessStatus || onboardingStatus ? <p className="access-status">{accessStatus || onboardingStatus}</p> : null}
         </section>
       </main>
     );
   }
 
-  if (!activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold) {
+  if (auth.isAuthenticated && !activeHousehold && !supabaseReadState && !currentRouteAllowedWithoutHousehold) {
     return (
       <main className="app-shell access-shell">
         {renderHeroActions()}
@@ -1820,8 +1812,7 @@ export const App = () => {
               <p>{t("household.setupBody")}</p>
             </div>
           </div>
-          {auth.isAuthenticated ? (
-            <div className="household-setup-grid">
+          <div className="household-setup-grid">
               <form className="household-setup-option" onSubmit={handleCreateHousehold}>
                 <div>
                   <h2>{t("household.setupCreateTitle")}</h2>
@@ -1865,10 +1856,7 @@ export const App = () => {
                   {t("household.continueWithInvite")}
                 </LoadingButton>
               </div>
-            </div>
-          ) : (
-            <AuthPanel compact language={selectedLanguage} onSuccess={continueToHouseholdSetup} />
-          )}
+          </div>
           {accessStatus ? <p className="access-status">{accessStatus}</p> : null}
         </section>
       </main>
