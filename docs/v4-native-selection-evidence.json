@@ -1,0 +1,10 @@
+{
+  "runtime": "android",
+  "add": 10,
+  "diagnosis": 10,
+  "cancelled": 1,
+  "busy": false,
+  "error": null,
+  "environment": "disposable Android emulator",
+  "scope": "actual native gallery and normalizer; no Auth, AI, uploads or database"
+}

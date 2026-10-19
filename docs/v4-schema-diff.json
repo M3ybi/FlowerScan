@@ -1,0 +1,18 @@
+{
+  "platform": "PostgreSQL with Auth/Storage fixtures and plaintext Vault adapter",
+  "migrations": 34,
+  "cleanReplay": "PASS_WITH_PLATFORM_ADAPTERS",
+  "syntheticUpgrade": "PASS_WITH_PLATFORM_ADAPTERS",
+  "fixturesPerReplay": 6,
+  "preservedPlantAndImageReference": true,
+  "releaseChecks": {
+    "sessions": 16,
+    "assertions": 26,
+    "roleCases": 7,
+    "concurrentSubscriptionEvents": 32,
+    "membershipRevocation": "PASS"
+  },
+  "schemaDiff": [],
+  "schemaSha256": "f5350b1b250a831ca11843a4b3c941313f1d23bc12784c69ef6cd9eb2850f702",
+  "fullSupabase": "BLOCKED: Docker unavailable locally; Vault encryption, PostgREST and Storage service not exercised"
+}

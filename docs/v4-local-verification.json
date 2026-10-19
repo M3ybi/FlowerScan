@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "revision": "93992572890033edc00185151fdec308268f38d2",
+  "dirty": true,
+  "generatedAtUtc": "2026-10-19T07:32:29.847Z",
+  "localOnly": false,
+  "results": [
+    {
+      "name": "install",
+      "command": "npm ci",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "application",
+      "command": "npm run check",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "image-chromium",
+      "command": "npm run test:image-browser",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "image-webkit",
+      "command": "npm run test:image-webkit",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "application-chromium",
+      "command": "npm run test:application-browser",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "application-webkit",
+      "command": "npm run test:application-webkit",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "auth-browser",
+      "command": "npm run test:auth-flow-browser",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "audit-all",
+      "command": "npm audit",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "audit-production",
+      "command": "npm audit --omit=dev",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "edge-types",
+      "command": "npm exec --yes --package=deno@2.9.6 -- npm run check:edge-types",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "auth-signature",
+      "command": "npm exec --yes --package=deno@2.9.6 -- npm run test:auth-signature",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "source-graph",
+      "command": "npm run check:source-graph",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "bundle-secrets",
+      "command": "npm run check:client-secrets",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "test:postgres",
+      "command": "npm run test:postgres",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "test:postgres-migrations",
+      "command": "npm run test:postgres-migrations",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "full-supabase",
+      "status": "BLOCKED",
+      "exitCode": 2
+    },
+    {
+      "name": "android-debug",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "diff-format",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "hosted-config-auth-storage",
+      "status": "BLOCKED",
+      "reason": "No authorized staging or production verification"
+    },
+    {
+      "name": "real-email-billing",
+      "status": "BLOCKED",
+      "reason": "Authorized test environment and provider acceptance evidence required"
+    },
+    {
+      "name": "physical-image-path",
+      "status": "BLOCKED",
+      "reason": "Ten repeated Add Plant/Diagnosis selections on each intended physical platform required"
+    },
+    {
+      "name": "signed-native-releases",
+      "status": "BLOCKED",
+      "reason": "Store signing, Xcode and device evidence required"
+    }
+  ],
+  "releaseVerdict": "NOT READY"
+}
