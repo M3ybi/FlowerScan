@@ -1,5 +1,7 @@
 # V4 Supabase validation
 
+Historical local-only snapshot. The later authorized production execution applied the four pending migrations, and the full disposable Supabase CI gate passed on `680571e` (34 migrations, synthetic upgrade and all six SQL fixtures twice). See [actual production evidence and remaining HTTP/provider gates](v4-production-deployment.md); the UNKNOWN/BLOCKED statements below describe the earlier scope.
+
 Code candidate: `93992572890033edc00185151fdec308268f38d2`. Git baseline: `4077c2c5c6c3a89fda71328c350157e2374cfe10`. These are source revisions, **not the hosted migration baseline**. Hosted applied versions are UNKNOWN. No `--linked` test, production query or migration was run. In particular, `test:database-audit` remains unsuitable here because it targets a linked project.
 
 ## Actual local results

@@ -1,6 +1,6 @@
 # Plantie V4 release summary — 2026-10-19
 
-**Recommendation: NOT READY.** Local engineering and verification are complete within the authorized scope. No staging environment was authorized, and production readiness requires external evidence that was not available. The original physical-gallery issue remains open.
+**Historical local readiness report.** The later direct-production request authorized a partial deployment; see [actual production execution and remaining blockers](v4-production-deployment.md). The evidence below describes the earlier local-only scope. The original physical-gallery issue remains open.
 
 ## Changes and why
 

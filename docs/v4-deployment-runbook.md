@@ -1,5 +1,7 @@
 # V4 deployment, operations and rollback runbook
 
+Historical preparation snapshot: the later direct-production request authorized a partial deployment. See [actual production execution and remaining blockers](v4-production-deployment.md) for current status; the preparation-only statements below describe the earlier authorization.
+
 **Prepared only. No staging is authorized; no production step below was executed.** Candidate code is `9399257`; baseline is `4077c2c`. Required external authority and final gate evidence must exist before using deployment commands. Never reset a linked database, include production data in fixtures, delete images speculatively, or enable the legacy backend as an automatic fallback.
 
 ## Local verification entrypoint
