@@ -45,6 +45,13 @@ try {
     .replace('sql_paths = ["./seed.sql"]', "sql_paths = []")
     .replace('openai_api_key = "env(OPENAI_API_KEY)"', 'openai_api_key = ""');
   await writeFile(path.join(workspace, "supabase", "config.toml"), config);
+  // The copied config declares this function. Startup resolves its source even
+  // though the SQL fixture never calls it. Copy its module graph, never .env/.temp.
+  for (const source of ["send-auth-email/index.ts", "_shared/authEmail.ts", "_shared/householdInviteEmail.ts", "_shared/observability.ts", "_shared/cors.ts"]) {
+    const target = path.join(workspace, "supabase", "functions", source);
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(path.join("supabase", "functions", source), target);
+  }
   const migrations = (await readdir("supabase/migrations")).filter(name => /^\d{14}_.+\.sql$/.test(name)).sort();
   const baseline = migrations.filter(name => name < "20261018190000");
   for (const name of baseline) await copyFile(`supabase/migrations/${name}`, path.join(migrationDir, name));
