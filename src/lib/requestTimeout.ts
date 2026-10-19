@@ -1,5 +1,6 @@
 // AbortSignal.timeout is unavailable in some mobile browsers. Keep cancellation
 // and release the timer as soon as the operation finishes on every runtime.
+import { awaitAbortableOperation } from "./abortableOperation.js";
 export const withRequestTimeout = async <T>(
   operation: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
@@ -12,7 +13,7 @@ export const withRequestTimeout = async <T>(
   const timer = setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
   try {
     if (controller.signal.aborted) throw controller.signal.reason;
-    const result = await operation(controller.signal);
+    const result = await awaitAbortableOperation(() => operation(controller.signal), { signal: controller.signal, timeoutMs: null });
     if (controller.signal.aborted) throw controller.signal.reason;
     return result;
   } catch (error) {

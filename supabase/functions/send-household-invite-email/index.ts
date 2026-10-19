@@ -1,4 +1,3 @@
-import { Resend } from "npm:resend";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildInviteUrl, classifyEmailError, parseSender, renderHouseholdInvitationEmail } from "../_shared/householdInviteEmail.ts";
@@ -61,6 +60,16 @@ Deno.serve(async (request) => {
     return json(200, { invitationCreated: true, emailSent: false, errorCode: "EMAIL_CONFIGURATION_ERROR" });
   }
 
+  // Admission is independent of invitation slots and expiry; repeated delivery
+  // of the same invitation must not bypass the provider spending limit.
+  try {
+    const { error } = await auth.client.rpc("admit_image_operation", { requested_operation: "invite_email" });
+    if (error) return json(error.message?.includes("IMAGE_RATE_LIMITED") ? 429 : 503,
+      { invitationCreated: true, emailSent: false, errorCode: error.message?.includes("IMAGE_RATE_LIMITED") ? "EMAIL_RATE_LIMITED" : "EMAIL_PROVIDER_UNAVAILABLE" });
+  } catch {
+    return json(503, { invitationCreated: true, emailSent: false, errorCode: "EMAIL_PROVIDER_UNAVAILABLE" });
+  }
+
   const senderEmail = auth.user.email ?? "A Plantie household owner";
   try {
     const message = renderHouseholdInvitationEmail({
@@ -70,18 +79,20 @@ Deno.serve(async (request) => {
       inviteUrl,
       expiresAt: data.expires_at,
     });
-    const resend = new Resend(apiKey);
-    const { data: sent, error } = await resend.emails.send({
-      from: from!,
-      to: data.invitee_email,
-      ...message,
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
+        "Idempotency-Key": `household-invite/${data.invite_id}/${Math.floor(Date.now() / 300_000)}` },
+      body: JSON.stringify({ from, to: data.invitee_email, ...message }),
+      signal: AbortSignal.timeout(10_000),
     });
-    if (error) {
-      const failure = classifyEmailError(error);
+    if (!response.ok) {
+      const rejection = await response.json().catch(() => null);
+      const failure = classifyEmailError({ statusCode: response.status,
+        message: typeof rejection?.message === "string" ? rejection.message : "" });
       console.error("Household invite provider rejected email", {
         invitationId: data.invite_id,
         householdId: data.household_id,
-        recipientDomain: data.invitee_email.split("@")[1],
         providerStatus: failure.providerStatus,
         providerCategory: failure.providerCategory,
         errorCode: failure.errorCode,
@@ -89,7 +100,9 @@ Deno.serve(async (request) => {
       });
       return json(200, { invitationCreated: true, emailSent: false, errorCode: failure.errorCode });
     }
-    return json(200, { invitationCreated: true, emailSent: true, providerMessageId: sent?.id ?? null });
+    const sent = await response.json().catch(() => null);
+    const providerMessageId = typeof sent?.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(sent.id) ? sent.id : null;
+    return json(200, { invitationCreated: true, emailSent: true, providerMessageId });
   } catch {
     console.error("Household invite provider request failed", {
       invitationId: data.invite_id,

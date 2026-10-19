@@ -102,7 +102,7 @@ test("public health function reports presence only and no secret payload", async
   assert.equal(healthPayloadContainsSecretLikeValue(JSON.parse(response.body)), false);
 });
 
-test("delete account request placeholder never deletes automatically", async () => {
+test("deletion review rejects forged anonymous account targets without acknowledging a request", async () => {
   const response = (await deleteAccountHandler(
     {
       body: JSON.stringify({ contact: "user@example.com", userId: "11111111-1111-4111-8111-111111111111" }),
@@ -112,8 +112,8 @@ test("delete account request placeholder never deletes automatically", async () 
     undefined as never,
   )) as TestHandlerResponse;
 
-  assert.equal(response.statusCode, 202);
+  assert.equal(response.statusCode, 401);
   const body = JSON.parse(response.body ?? "{}") as { destructiveAction?: boolean; message?: string };
-  assert.equal(body.destructiveAction, false);
-  assert.match(body.message ?? "", /manual review/i);
+  assert.equal(body.destructiveAction, undefined);
+  assert.match(body.message ?? "", /Sign in/);
 });

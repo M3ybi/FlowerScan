@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isRevenueCatEnvironmentAllowed } from "../src/lib/revenueCatEnvironment.js";
+
+test("sandbox and Test Store events require explicit server opt-in", () => {
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "SANDBOX", store: "APP_STORE" }, false), false);
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "PRODUCTION", store: "TEST_STORE" }, false), false);
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "SANDBOX", store: "TEST_STORE" }, true), true);
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "PRODUCTION", store: "PLAY_STORE" }, false), true);
+  assert.equal(isRevenueCatEnvironmentAllowed({ store: "APP_STORE" }, false), true);
+  assert.equal(isRevenueCatEnvironmentAllowed({ environment: "unrecognized" }, true), false);
+});
 import {
+  handler,
   mapRevenueCatStoreToPlatform,
   mapRevenueCatStatus,
   parseRevenueCatPayload,
@@ -8,6 +19,26 @@ import {
   verifyWebhookSecret,
 } from "../netlify/functions/revenuecat-webhook.js";
 import type { RevenueCatWebhookEvent, SupabaseAdminClient } from "../netlify/functions/revenuecat-webhook.js";
+
+test("compatibility webhook ignores signed sandbox events before privileged I/O", async () => {
+  const originalSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+  const originalSandbox = process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS;
+  const originalFetch = globalThis.fetch;
+  process.env.REVENUECAT_WEBHOOK_SECRET = "synthetic-webhook-secret";
+  delete process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS;
+  globalThis.fetch = async () => { assert.fail("sandbox event reached privileged I/O"); };
+  try {
+    const result = await handler({ httpMethod: "POST", headers: { authorization: "Bearer synthetic-webhook-secret" },
+      body: JSON.stringify({ event: { id: "fixture-sandbox", app_user_id: "fixture-user", type: "INITIAL_PURCHASE", environment: "SANDBOX", store: "TEST_STORE", entitlement_ids: ["premium"] } }) } as never, {} as never, () => undefined);
+    assert.ok(result);
+    assert.equal(result.statusCode, 200);
+    assert.equal(JSON.parse(result.body ?? "{}").reason, "environment_not_allowed");
+  } finally {
+    if (originalSecret === undefined) delete process.env.REVENUECAT_WEBHOOK_SECRET; else process.env.REVENUECAT_WEBHOOK_SECRET = originalSecret;
+    if (originalSandbox === undefined) delete process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS; else process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS = originalSandbox;
+    globalThis.fetch = originalFetch;
+  }
+});
 
 const userId = "11111111-1111-4111-8111-111111111111";
 

@@ -2,6 +2,7 @@ import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploa
 import { createServiceClient, requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
+import { requireImageAdmission } from "../_shared/imageAdmission.ts";
 
 const diagnosisSchema = {
   additionalProperties: false,
@@ -40,7 +41,7 @@ const extractOutputText = (response: unknown) => {
 
 const parseDiagnosis = (outputText: string) => {
   const parsed = JSON.parse(outputText) as Record<string, unknown>;
-  const confidence = Number(parsed.confidence);
+  const confidence = parsed.confidence;
   const observedSymptoms = Array.isArray(parsed.observed_symptoms)
     ? parsed.observed_symptoms.map((item) => sanitizeText(item, 160)).filter(Boolean).slice(0, 8)
     : [];
@@ -49,7 +50,7 @@ const parseDiagnosis = (outputText: string) => {
     : [];
 
   if (
-    !Number.isInteger(confidence) ||
+    typeof confidence !== "number" || !Number.isInteger(confidence) || confidence < 0 || confidence > 100 ||
     observedSymptoms.length === 0 ||
     recommendedSteps.length === 0 ||
     (parsed.confidence_label !== "low" && parsed.confidence_label !== "medium" && parsed.confidence_label !== "high") ||
@@ -59,7 +60,7 @@ const parseDiagnosis = (outputText: string) => {
   }
 
   const diagnosis = {
-    confidence: Math.max(0, Math.min(100, confidence)),
+    confidence,
     confidence_label: parsed.confidence_label,
     diagnosis_title: sanitizeText(parsed.diagnosis_title, 140),
     disclaimer: sanitizeText(parsed.disclaimer, 240),
@@ -99,6 +100,9 @@ Deno.serve(async (request) => {
   try { requireProcessedImage(imageDataUrl); }
   catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
+  try { await requireImageAdmission(() => auth.client.rpc("admit_image_operation", { requested_operation: "diagnosis" })); }
+  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
+
   const { data: reservationId, error: reservationError } = await auth.client.rpc("reserve_ai_analyze_usage", {
     analyze_type: "plant_unwell_ai_analyze",
     generation_source: "plant_unwell_flow",
@@ -107,6 +111,17 @@ Deno.serve(async (request) => {
   if (reservationError) return json(403, { error: reservationError.message || "AI analyze limit reached." });
 
   const serviceClient = createServiceClient();
+  const releaseReservation = async () => {
+    if (!reservationId) return;
+    try {
+      const { error } = await serviceClient.rpc("release_ai_analyze_reservation", {
+        analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
+      });
+      if (error) console.warn("Diagnosis reservation cleanup failed", { code: "DIAGNOSIS_RESERVATION_RELEASE_FAILED" });
+    } catch {
+      console.warn("Diagnosis reservation cleanup failed", { code: "DIAGNOSIS_RESERVATION_RELEASE_FAILED" });
+    }
+  };
   let response: Response;
   try {
     response = await fetch("https://api.openai.com/v1/responses", {
@@ -132,9 +147,7 @@ Deno.serve(async (request) => {
 
   } catch (error) {
     if (reservationId) {
-      await serviceClient.rpc("release_ai_analyze_reservation", {
-        analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
-      }).catch(() => undefined);
+      await releaseReservation();
     }
     return imageErrorResponse(imageNetworkError(error), body.language);
   }
@@ -142,11 +155,7 @@ Deno.serve(async (request) => {
   if (!response.ok) {
     console.error("Supabase diagnosis AI request failed", { status: response.status, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
     if (reservationId) {
-      await serviceClient.rpc("release_ai_analyze_reservation", {
-        analyze_type: "plant_unwell_ai_analyze",
-        reservation_id: reservationId,
-        target_household_id: householdId,
-      }).catch(() => undefined);
+      await releaseReservation();
     }
     return imageErrorResponse(await imageProviderFailure(response), body.language);
   }
@@ -156,20 +165,14 @@ Deno.serve(async (request) => {
     if (payload.status === "incomplete" || payload.status === "failed") {
       console.error("Diagnosis provider returned no complete result", { status: payload.status });
       if (reservationId) {
-        await serviceClient.rpc("release_ai_analyze_reservation", {
-          analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
-        }).catch(() => undefined);
+        await releaseReservation();
       }
       return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503), body.language);
     }
     const diagnosis = parseDiagnosis(extractOutputText(payload));
     if (!diagnosis) {
       if (reservationId) {
-        await serviceClient.rpc("release_ai_analyze_reservation", {
-          analyze_type: "plant_unwell_ai_analyze",
-          reservation_id: reservationId,
-          target_household_id: householdId,
-        }).catch(() => undefined);
+        await releaseReservation();
       }
       return json(502, { error: "AI returned incomplete diagnosis data." });
     }
@@ -181,20 +184,14 @@ Deno.serve(async (request) => {
         target_household_id: householdId,
       });
       if (commitError) {
-        await serviceClient.rpc("release_ai_analyze_reservation", {
-          analyze_type: "plant_unwell_ai_analyze", reservation_id: reservationId, target_household_id: householdId,
-        }).catch(() => undefined);
+        await releaseReservation();
         return json(409, { error: "AI analyze usage could not be recorded." });
       }
     }
     return json(200, { diagnosis });
   } catch {
     if (reservationId) {
-      await serviceClient.rpc("release_ai_analyze_reservation", {
-        analyze_type: "plant_unwell_ai_analyze",
-        reservation_id: reservationId,
-        target_household_id: householdId,
-      }).catch(() => undefined);
+      await releaseReservation();
     }
     return json(502, { error: "AI returned invalid JSON." });
   }

@@ -63,6 +63,7 @@ export const callBackendFunction = async <T>({
   signal,
 }: BackendFunctionOptions): Promise<T> => {
   const imageWorkflow = ["upload-validated-image", "validate-plant-image", "plant-care-ai", "plant-diagnosis-ai"].includes(functionName);
+  const timeoutMs = imageWorkflow ? 60_000 : functionName === "delete-account-request" ? 15_000 : null;
   if (isSupabaseBackend) {
     if (!supabase) {
       if (!allowNetlifyFallback || !isLegacyNetlifyBackendEnabled) {
@@ -71,7 +72,7 @@ export const callBackendFunction = async <T>({
     } else {
       const client = supabase;
       const invoke = (signal?: AbortSignal) => client.functions.invoke(functionName, { body, ...(signal ? { signal } : {}) });
-      const { data, error } = await (imageWorkflow ? withRequestTimeout(invoke, 60_000, signal) : invoke(signal)).catch(async (error: unknown) => {
+      const { data, error } = await (timeoutMs ? withRequestTimeout(invoke, timeoutMs, signal) : invoke(signal)).catch(async (error: unknown) => {
         throw (imageWorkflow ? await imageErrorFromResponse(error) : null) ?? error;
       });
       if (!error) {
@@ -88,17 +89,19 @@ export const callBackendFunction = async <T>({
     throw new Error("Legacy Netlify backend is disabled.");
   }
 
-  const invoke = (signal?: AbortSignal) => fetch(netlifyPath, {
+  const authorization = functionName === "delete-account-request" && supabase
+    ? (await supabase.auth.getSession()).data.session?.access_token : undefined;
+  const invoke = async (signal?: AbortSignal): Promise<T> => {
+    const response = await fetch(netlifyPath, {
     body: JSON.stringify(body ?? {}),
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(authorization ? { Authorization: `Bearer ${authorization}` } : {}) },
     method: "POST",
     ...(signal ? { signal } : {}),
-  });
-  const response = await (imageWorkflow ? withRequestTimeout(invoke, 60_000, signal) : invoke(signal)).catch(async (error: unknown) => { throw (imageWorkflow ? await imageErrorFromResponse(error) : null) ?? error; });
-
-  if (!response.ok) {
-    throw (imageWorkflow ? await imageErrorFromResponse({ context: response }) : null) ?? new Error((await extractResponseErrorMessage(response)) || `Legacy Netlify backend request failed with status ${response.status}.`);
-  }
-
-  return (await response.json()) as T;
+    });
+    if (!response.ok) {
+      throw (imageWorkflow ? await imageErrorFromResponse({ context: response }) : null) ?? new Error((await extractResponseErrorMessage(response)) || `Legacy Netlify backend request failed with status ${response.status}.`);
+    }
+    return (await response.json()) as T;
+  };
+  return (timeoutMs ? withRequestTimeout(invoke, timeoutMs, signal) : invoke(signal)).catch(async (error: unknown) => { throw (imageWorkflow ? await imageErrorFromResponse(error) : null) ?? error; });
 };

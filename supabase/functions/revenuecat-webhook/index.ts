@@ -1,4 +1,5 @@
 import { getRevenueCatAccessExpiration, isRevenueCatRefundRevocation } from "../../../src/lib/revenueCatWebhookRules.ts";
+import { isRevenueCatEnvironmentAllowed } from "../../../src/lib/revenueCatEnvironment.ts";
 ﻿import { createServiceClient } from "../_shared/auth.ts";
 import { json } from "../_shared/cors.ts";
 const premiumEntitlementId = "premium";
@@ -15,6 +16,7 @@ const inactiveEventTypes = new Set(["EXPIRATION", "REFUND"]);
 const stateChangingEventTypes = new Set([...activeEventTypes, "BILLING_ISSUE", "CANCELLATION", ...inactiveEventTypes]);
 
 type RevenueCatEvent = {
+  environment?: string;
   appUserId: string;
   currency: string | null;
   entitlementId: string;
@@ -65,6 +67,7 @@ const parsePayload = async (request: Request): Promise<RevenueCatEvent | null> =
     if (!parsed.event || typeof parsed.event !== "object") return null;
     const event = parsed.event as Record<string, unknown>;
     const webhookEvent = {
+      environment: stringValue(event.environment),
       appUserId: stringValue(event.app_user_id),
       currency: stringValue(event.currency) || null,
       entitlementId: firstEntitlementId(event),
@@ -127,6 +130,9 @@ Deno.serve(async (request) => {
 
   const event = await parsePayload(request);
   if (!event) return json(400, { error: "Invalid RevenueCat webhook payload." });
+  if (!isRevenueCatEnvironmentAllowed(event, Deno.env.get("REVENUECAT_ALLOW_SANDBOX_EVENTS") === "true")) {
+    return json(200, { status: "ignored", reason: "environment_not_allowed" });
+  }
 
   console.info("RevenueCat webhook received", {
     appUserIdPrefix: safeUserPrefix(event.appUserId),

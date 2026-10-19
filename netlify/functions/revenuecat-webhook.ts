@@ -1,5 +1,6 @@
 import { getRevenueCatAccessExpiration, isRevenueCatRefundRevocation } from "../../src/lib/revenueCatWebhookRules.js";
-﻿import type { Handler } from "@netlify/functions";
+import { isRevenueCatEnvironmentAllowed } from "../../src/lib/revenueCatEnvironment.js";
+import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getRevenueCatPlan } from "../../src/lib/revenueCatProducts.js";
 
@@ -18,6 +19,7 @@ export type RevenueCatSubscriptionStatus = "active" | "cancelled" | "expired" | 
 export type RevenueCatSubscriptionPlatform = "ios" | "android" | "web" | "manual";
 
 export type RevenueCatWebhookEvent = {
+  environment?: string;
   appUserId: string;
   currency: string | null;
   entitlementId: string;
@@ -127,6 +129,7 @@ export const parseRevenueCatPayload = (body: string | null): RevenueCatWebhookEv
 
     const event = parsed.event as Record<string, unknown>;
     const webhookEvent: RevenueCatWebhookEvent = {
+      environment: stringValue(event.environment),
       appUserId: stringValue(event.app_user_id),
       currency: stringValue(event.currency) || null,
       entitlementId: firstEntitlementId(event),
@@ -352,6 +355,10 @@ export const handler: Handler = async (event) => {
       headers,
       statusCode: 400,
     };
+  }
+
+  if (!isRevenueCatEnvironmentAllowed(payload, process.env.REVENUECAT_ALLOW_SANDBOX_EVENTS === "true")) {
+    return { body: JSON.stringify({ status: "ignored", reason: "environment_not_allowed" }), headers, statusCode: 200 };
   }
 
   safeLog("RevenueCat webhook received", {

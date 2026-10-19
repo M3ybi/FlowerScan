@@ -10,7 +10,7 @@ const fixtureBundle = await build({ entryPoints: ["tests/fixtures/imagePayload.t
 const { fixtureDataUrl, jpegFixtureAtSize } = await import(`data:text/javascript;base64,${Buffer.from(fixtureBundle.outputFiles[0].text).toString("base64")}`);
 const imageDataUrl = fixtureDataUrl();
 const bundles = new Map();
-const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploadError = null, serviceOverride, signingSecret, admissionError = null, userId = imageId } = {}) => {
+const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploadError = null, serviceOverride, signingSecret, admissionError = null, userId = imageId, allowSandbox = false } = {}) => {
   if (!bundles.has(name)) {
     const result = await build({
       entryPoints: [`supabase/functions/${name}/index.ts`], bundle: true, write: false, format: "iife",
@@ -32,7 +32,11 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
     throw new Error(`Unexpected user RPC: ${method}`);
   } };
   const service = {
-    rpc: async (method) => { calls.push(`service:${method}`); return { error: null }; },
+    rpc: (method) => {
+      calls.push(`service:${method}`);
+      // PostgREST builders are PromiseLike; they do not expose Promise.catch.
+      return { then: (fulfilled, rejected) => Promise.resolve({ error: null }).then(fulfilled, rejected) };
+    },
     storage: { from: () => ({ upload: async (_path, _bytes, options) => {
       calls.push("storage:upload");
       assert.equal(options.upsert, true);
@@ -41,11 +45,11 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
   };
   let handler;
   vm.runInNewContext(bundles.get(name), {
-    Deno: { env: { get: (name) => name === "IMAGE_VALIDATION_SIGNING_SECRET" ? signingSecret : "fixture-key" }, serve: (fn) => { handler = fn; } },
+    Deno: { env: { get: (name) => name === "IMAGE_VALIDATION_SIGNING_SECRET" ? signingSecret : name === "REVENUECAT_ALLOW_SANDBOX_EVENTS" ? String(allowSandbox) : "fixture-key" }, serve: (fn) => { handler = fn; } },
     fixture: { auth: signedIn ? { user: { id: userId }, client: user } : null, service: serviceOverride ?? service },
     crypto: webcrypto, btoa, TextEncoder, Request, Response, AbortSignal, AbortController, Uint8Array, TextDecoder, Error, TypeError, SyntaxError, DOMException, atob, setTimeout, clearTimeout,
     fetch: fetch ?? (async () => { throw new Error("Unexpected provider call"); }),
-    console: { error() {}, info() {}, log() {} },
+    console: { error() {}, warn() {}, info() {}, log() {} },
   });
   return { calls, invoke: (body, headers = {}) => handler(new Request("https://fixture.invalid", {
     method: "POST", headers: { authorization: "Bearer fixture-key", "content-type": "application/json", ...headers }, body: JSON.stringify(body),
@@ -79,7 +83,7 @@ test("upload handler rejects malformed bytes before AI and never stores rejected
 });
 
 test("server admission rejects excess image requests before provider or storage work", async () => {
-  for (const name of ["validate-plant-image", "upload-validated-image", "plant-care-ai"]) {
+  for (const name of ["validate-plant-image", "upload-validated-image", "plant-care-ai", "plant-diagnosis-ai"]) {
     const { invoke, calls } = await loadHandler(name, { admissionError: { message: "IMAGE_RATE_LIMITED" } });
     const response = await invoke({ ...uploadBody, plantName: "Plant", generationSource: "initial_plant_add" });
     assert.equal(response.status, 429, name);
@@ -200,6 +204,17 @@ test("validation, care and diagnosis all accept the normalized 2 MiB transport c
 });
 
 const diagnosisBody = { householdId, plantName: "Fixture plant", imageDataUrl, language: "en" };
+test("malformed confidence values are rejected rather than promoted to a definitive diagnosis", async () => {
+  for (const confidence of ["80", -1, 101, 0.5, null]) {
+    const { invoke, calls } = await loadHandler("plant-diagnosis-ai", { fetch: async () => Response.json({ output_text: JSON.stringify({
+      confidence, confidence_label: "high", risk_level: "low", diagnosis_title: "Fixture", disclaimer: "Estimate",
+      reasoning_summary: "Fixture", observed_symptoms: ["Leaf"], recommended_steps: ["Check soil"],
+    }) }) });
+    assert.equal((await invoke(diagnosisBody)).status, 502, String(confidence));
+    assert.equal(calls.includes("service:commit_ai_analyze_usage"), false);
+    assert.equal(calls.includes("service:release_ai_analyze_reservation"), true);
+  }
+});
 test("incomplete provider diagnoses release quota and return a safe service error", async () => {
   const { invoke, calls } = await loadHandler("plant-diagnosis-ai", { fetch: async () => Response.json({
     status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output_text: '{"diagnosis_title":',
@@ -207,12 +222,12 @@ test("incomplete provider diagnoses release quota and return a safe service erro
   const response = await invoke(diagnosisBody);
   assert.equal(response.status, 503);
   assert.equal((await response.json()).code, "IMAGE_SERVICE_UNAVAILABLE");
-  assert.deepEqual(calls, ["user:reserve_ai_analyze_usage", "service:release_ai_analyze_reservation"]);
+  assert.deepEqual(calls, ["user:admit_image_operation", "user:reserve_ai_analyze_usage", "service:release_ai_analyze_reservation"]);
 });
 test("diagnosis network rejection releases quota through the trusted service", async () => {
   const { invoke, calls } = await loadHandler("plant-diagnosis-ai", { fetch: async () => { throw new Error("Network unavailable"); } });
   assert.equal((await invoke(diagnosisBody)).status, 502);
-  assert.deepEqual(calls, ["user:reserve_ai_analyze_usage", "service:release_ai_analyze_reservation"]);
+  assert.deepEqual(calls, ["user:admit_image_operation", "user:reserve_ai_analyze_usage", "service:release_ai_analyze_reservation"]);
 });
 
 test("initial care provider failure returns an actionable failure", async () => {
@@ -225,7 +240,7 @@ test("valid diagnosis commits quota once through the trusted service", async () 
       disclaimer: "Estimate", reasoning_summary: "Dry soil", observed_symptoms: ["Dry leaf"], recommended_steps: ["Check soil"] }),
   }) });
   assert.equal((await invoke(diagnosisBody)).status, 200);
-  assert.deepEqual(calls, ["user:reserve_ai_analyze_usage", "service:commit_ai_analyze_usage"]);
+  assert.deepEqual(calls, ["user:admit_image_operation", "user:reserve_ai_analyze_usage", "service:commit_ai_analyze_usage"]);
 });
 
 test("primary webhook forwards grace periods and effective refund revocations", async () => {
@@ -242,4 +257,14 @@ test("primary webhook forwards grace periods and effective refund revocations", 
   assert.equal(applied[0].period_end, new Date(3000).toISOString());
   assert.equal((await invoke({ event: { ...event, id: "refund", type: "CANCELLATION", cancel_reason: "CUSTOMER_SUPPORT" } })).status, 200);
   assert.equal(applied[1].event_status, "refunded");
+});
+
+test("primary webhook ignores signed sandbox/Test Store purchases before accessing subscription storage", async () => {
+  const { invoke, calls } = await loadHandler("revenuecat-webhook");
+  for (const event of [{ environment: "SANDBOX", store: "PLAY_STORE" }, { environment: "PRODUCTION", store: "TEST_STORE" }]) {
+    const response = await invoke({ event: { ...event, id: "sandbox-event", type: "INITIAL_PURCHASE" } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).reason, "environment_not_allowed");
+  }
+  assert.deepEqual(calls, []);
 });
