@@ -1,0 +1,3575 @@
+{
+  "scope": [
+    "src",
+    "netlify/functions",
+    "supabase/functions"
+  ],
+  "modules": 183,
+  "edges": 688,
+  "unresolved": [],
+  "cycles": [],
+  "largestModules": [
+    {
+      "file": "src/lib/i18n.ts",
+      "lines": 2784,
+      "imports": 1,
+      "consumers": 27
+    },
+    {
+      "file": "src/App.tsx",
+      "lines": 2059,
+      "imports": 57,
+      "consumers": 1
+    },
+    {
+      "file": "src/lib/plantieRepository.ts",
+      "lines": 1263,
+      "imports": 9,
+      "consumers": 12
+    },
+    {
+      "file": "src/lib/billingService.ts",
+      "lines": 707,
+      "imports": 3,
+      "consumers": 3
+    },
+    {
+      "file": "src/features/plants/components/PlantDetailsPage.tsx",
+      "lines": 686,
+      "imports": 16,
+      "consumers": 1
+    },
+    {
+      "file": "src/data/flowers.ts",
+      "lines": 486,
+      "imports": 0,
+      "consumers": 4
+    },
+    {
+      "file": "netlify/functions/_shared/storage.ts",
+      "lines": 456,
+      "imports": 4,
+      "consumers": 8
+    },
+    {
+      "file": "src/lib/imageCaptureService.ts",
+      "lines": 452,
+      "imports": 6,
+      "consumers": 5
+    },
+    {
+      "file": "src/features/settings/components/SettingsPage.tsx",
+      "lines": 442,
+      "imports": 17,
+      "consumers": 1
+    },
+    {
+      "file": "src/components/PricingPage.tsx",
+      "lines": 427,
+      "imports": 12,
+      "consumers": 1
+    },
+    {
+      "file": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "lines": 387,
+      "imports": 6,
+      "consumers": 1
+    },
+    {
+      "file": "netlify/functions/revenuecat-webhook.ts",
+      "lines": 386,
+      "imports": 3,
+      "consumers": 0
+    },
+    {
+      "file": "src/lib/supabaseReadThrough.ts",
+      "lines": 359,
+      "imports": 3,
+      "consumers": 5
+    },
+    {
+      "file": "src/lib/authRules.ts",
+      "lines": 351,
+      "imports": 1,
+      "consumers": 5
+    },
+    {
+      "file": "src/lib/loggedOutMenuCopy.ts",
+      "lines": 344,
+      "imports": 0,
+      "consumers": 1
+    },
+    {
+      "file": "src/lib/authService.ts",
+      "lines": 337,
+      "imports": 8,
+      "consumers": 6
+    },
+    {
+      "file": "src/components/AuthPanel.tsx",
+      "lines": 327,
+      "imports": 8,
+      "consumers": 5
+    },
+    {
+      "file": "src/lib/supabaseSourceOfTruth.ts",
+      "lines": 324,
+      "imports": 6,
+      "consumers": 4
+    },
+    {
+      "file": "netlify/functions/plant-care-ai.ts",
+      "lines": 294,
+      "imports": 3,
+      "consumers": 0
+    },
+    {
+      "file": "src/features/invitations/hooks/useInvitationActions.ts",
+      "lines": 291,
+      "imports": 5,
+      "consumers": 1
+    }
+  ],
+  "imports": [
+    {
+      "from": "netlify/functions/_shared/diagnostics.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/_shared/report.ts",
+      "to": "netlify/functions/_shared/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/_shared/report.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "type"
+    },
+    {
+      "from": "netlify/functions/_shared/storage.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/_shared/storage.ts",
+      "to": "netlify/functions/_shared/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "netlify/functions/_shared/storage.ts",
+      "to": "netlify/functions/_shared/diagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/_shared/storage.ts",
+      "to": "netlify/functions/_shared/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/_shared/storage.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/delete-account-request.ts",
+      "to": "supabase/functions/_shared/accountDeletion.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/delete-account-request.ts",
+      "to": "src/lib/requestTimeout.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/household-access.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/household-access.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-care-ai.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-care-ai.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-care-ai.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-diagnosis-ai.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-diagnosis-ai.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-diagnosis-ai.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-records.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-records.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-report.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-report.ts",
+      "to": "netlify/functions/_shared/report.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-report.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-state.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/plant-state.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-public-key.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-public-key.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-subscription.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-subscription.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-watering-notifications.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-watering-notifications.ts",
+      "to": "netlify/functions/_shared/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-watering-notifications.ts",
+      "to": "netlify/functions/_shared/notifications.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/push-watering-notifications.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/report-settings.ts",
+      "to": "netlify/functions/_shared/household-scope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/report-settings.ts",
+      "to": "netlify/functions/_shared/storage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/revenuecat-webhook.ts",
+      "to": "src/lib/revenueCatWebhookRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/revenuecat-webhook.ts",
+      "to": "src/lib/revenueCatEnvironment.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "netlify/functions/revenuecat-webhook.ts",
+      "to": "src/lib/revenueCatProducts.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/AppRouter.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/householdInvites.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/householdPeople.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/localDiagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/records.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/app/routes.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/AppNavigation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/HouseholdInvitationInbox.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/HouseholdInvitationReview.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/InvitationCenterOverlay.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/components/ReleasePages.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/auth/hooks/useRecoveryActions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/care/hooks/useCareActions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/households/components/HouseholdSheet.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/households/hooks/useHouseholdCreation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/households/types.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/invitations/hooks/useInvitationActions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/plants/hooks/usePlantActions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/plants/hooks/usePlantPersistence.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/features/settings/hooks/useAccountDeletion.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useCustomFlowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useHouseholdDirectory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useHouseholdInvitations.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useImageSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/hooks/useSubscriptionState.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/aiDiagnosisAccess.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/aiDiagnosisAccess.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/authPanelCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/authService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/diagnosisConfidence.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/errorDiagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdInvitationCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdMembershipRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdOperationScope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdPermissions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdPlanRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/householdSubscriptionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/lib/supabaseSourceOfTruth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/utils/qrPdf.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/App.tsx",
+      "to": "src/utils/watering.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/AppErrorBoundary.tsx",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/AppErrorBoundary.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/AppErrorBoundary.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/features/dashboard/components/DashboardPage.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/app/FeatureBoundary.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/app/routes.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/features/plants/components/PlantDetailsPage.tsx",
+      "kind": "dynamic"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/features/settings/components/SettingsPage.tsx",
+      "kind": "dynamic"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "kind": "dynamic"
+    },
+    {
+      "from": "src/app/AppRouter.tsx",
+      "to": "src/features/qr/components/QrPage.tsx",
+      "kind": "dynamic"
+    },
+    {
+      "from": "src/app/FeatureBoundary.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/FeatureBoundary.tsx",
+      "to": "src/app/AppErrorBoundary.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/appFormatting.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/appFormatting.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/appFormatting.ts",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/appFormatting.ts",
+      "to": "src/utils/links.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/appFormatting.ts",
+      "to": "src/utils/dates.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/appFormatting.ts",
+      "to": "src/utils/watering.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/carePresentation.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/carePresentation.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/carePresentation.tsx",
+      "to": "src/utils/customFlower.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/householdInvites.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/householdInvites.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/householdPeople.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/householdPeople.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/householdPeople.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/localDiagnostics.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/localDiagnostics.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/localDiagnostics.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/app/localDiagnostics.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/records.ts",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/routes.ts",
+      "to": "src/lib/releaseReadiness.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/app/routes.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AccountMenu.tsx",
+      "to": "src/lib/authService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AppNavigation.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/AuthButton.tsx",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthButton.tsx",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthButton.tsx",
+      "to": "src/components/AccountMenu.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthButton.tsx",
+      "to": "src/components/AuthModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthModal.tsx",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthModal.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthModal.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthModal.tsx",
+      "to": "src/components/ModalDialog.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/authService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/authRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/authRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/nativeOAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/invitationAuthContext.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/authPanelCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/authPanelCopy.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/AuthPanel.tsx",
+      "to": "src/lib/authPanelCopy.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/BillingHistoryTimeline.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/BillingHistoryTimeline.tsx",
+      "to": "src/lib/subscriptionHistoryModel.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/BillingHistoryTimeline.tsx",
+      "to": "src/lib/billingHistoryCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/BillingHistoryTimeline.tsx",
+      "to": "src/lib/subscriptionUiRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationInbox.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdInvitationInbox.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdInvitationInbox.tsx",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationInbox.tsx",
+      "to": "src/lib/householdInvitationCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationInbox.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/lib/householdInvitationCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdInvitationReview.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/app/householdPeople.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/app/householdPeople.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/lib/householdSubscriptionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/lib/householdPermissions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdPeopleList.tsx",
+      "to": "src/lib/householdInvitationCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/HouseholdSwitcher.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/ImageSourcePicker.tsx",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/ImageSourcePicker.tsx",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/ImageSourcePicker.tsx",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/InvitationCenterOverlay.tsx",
+      "to": "src/lib/invitationOverlay.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/InvitationCenterOverlay.tsx",
+      "to": "src/lib/dialogScrollLock.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/lib/loggedOutMenuCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/lib/menuProductInfo.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/hooks/useAppVersion.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/lib/authRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/LoggedOutMenu.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/ModalDialog.tsx",
+      "to": "src/lib/dialogScrollLock.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PlantActionModal.tsx",
+      "to": "src/components/ModalDialog.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/hooks/useHouseholdSubscriptionHistory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/hooks/useOperationScope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/billingService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/billingService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/dialogScrollLock.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/householdMembershipRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/householdPermissions.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/householdSubscriptionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/lib/subscriptionUiRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/components/BillingHistoryTimeline.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/PricingPage.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/QrCode.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/QrCode.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/ReleasePages.tsx",
+      "to": "src/features/settings/accountDeletionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/ReleasePages.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/ReleasePages.tsx",
+      "to": "src/lib/releaseReadiness.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/ReleasePages.tsx",
+      "to": "src/lib/releaseReadiness.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/ReleasePages.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/StorageNotice.tsx",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/StorageNotice.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/hooks/useOperationScope.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/billingService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/billingService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/householdSubscriptionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/lib/subscriptionUiRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/components/UpgradeModal.tsx",
+      "to": "src/components/ModalDialog.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/auth/hooks/useRecoveryActions.ts",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/auth/hooks/useRecoveryActions.ts",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/auth/hooks/useRecoveryActions.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/auth/hooks/useRecoveryActions.ts",
+      "to": "src/lib/authService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/components/CarePreviewModal.tsx",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/care/components/CarePreviewModal.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/components/CarePreviewModal.tsx",
+      "to": "src/components/ModalDialog.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/components/CarePreviewModal.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/care/components/CarePreviewModal.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/lib/aiDiagnosisAccess.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/care/hooks/useCareActions.ts",
+      "to": "src/utils/customFlower.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/components/AppNavigation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/hooks/useImageSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/utils/watering.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/features/plants/components/AddPlantModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/dashboard/components/DashboardPage.tsx",
+      "to": "src/features/plants/components/PlantGrid.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/app/localDiagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/components/ImageSourcePicker.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/components/PlantActionModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/lib/aiDiagnosisAccess.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/app/localDiagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/app/routes.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/components/AppNavigation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosisPage.tsx",
+      "to": "src/utils/links.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosticHistory.tsx",
+      "to": "src/app/localDiagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosticHistory.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosticHistory.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosticHistory.tsx",
+      "to": "src/utils/dates.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/components/DiagnosticHistory.tsx",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/hooks/useImageSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/aiDiagnosisAccess.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/supabaseSourceOfTruth.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/lib/supabaseSourceOfTruth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/diagnosis/hooks/useDiagnosisActions.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/components/ModalDialog.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/components/HouseholdSheet.tsx",
+      "to": "src/features/households/types.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/hooks/useHouseholdDirectory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/householdNameValidation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/householdSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdCreation.ts",
+      "to": "src/features/households/types.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/hooks/useHouseholdDirectory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/householdNameValidation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/householdPermissions.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdManagement.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/components/HouseholdSwitcher.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/hooks/useHouseholdDirectory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/householdInvitationCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/householdSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/invitationAuthContext.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/households/hooks/useHouseholdSelectionActions.tsx",
+      "to": "src/features/households/types.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/app/householdInvites.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/app/householdPeople.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/householdPermissions.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationActions.ts",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/app/householdInvites.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/hooks/useHouseholdDirectory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/hooks/useHouseholdInvitations.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/authService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/householdSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/invitationAuthContext.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/invitations/hooks/useInvitationReviewActions.ts",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/AddPlantModal.tsx",
+      "to": "src/components/ImageSourcePicker.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/AddPlantModal.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/AddPlantModal.tsx",
+      "to": "src/components/PlantActionModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/AddPlantModal.tsx",
+      "to": "src/hooks/useImageSelection.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/AddPlantModal.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/app/carePresentation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/app/routes.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/components/AppNavigation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/components/ModalDialog.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/components/QrCode.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/components/UpgradeModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/data/wateringIntervals.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/hooks/useImageSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/hooks/useSubscriptionState.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/lib/aiDiagnosisAccess.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/utils/dates.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/utils/watering.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/features/care/components/CarePreviewModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/features/diagnosis/components/DiagnosisModal.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantDetailsPage.tsx",
+      "to": "src/features/diagnosis/components/DiagnosticHistory.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/data/wateringIntervals.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/utils/watering.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/components/PlantGrid.tsx",
+      "to": "src/utils/links.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/app/routes.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/hooks/useImageSelection.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/lib/supabaseSourceOfTruth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/utils/customFlower.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantActions.ts",
+      "to": "src/features/plants/services/addPlant.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantPersistence.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantPersistence.ts",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantPersistence.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantPersistence.ts",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantPersistence.ts",
+      "to": "src/lib/supabaseSourceOfTruth.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/hooks/usePlantPersistence.ts",
+      "to": "src/lib/supabaseSourceOfTruth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/plants/services/addPlant.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/services/addPlant.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/plants/services/addPlant.ts",
+      "to": "src/utils/customFlower.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/app/appFormatting.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/app/routes.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/components/AppNavigation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/components/QrCode.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/qr/components/QrPage.tsx",
+      "to": "src/utils/qrPdf.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/accountDeletionCopy.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/app/householdInvites.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/app/householdPeople.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/app/routes.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/AppNavigation.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/AuthPanel.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/HouseholdPeopleList.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/LoadingButton.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/LoggedOutMenu.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/PricingPage.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/components/SettingsSectionHeader.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/hooks/useAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/hooks/useSubscriptionState.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/authRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/householdInvitationCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/householdSubscriptionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/invitationAuthContext.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/lib/supabaseReadThrough.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/components/SettingsPage.tsx",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/hooks/useAccountDeletion.ts",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/features/settings/hooks/useAccountDeletion.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/features/settings/hooks/useAccountDeletion.ts",
+      "to": "src/features/settings/accountDeletionCopy.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAppVersion.ts",
+      "to": "src/lib/menuProductInfo.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAuth.ts",
+      "to": "src/lib/authService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAuth.ts",
+      "to": "src/lib/authRedirects.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAuth.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAuth.ts",
+      "to": "src/lib/invitationAuthContext.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAuth.ts",
+      "to": "src/lib/passwordRecoverySession.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useAuth.ts",
+      "to": "src/lib/passwordRecoverySession.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useCustomFlowers.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useCustomFlowers.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useFlowerRecords.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useFlowerRecords.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useHouseholdDirectory.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useHouseholdDirectory.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useHouseholdInvitations.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useHouseholdInvitations.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useHouseholdInvitations.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useHouseholdSubscriptionHistory.ts",
+      "to": "src/lib/householdSubscriptionHistory.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useHouseholdSubscriptionHistory.ts",
+      "to": "src/lib/householdSubscriptionHistoryController.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useHouseholdSubscriptionHistory.ts",
+      "to": "src/lib/householdSubscriptionHistoryController.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useImageSelection.ts",
+      "to": "src/lib/imageValidationReceipts.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useImageSelection.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useImageSelection.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useImageSelection.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useImageSelection.ts",
+      "to": "src/utils/imageUploadValidation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useImageSelection.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/hooks/useSubscriptionState.ts",
+      "to": "src/lib/billingService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useSubscriptionState.ts",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/hooks/useSubscriptionState.ts",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authPanelCopy.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authPanelCopy.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/authPanelCopy.ts",
+      "to": "src/lib/i18n.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authPanelCopy.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/authRecovery.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authRedirects.ts",
+      "to": "src/utils/household.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authRedirects.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authRules.ts",
+      "to": "src/lib/authRedirects.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authRules.ts",
+      "to": "src/lib/authRedirects.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/authRecovery.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/authRedirects.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/authRedirects.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/invitationAuthContext.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/nativeOAuth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/nativeOAuth.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/authService.ts",
+      "to": "src/lib/authRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/backendConfig.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/backendConfig.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/backendConfig.ts",
+      "to": "src/lib/requestTimeout.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/billingHistoryCopy.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/billingHistoryCopy.ts",
+      "to": "src/lib/subscriptionHistoryModel.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/billingService.ts",
+      "to": "src/lib/revenueCatProducts.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/billingService.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/billingService.ts",
+      "to": "src/lib/revenueCatProducts.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/diagnosisGate.ts",
+      "to": "src/lib/entitlementService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/diagnosisGate.ts",
+      "to": "src/lib/diagnosisGateRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/diagnosisGate.ts",
+      "to": "src/lib/diagnosisGateRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/entitlementService.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/heicDecode.worker.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/heicDecoder.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/heicDecoder.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/householdInvitationCopy.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdInvitationCopy.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdInvitationRules.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdMembershipRules.ts",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdPermissions.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdPlanService.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/householdPlanService.ts",
+      "to": "src/lib/householdPlanRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdPlanService.ts",
+      "to": "src/lib/householdPlanRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/householdSelection.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdSubscriptionCopy.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdSubscriptionHistory.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/householdSubscriptionHistory.ts",
+      "to": "src/lib/subscriptionHistoryModel.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/householdSubscriptionHistory.ts",
+      "to": "src/lib/subscriptionHistoryModel.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdSubscriptionHistoryController.ts",
+      "to": "src/lib/householdSubscriptionHistory.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/householdSubscriptionHistoryController.ts",
+      "to": "src/lib/subscriptionHistoryModel.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/householdSubscriptionHistoryController.ts",
+      "to": "src/lib/subscriptionHistoryModel.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/i18n.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/imageCaptureService.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/imageCaptureService.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/imageCaptureService.ts",
+      "to": "src/lib/requestTimeout.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/imageCaptureService.ts",
+      "to": "src/lib/imageOperation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/imageCaptureService.ts",
+      "to": "src/lib/imageFormats.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/imageCaptureService.ts",
+      "to": "src/lib/heicDecoder.ts",
+      "kind": "dynamic"
+    },
+    {
+      "from": "src/lib/imageOperation.ts",
+      "to": "src/lib/abortableOperation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/invitationAuthContext.ts",
+      "to": "src/lib/householdInvitationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationRules.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationRules.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/legacyMigrationRules.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/lib/legacyMigrationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/lib/legacyMigrationRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/legacyMigrationService.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/loggedOutMenuCopy.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/menuProductInfo.ts",
+      "to": "src/lib/householdMembershipRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/menuProductInfo.ts",
+      "to": "src/lib/householdPlanRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/menuProductInfo.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/menuProductInfo.ts",
+      "to": "src/lib/releaseReadiness.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/menuProductInfo.ts",
+      "to": "src/lib/releaseReadiness.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/validatedImageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/supabase.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/requestTimeout.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/imageStoragePaths.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/householdNameValidation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/plantieRepository.ts",
+      "to": "src/lib/diagnosisConfidence.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/requestTimeout.ts",
+      "to": "src/lib/abortableOperation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/subscriptionState.ts",
+      "to": "src/lib/billingService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/subscriptionState.ts",
+      "to": "src/lib/householdPlanService.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/subscriptionUiRules.ts",
+      "to": "src/lib/subscriptionState.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/utils/household.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/lib/legacyMigrationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/lib/legacyMigrationRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseReadThrough.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/imageStoragePaths.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/utils/diagnostics.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/legacyMigrationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/legacyMigrationRules.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/supabaseSourceOfTruth.ts",
+      "to": "src/lib/plantieRepository.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/lib/validatedImageInput.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/validatedImageUpload.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/lib/validatedImageUpload.ts",
+      "to": "src/lib/imageValidationReceipts.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/main.tsx",
+      "to": "src/components/StorageNotice.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/main.tsx",
+      "to": "src/App.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/main.tsx",
+      "to": "src/app/AppErrorBoundary.tsx",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/lib/requestTimeout.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/customFlower.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/diagnostics.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/diagnostics.ts",
+      "to": "src/lib/imageCaptureService.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/diagnostics.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/diagnostics.ts",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/diagnostics.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/diagnostics.ts",
+      "to": "src/lib/diagnosisConfidence.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/household.ts",
+      "to": "src/lib/browserStorage.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/imageUploadValidation.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/imageUploadValidation.ts",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/imageUploadValidation.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/imageUploadValidation.ts",
+      "to": "src/lib/imageValidationReceipts.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/imageUploadValidation.ts",
+      "to": "src/lib/imageUploadValidationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/pushNotifications.ts",
+      "to": "src/lib/backendConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/qrPdf.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/qrPdf.ts",
+      "to": "src/utils/links.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/report.ts",
+      "to": "src/data/wateringIntervals.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/report.ts",
+      "to": "src/data/flowers.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/report.ts",
+      "to": "src/hooks/useFlowerRecords.ts",
+      "kind": "type"
+    },
+    {
+      "from": "src/utils/report.ts",
+      "to": "src/utils/dates.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/report.ts",
+      "to": "src/utils/watering.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "src/utils/watering.ts",
+      "to": "src/utils/dates.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/authEmail.ts",
+      "to": "supabase/functions/_shared/householdInviteEmail.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/imageAdmission.ts",
+      "to": "supabase/functions/_shared/imageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/imageUpload.ts",
+      "to": "src/lib/imageUploadConfig.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/imageUpload.ts",
+      "to": "src/lib/imageUploadErrors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/imageUpload.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/plantImageValidation.ts",
+      "to": "src/lib/imageUploadValidationRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/plantImageValidation.ts",
+      "to": "supabase/functions/_shared/imageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/_shared/plantImageValidation.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/delete-account-request/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/delete-account-request/index.ts",
+      "to": "supabase/functions/_shared/accountDeletion.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/delete-account-request/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-care-ai/index.ts",
+      "to": "supabase/functions/_shared/imageAdmission.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-care-ai/index.ts",
+      "to": "supabase/functions/_shared/imageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-care-ai/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-care-ai/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-care-ai/index.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-diagnosis-ai/index.ts",
+      "to": "supabase/functions/_shared/imageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-diagnosis-ai/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-diagnosis-ai/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-diagnosis-ai/index.ts",
+      "to": "src/lib/onboarding.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/plant-diagnosis-ai/index.ts",
+      "to": "supabase/functions/_shared/imageAdmission.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/revenuecat-webhook/index.ts",
+      "to": "src/lib/revenueCatWebhookRules.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/revenuecat-webhook/index.ts",
+      "to": "src/lib/revenueCatEnvironment.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/revenuecat-webhook/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/revenuecat-webhook/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/send-auth-email/index.ts",
+      "to": "supabase/functions/_shared/authEmail.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/send-household-invite-email/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/send-household-invite-email/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/send-household-invite-email/index.ts",
+      "to": "supabase/functions/_shared/householdInviteEmail.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/send-test-email/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/send-test-email/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/upload-validated-image/index.ts",
+      "to": "supabase/functions/_shared/imageAdmission.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/upload-validated-image/index.ts",
+      "to": "supabase/functions/_shared/imageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/upload-validated-image/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/upload-validated-image/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/upload-validated-image/index.ts",
+      "to": "supabase/functions/_shared/plantImageValidation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/upload-validated-image/index.ts",
+      "to": "supabase/functions/_shared/imageValidationReceipt.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/validate-plant-image/index.ts",
+      "to": "supabase/functions/_shared/imageAdmission.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/validate-plant-image/index.ts",
+      "to": "supabase/functions/_shared/imageUpload.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/validate-plant-image/index.ts",
+      "to": "supabase/functions/_shared/auth.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/validate-plant-image/index.ts",
+      "to": "supabase/functions/_shared/cors.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/validate-plant-image/index.ts",
+      "to": "supabase/functions/_shared/plantImageValidation.ts",
+      "kind": "runtime"
+    },
+    {
+      "from": "supabase/functions/validate-plant-image/index.ts",
+      "to": "supabase/functions/_shared/imageValidationReceipt.ts",
+      "kind": "runtime"
+    }
+  ]
+}

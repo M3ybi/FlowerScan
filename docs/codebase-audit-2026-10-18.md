@@ -1,5 +1,7 @@
 # Plantie implementation audit - 2026-10-18
 
+Historical report. The [V3 report](v3-audit-2026-10-19.md) supersedes its deletion-queue, feature-extraction and semantic-coverage limitations as documented there.
+
 ## 1. Executive summary
 
 Baseline: `3b80469a6e1344e65145dfac6b63ed0e81dad128`, clean main branch. A detached baseline checkout passed 561 reported Node test executions, type checking and production build. The initial dependency audit reported two critical native-runtime advisories and two high dependency advisories (one high was development-only).

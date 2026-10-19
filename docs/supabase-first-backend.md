@@ -42,7 +42,7 @@ The legacy `VITE_ENABLE_SUPABASE_WRITES=false` flag also disables write-through 
 | Push notifications | `push-public-key`, `push-subscription`, scheduled notification function | Still Netlify-only and gated behind explicit legacy backend flag. Supabase push delivery is a future migration. |
 | RevenueCat webhook | `/.netlify/functions/revenuecat-webhook` | `supabase/functions/revenuecat-webhook` with idempotent event insert and service-role subscription/entitlement writes. Netlify webhook remains deprecated compatibility fallback. |
 | Health endpoint | `/.netlify/functions/health` | Health page reports selected Supabase backend in Supabase mode. Netlify health remains only for legacy backend checks. |
-| Delete account request | `/.netlify/functions/delete-account-request` | `supabase/functions/delete-account-request` acknowledges manual review without destructive deletes. It currently logs metadata only; no durable review queue or delivery mechanism is implemented. |
+| Delete account request | `/.netlify/functions/delete-account-request` | `supabase/functions/delete-account-request` verifies the caller and stores an idempotent request in the private account-deletion review queue, with status/audit records and no automatic deletion. The Netlify compatibility handler uses the same user-scoped RPC. See [V3 rollout](v3-rollout.md) for required migrations and operator policy. |
 
 ## Supabase Edge Functions
 

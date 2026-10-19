@@ -31,3 +31,7 @@ Type packages, TypeScript, Vite/React plugin, Playwright and Capacitor/Supabase 
 Targeted updates: @capacitor/android, @capacitor/ios and @capacitor/core 8.3.4 -> 8.5.3; @capacitor/cli 8.3.4 -> 8.4.3; @fastify/busboy 3.2.0 -> 3.2.2; source-map-js 1.2.1 -> 1.2.2. No automatic force fix or unrelated major upgrade was applied.
 
 Primary maintainer evidence: [Capacitor advisory](https://github.com/ionic-team/capacitor/security/advisories/GHSA-rvm3-566m-v7fv), [busboy advisory](https://github.com/fastify/busboy/security/advisories/GHSA-xjh9-v7x6-24jw), [PGlite PostgreSQL testing API](https://pglite.dev/docs/api).
+
+## V3 addition ? 2026-10-19
+
+Exact development dependency `pg@8.16.3` supports independent-session PostgreSQL contention tests; it is not bundled into the application. Existing busboy resolves to 3.2.3 in the updated lockfile. Clean installation and full/production-only audits both passed with zero reported vulnerabilities. Runtime dependency versions above were retained; historical registry-latest columns describe the October 18 lookup, not an ongoing update feed. See [V3 validation](v3-validation.md).

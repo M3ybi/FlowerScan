@@ -78,3 +78,9 @@ See `docs/mobile-capacitor.md`.
 ## Data Safety
 
 Use forward-only Supabase migrations. Do not run destructive database resets, drops, truncates, bulk deletes, storage wipes, or project recreation against production infrastructure. Document destructive cleanup ideas for manual review instead.
+
+## Local verification and V3 rollout
+
+Run `npm ci` and `npm run check`. CI additionally runs Edge typing, source graph, client-secret scanning, controlled Chromium/WebKit workflows, auth-browser checks and disposable PostgreSQL contention tests. These require no production credentials. The PostgreSQL runner accepts only an explicitly configured disposable loopback server; do not use a linked project.
+
+Read the [V3 engineering report](docs/v3-audit-2026-10-19.md) for exact results, the [validation scope](docs/v3-validation.md), and [migration/function ordering and operator decisions](docs/v3-rollout.md). A passing local build does not establish the affected physical phones or production provider configuration.

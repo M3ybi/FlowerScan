@@ -257,3 +257,7 @@ npx cap sync
 ## Test Store limitation
 
 RevenueCat Test Store can be used before App Store Connect / Google Play products are ready if the SDK version supports it and the RevenueCat dashboard is configured for Test Store products. Test Store results still must not activate Premium locally. Server entitlement confirmation remains the final source of truth.
+
+## V3 webhook environment gate
+
+Both handlers ignore signed sandbox/Test Store events before database writes unless `REVENUECAT_ALLOW_SANDBOX_EVENTS` is exactly `true`. Keep that opt-in on a separate test backend. Explicit unknown environments are denied; signed legacy events without environment remain compatible. Existing stored records are not reclassified. Confirm App Review/tester sandbox routing before rollout; those purchases will be ignored against the default production gate. See [V3 deployment decisions](v3-rollout.md).
