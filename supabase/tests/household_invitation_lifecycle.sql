@@ -350,9 +350,9 @@ begin
   if exists (select 1 from public.household_members hm where hm.role not in ('owner','viewer')) then
     raise exception 'Unsupported role persisted after migration.';
   end if;
-  if not exists (select 1 from public.households h where h.special_coowner_user_id is not null
-    and h.household_type = 'admin_special' and h.max_owner_count = 2
-    and (select count(*) from public.household_members hm where hm.household_id = h.id and hm.role = 'owner') = 2) then
+  if exists (select 1 from public.households h where h.special_coowner_user_id is not null
+    and (h.household_type is distinct from 'admin_special' or h.max_owner_count is distinct from 2
+      or (select count(*) from public.household_members hm where hm.household_id = h.id and hm.role = 'owner') <> 2)) then
     raise exception 'Configured administrative coownership was not preserved.';
   end if;
   raise notice 'Household lifecycle, verified recipient, capacity, idempotency, RLS and expiry assertions passed.';

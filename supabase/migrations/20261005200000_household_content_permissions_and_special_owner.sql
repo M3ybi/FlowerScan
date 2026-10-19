@@ -127,7 +127,13 @@ begin
     where household_id = special_household_id and user_id = second_owner_id;
   perform public.reconcile_household_access(special_household_id);
 exception
-  when no_data_found then raise exception 'Designated Petzvalova household or owners were not found.';
+  when no_data_found then
+    -- A clean installation has no designated historical household. If it is
+    -- present, incomplete ownership must still abort rather than grant access.
+    if exists (select 1 from public.households where lower(btrim(name)) = 'petzvalova') then
+      raise exception 'Designated Petzvalova household or owners were not found.';
+    end if;
+    raise notice 'Designated historical household is absent; no coowner grant applied.';
   when too_many_rows then raise exception 'More than one designated Petzvalova household was found.';
 end;
 $$;
