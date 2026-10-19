@@ -42,6 +42,7 @@ const testScripts = [
   "test:product-redesign",
   "test:care-presentation",
   "test:revenuecat-webhook",
+  "test:v4-release",
 ];
 
 const runNpmScript = (script) => {

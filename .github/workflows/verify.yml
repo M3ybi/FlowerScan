@@ -23,6 +23,7 @@ jobs:
         with:
           deno-version: 2.9.6
       - run: npm run check:edge-types
+      - run: npm run test:auth-signature
       - run: npm run check
       - run: npm run check:client-secrets
       - run: npm run check:source-graph
@@ -60,3 +61,20 @@ jobs:
       - run: npm run test:postgres
         env:
           PLANTIE_TEST_POSTGRES_URL: postgresql://postgres:local-ci-only@127.0.0.1:5432/postgres
+      - run: npm run test:postgres-migrations
+        env:
+          PLANTIE_TEST_POSTGRES_URL: postgresql://postgres:local-ci-only@127.0.0.1:5432/postgres
+
+  supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Creates only a random disposable project, never reads linked credentials.
+      # Exit 2 (infrastructure unavailable) fails this gate; it is not a pass.
+      - run: npm run test:supabase-local

@@ -44,6 +44,12 @@ jobs:
         run: npm run build && npm run check:client-secrets
         env:
           VITE_BASE_PATH: /FlowerScan/
+          PLANTIE_RELEASE_ENV: production
+          PLANTIE_RELEASE_PLATFORM: web
+          PLANTIE_PRODUCTION_SUPABASE_URL: ${{ vars.PLANTIE_PRODUCTION_SUPABASE_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_REVENUECAT_API_KEY_WEB: ${{ vars.VITE_REVENUECAT_API_KEY_WEB }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
