@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import pg from "pg";
 import { verifyDatabaseRelease } from "./lib/verifyDatabaseRelease.mjs";
+import { supabaseFailureSummary } from "./lib/supabaseDiagnostics.mjs";
 
 // A dedicated, random local project. Never --linked, never copy .temp/.env or
 // start/reset/stop the workspace's configured Supabase project.
@@ -32,7 +33,7 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^
 const run = args => {
   const result = spawnSync(process.execPath, [cli, ...args, "--workdir", workspace], { cwd: workspace, env, encoding: "utf8", windowsHide: true, maxBuffer: 32 * 1024 * 1024 });
   // CLI status contains local credentials. Keep it in memory; never echo it.
-  if (result.status !== 0) throw new Error(`Disposable Supabase command failed: ${args.slice(0, 2).join(" ")} (exit ${result.status ?? 1})`);
+  if (result.status !== 0) throw new Error(`Disposable Supabase command failed: ${args.slice(0, 2).join(" ")} (exit ${result.status ?? 1}; ${supabaseFailureSummary(result)})`);
   return result.stdout;
 };
 let client;

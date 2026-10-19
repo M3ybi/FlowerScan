@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { executeVerification, verificationExitCode } from "../scripts/lib/releaseVerification.mjs";
+import { supabaseFailureSummary } from "../scripts/lib/supabaseDiagnostics.mjs";
+
+test("Supabase startup diagnostics identify failures without echoing CLI credentials", () => {
+  assert.equal(supabaseFailureSummary({ stderr: "entrypoint path does not exist: /private/functions/mail/index.ts" }), "MISSING_FUNCTION_ENTRYPOINT");
+  assert.equal(supabaseFailureSummary({ stderr: "failed to pull image from registry: unauthorized token=private-token" }), "CONTAINER_IMAGE_PULL_FAILED");
+  assert.equal(supabaseFailureSummary({ stdout: "ANON_KEY=private-value", stderr: "secret=private-value", error: { code: "ENOENT" } }), "EXECUTABLE_UNAVAILABLE");
+  assert.equal(supabaseFailureSummary({ stdout: "postgresql://private-user:private-password@host/db", stderr: "eyJ-private-token" }), "UNCLASSIFIED_CLI_FAILURE");
+  assert.equal(supabaseFailureSummary({ stderr: "container unhealthy\nno space left on device" }), "CONTAINER_HEALTH_FAILED,DISK_CAPACITY");
+});
 
 test("release runner retains child failures, blocked infrastructure and missing executables", async () => {
   for (const code of [0, 1, 2, 17]) {
