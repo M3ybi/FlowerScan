@@ -53,29 +53,35 @@ export const QrPage = ({
   if (route.page === "qr") {
     return (
       <main className="app-shell qr-shell">
-        <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
-          <div>
-            <p className="eyebrow">{t("qr.printable")}</p>
-            <h1>{t("qr.heading")}</h1>
-            <p className="topbar-copy">Generate and print plant labels that open each plant profile.</p>
+        <header className="topbar qr-header">
+          <div className="qr-header-title">
+            <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
+              <ArrowLeft size={22} aria-hidden="true" />
+            </a>
+            <div>
+              <p className="eyebrow">{t("qr.printable")}</p>
+              <h1>{t("qr.heading")}</h1>
+            </div>
           </div>
-          <div className="topbar-actions">
+          <p className="topbar-copy qr-header-copy">{t("qr.body")}</p>
+          <div className="qr-header-actions">
             <LoadingButton
-              className="icon-button"
+              className="primary-action qr-header-action"
               type="button"
               onClick={handleQrPdfExport}
-              aria-label={t("qr.exportPdf")}
+              disabled={allFlowers.length === 0}
+              aria-label={isExportingQrPdf ? t("qr.exportGenerating") : undefined}
               isLoading={isExportingQrPdf}
-              loadingLabel={<span className="sr-only">{t("qr.exportGenerating")}</span>}
             >
-              <FileDown size={21} aria-hidden="true" />
+              <FileDown size={18} aria-hidden="true" />
+              <span>{t("qr.exportPdf")}</span>
             </LoadingButton>
-            <button className="icon-button" type="button" onClick={() => window.print()} aria-label={t("qr.printCodes")}>
-              <Printer size={21} aria-hidden="true" />
+            <button className="ghost-action qr-header-action" type="button" onClick={() => window.print()} disabled={allFlowers.length === 0}>
+              <Printer size={18} aria-hidden="true" />
+              <span>{t("qr.printCodes")}</span>
             </button>
+          </div>
+          <div className="qr-header-household">
             {renderHeroActions()}
           </div>
         </header>
@@ -116,7 +122,7 @@ export const QrPage = ({
                 </LoadingButton>
                 <span>{qrLabelValidation.message}</span>
               </div>
-              {qrExportStatus ? <div className="report-status">{qrExportStatus}</div> : null}
+              {qrExportStatus ? <div className="report-status" role="status">{qrExportStatus}</div> : null}
             </>
           ) : (
             <p>{t("qr.noPlantsExport")}</p>

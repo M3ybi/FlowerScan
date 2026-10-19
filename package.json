@@ -77,6 +77,8 @@
     "test:application-webkit": "node scripts/test-application-browser.mjs --webkit",
     "test:menu-entry-browser": "node scripts/test-menu-entry-browser.mjs",
     "test:menu-entry-webkit": "node scripts/test-menu-entry-browser.mjs --webkit",
+    "test:qr-header-browser": "node scripts/test-qr-header-browser.mjs",
+    "test:qr-header-webkit": "node scripts/test-qr-header-browser.mjs --webkit",
     "check:source-graph": "node scripts/analyze-source-graph.mjs",
     "check:edge-types": "deno check --node-modules-dir=none --no-lock supabase/functions/delete-account-request/index.ts supabase/functions/plant-care-ai/index.ts supabase/functions/plant-diagnosis-ai/index.ts supabase/functions/revenuecat-webhook/index.ts supabase/functions/send-auth-email/index.ts supabase/functions/send-household-invite-email/index.ts supabase/functions/send-test-email/index.ts supabase/functions/upload-validated-image/index.ts supabase/functions/validate-plant-image/index.ts",
     "test:v4-release": "node --test tests/release-environment.test.mjs tests/release-artifact.test.mjs tests/invitation-delivery-client.test.mjs tests/operational-observability.test.mjs tests/release-verification.test.mjs",

@@ -269,6 +269,7 @@ export const App = () => {
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [qrExportStatus, setQrExportStatus] = useState("");
   const [isExportingQrPdf, setIsExportingQrPdf] = useState(false);
+  const qrPdfExportRef = useRef<symbol | null>(null);
   const [newPlantName, setNewPlantName] = useState("");
   const [newPlantStatus, setNewPlantStatus] = useState("");
   const [isAddingPlant, setIsAddingPlant] = useState(false);
@@ -454,6 +455,7 @@ export const App = () => {
     setIsRemovingPlant(false);
     setIsCreatingInvite(false);
     setIsExportingQrPdf(false);
+    qrPdfExportRef.current = null;
     setPendingQuickRecordKey("");
     setPendingDiagnosticUpdateKey("");
     setNewPlantName("");
@@ -1058,7 +1060,7 @@ export const App = () => {
 
   const handleQrPdfExport = async () => {
     if (!isHouseholdOperationCurrent()) return;
-    if (isExportingQrPdf) {
+    if (qrPdfExportRef.current) {
       return;
     }
 
@@ -1076,6 +1078,9 @@ export const App = () => {
       return;
     }
 
+    // Both export buttons share a lock before React commits their busy state.
+    const exportRequest = Symbol();
+    qrPdfExportRef.current = exportRequest;
     try {
       setIsExportingQrPdf(true);
       setQrExportStatus(t("qr.exportGenerating"));
@@ -1086,7 +1091,10 @@ export const App = () => {
       if (!isHouseholdOperationCurrent()) return;
       setQrExportStatus(error instanceof Error ? error.message : t("qr.exportFailed"));
     } finally {
-      if (isHouseholdOperationCurrent()) setIsExportingQrPdf(false);
+      if (qrPdfExportRef.current === exportRequest) {
+        qrPdfExportRef.current = null;
+        if (isHouseholdOperationCurrent()) setIsExportingQrPdf(false);
+      }
     }
   };
 

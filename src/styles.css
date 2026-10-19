@@ -4358,6 +4358,136 @@ textarea:focus-visible {
   line-height: 1.4;
 }
 
+.qr-shell .qr-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title actions" "copy household";
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+  min-height: 0;
+}
+
+.qr-header-title {
+  grid-area: title;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.qr-header-title > div {
+  min-width: 0;
+}
+
+.qr-header-copy {
+  grid-area: copy;
+  min-width: 0;
+  margin: 0;
+}
+
+.qr-header-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-self: end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.qr-header-actions .qr-header-action {
+  display: inline-grid;
+  grid-template-columns: 18px auto;
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.qr-header-action svg {
+  flex-shrink: 0;
+}
+
+.qr-header-actions .primary-action {
+  background: var(--brand);
+}
+
+.qr-header-action .button-spinner {
+  display: none;
+  width: 18px;
+  height: 18px;
+}
+
+.qr-header-action .button-label {
+  display: contents;
+}
+
+.qr-header-action[aria-busy="true"] .button-spinner {
+  display: inline-block;
+}
+
+.qr-header-action[aria-busy="true"] svg {
+  display: none;
+}
+
+.qr-header-action:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.qr-header-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.qr-header-action:disabled {
+  box-shadow: none;
+}
+
+.qr-header-household {
+  grid-area: household;
+  min-width: 0;
+  justify-self: end;
+  max-width: 100%;
+}
+
+.qr-header-household .hero-actions {
+  flex-wrap: nowrap;
+}
+
+.qr-header-household .user-menu-trigger {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .qr-shell .qr-header {
+    grid-template-areas: "title household" "copy copy" "actions actions";
+  }
+
+  .qr-header-actions {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 767px) {
+  .qr-shell .qr-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "title" "copy" "actions" "household";
+    padding: var(--space-4);
+  }
+
+  .qr-header-actions,
+  .qr-header-household {
+    width: 100%;
+  }
+
+  .qr-header-actions .qr-header-action {
+    flex-grow: 1;
+  }
+}
+
 .qr-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
