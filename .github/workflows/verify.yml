@@ -28,8 +28,10 @@ jobs:
       - run: npm run check:client-secrets
       - run: npm run check:source-graph
       - run: npx playwright install --with-deps chromium webkit
-      - name: Select the installed Chromium for browser fixtures
-        run: node --input-type=module -e "import { chromium } from 'playwright'; import { appendFileSync } from 'node:fs'; appendFileSync(process.env.GITHUB_ENV, 'PLANTIE_TEST_BROWSER=' + chromium.executablePath() + '\n');"
+      # Ubuntu profiles the system Chrome location for its user-namespace sandbox.
+      # A downloaded binary lacks that profile when launched directly by the Auth fixture.
+      - name: Select the hosted Chrome for browser fixtures
+        run: node --input-type=module -e "import { accessSync, appendFileSync, constants } from 'node:fs'; const browser = process.env.CHROME_BIN; if (!browser) throw new Error('Hosted Chrome is unavailable'); accessSync(browser, constants.X_OK); appendFileSync(process.env.GITHUB_ENV, 'PLANTIE_TEST_BROWSER=' + browser + '\n');"
       - run: npm run test:image-browser
       - run: npm run test:image-webkit
       - run: npm run test:application-browser

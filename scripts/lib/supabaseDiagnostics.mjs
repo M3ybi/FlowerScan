@@ -22,6 +22,8 @@ export const supabaseFailureSummary = ({ stdout, stderr, error }) => {
 export const supabaseFailureSignals = ({ stderr }) => {
   const tail = (stderr ?? "").slice(-8192).toLowerCase().replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/g, "");
   const vocabulary = ["error", "failed", "panic", "timeout", "connection", "refused", "network", "dns", "tls", "certificate", "forbidden", "unauthorized", "unexpected", "status", "download", "pull", "image", "manifest", "registry", "checksum", "digest", "denied", "permission", "missing", "invalid", "unsupported", "version", "migration", "database", "relation", "column", "constraint", "violates", "syntax", "extension", "vault", "pg_net", "pgcrypto", "auth", "storage", "postgres", "realtime", "analytics", "vector", "edge", "runtime", "function", "entrypoint", "module", "file", "directory", "exist", "found", "memory", "space", "health", "stopped", "exited", "port", "address", "unavailable", "resolve", "fetch", "404", "403", "429", "500", "502", "503", "eof"];
-  // Return only repository-owned vocabulary, never text/identifiers from the CLI.
-  return vocabulary.filter(word => new RegExp(`\\b${word}\\b`).test(tail)).join(",") || "NO_KNOWN_SIGNALS";
+  vocabulary.push("layer", "extract", "unpack", "stat", "create", "read", "write", "open", "lstat", "symlink", "mkdir", "mount", "cannot", "not", "no", "such", "or", "client", "server", "response", "too", "many", "requests", "rate", "limit", "retry", "canceled", "context", "deadline", "exceeded", "message", "cause", "enoent", "package", "deno", "mismatch", "signature", "reference", "format", "algorithm", "sha256", "https");
+  // Preserve at most 40 fixed tokens for context, never CLI text/identifiers.
+  const allowed = new Set(vocabulary);
+  return (tail.match(/\b[a-z0-9_]+\b/g) ?? []).filter(word => allowed.has(word)).slice(-40).join(",") || "NO_KNOWN_SIGNALS";
 };
