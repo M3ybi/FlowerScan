@@ -30,6 +30,7 @@ export type BillingCustomerInfo = {
   lastExpiredPlan?: "monthly" | "yearly" | null;
   managementUrl: string | null;
   productId: string | null;
+  store?: string | null;
   willRenew: boolean | null;
 };
 
@@ -256,6 +257,7 @@ const mapCustomerInfo = (customerInfo: CustomerInfo): BillingCustomerInfo => {
     lastExpiredPlan: previousPlan?.billingPeriod ?? null,
     managementUrl: safeManagementUrl(customerInfo.managementURL),
     productId,
+    store: premium?.isActive ? premium.store ?? null : null,
     willRenew: premium?.isActive ? premium.willRenew : null,
   };
 };
@@ -294,6 +296,7 @@ const mapWebCustomerInfo = (customerInfo: WebCustomerInfo): BillingCustomerInfo 
     lastExpiredPlan: previousPlan?.billingPeriod ?? null,
     managementUrl: safeManagementUrl(customerInfo.managementURL),
     productId,
+    store: premium?.store ?? null,
     willRenew: premium?.willRenew ?? null,
   };
 };

@@ -153,6 +153,21 @@ test("yearly switching is only offered to an active monthly subscriber", () => {
   assert.equal(canSwitchToYearly(activeSubscription("yearly_active", true)), false);
 });
 
+test("Test Store purchases explain unavailable cancellation instead of offering a dead end", async () => {
+  const base = activeSubscription("monthly_active", true);
+  for (const store of ["test_store", "TEST_STORE"]) {
+    const subscription = { ...base, customerInfo: { ...base.customerInfo!, store, managementUrl: null } };
+    assert.equal(canCancelSubscription(subscription), false);
+    const html = renderSubscription(subscription);
+    assert.match(html, /RevenueCat Test Store/);
+    assert.match(html, /does not support subscription cancellation/);
+    assert.doesNotMatch(html, /Cancel subscription/);
+    const handoff = createCancellationHandoff(async () => { assert.fail("Test Store cannot open a cancellation portal"); });
+    assert.equal(handoff.openDialog(subscription), false);
+    assert.equal(subscription.customerInfo.willRenew, true);
+  }
+});
+
 test("provider management and purchases fail closed without the selected household's Owner membership", () => {
   const paid = activeSubscription("monthly_active", true);
   for (const entitlement of [null,
@@ -287,6 +302,7 @@ test("subscription loading, errors, cancellation, and provider handoff are trans
       "pricing.keepSubscription",
       "pricing.cancelHandoff",
       "pricing.cancelUnavailable",
+      "pricing.testStoreCancellationUnavailable",
       "pricing.currentSubscription",
       "pricing.freePlan",
       "pricing.monthlyPlan",

@@ -20,6 +20,7 @@ import {
   formatSubscriptionDate,
   getSubscriptionPresentation,
   isOwnPaidSubscription,
+  isTestStoreSubscription,
   safeBillingManagementUrl,
 } from "../lib/subscriptionUiRules";
 import { BillingHistoryTimeline } from "./BillingHistoryTimeline";
@@ -343,6 +344,7 @@ export const PricingPage = ({
         {isPremium && (entitlement?.cancelAtPeriodEnd || entitlement?.status === "cancelled") ? <p>{copy.cancelledNotice}</p> : null}
         {!isPremium && entitlement?.suspendedMemberCount ? <p>{copy.suspended(entitlement.suspendedMemberCount)}</p> : null}
         {billingDetailsUnavailable ? <p>{copy.billingDetailsUnavailable}</p> : null}
+        {isTestStoreSubscription(subscription) ? <p role="status">{t("pricing.testStoreCancellationUnavailable")}</p> : null}
         {isOwner && isPremium && householdPeriod && !entitlement?.billingBoundHere ? <p>{copy.managementAccountRequired}</p> : null}
         {entitlement?.role === "viewer" ? <p className="pricing-action-note">{copy.ownerOnly}</p> : null}
         {hasSubscriptionError ? <p>{t("pricing.refreshFailed")}</p> : null}

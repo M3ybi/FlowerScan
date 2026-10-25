@@ -1,6 +1,8 @@
 # Test Store billing on the live site
 
-The user selected **RevenueCat Test Store only**. No production RevenueCat app or platform key exists. This choice changes billing independently of the hosting/database environment: the live web app uses the existing production Supabase project with simulated Test Store purchases. It does not require a staging backend or real payment setup.
+The initial release selected **RevenueCat Test Store only**. This choice changes billing independently of the hosting/database environment: the live web app uses the existing production Supabase project with simulated Test Store purchases. It does not require a staging backend or real payment setup.
+
+On 2026-10-25, the user additionally authorized local Web Billing sandbox cancellation testing against this backend. The primary webhook now supports a separate `REVENUECAT_ALLOW_WEB_BILLING_SANDBOX_EVENTS` opt-in alongside Test Store mode. Local development uses the configured `rcb_sb_` key without the Test Store override. Hosted frontend billing remains unchanged. See [cancellation testing and deployment verification](revenuecat-billing.md#cancellation-testing).
 
 ## Client and build configuration
 

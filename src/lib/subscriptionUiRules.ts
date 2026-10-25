@@ -70,8 +70,12 @@ export const canPurchaseHouseholdPlan = (subscription: SubscriptionSnapshot) =>
   subscription.customerInfo?.hasRevenueCatPremium === false &&
   (subscription.view === "free" || subscription.view === "expired");
 
+export const isTestStoreSubscription = (subscription: SubscriptionSnapshot) =>
+  isOwnPaidSubscription(subscription) && subscription.customerInfo?.store?.toLowerCase() === "test_store";
+
 export const canCancelSubscription = (subscription: SubscriptionSnapshot) =>
   isOwnPaidSubscription(subscription) &&
+  !isTestStoreSubscription(subscription) &&
   (subscription.view === "monthly_active" || subscription.view === "yearly_active") &&
   subscription.customerInfo?.willRenew === true;
 

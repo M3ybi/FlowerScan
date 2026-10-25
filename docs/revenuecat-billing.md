@@ -97,6 +97,26 @@ VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED=false
 
 Local browser development uses the `rcb_sb_...` Web Billing sandbox key when provided in `.env.development.local`; otherwise it uses the `test_...` Test Store key. Native development and Netlify deploy previews use the Test Store key. Production web builds require a separate `rcb_...` public Web Billing key and a configured web billing provider; if absent, purchase buttons fail closed. Never put the Test Store or sandbox key in the production web key or expose webhook, Stripe, or Supabase service-role secrets to the browser. The production Netlify site does not enable real web billing until its Web Billing configuration is set up intentionally.
 
+## Cancellation testing
+
+The pricing page opens the purchased subscription's RevenueCat `managementURL` after confirmation. Opening the portal does not itself cancel renewal; the customer must complete cancellation there. Cancellation preserves Premium until the provider-confirmed period end, and expiration removes paid access through the existing webhook flow.
+
+RevenueCat Test Store purchases do not have a supported cancellation portal or cancellation API. The SDK adapters retain the active entitlement's `store` so the page explains this limitation instead of offering an unusable cancellation action. The purchased store is checked independently of the currently configured SDK key: switching to a Web Billing sandbox key does not convert an earlier Test Store subscription.
+
+To test actual cancellation, use a new RevenueCat Web Billing sandbox purchase. Local browser development must have `VITE_REVENUECAT_API_KEY_WEB_SANDBOX` configured and no `VITE_REVENUECAT_BILLING_MODE=test_store` override; restart Vite and reload the browser. The target backend must also accept Web Billing sandbox webhooks. After deploying the compatible webhook, set `REVENUECAT_ALLOW_WEB_BILLING_SANDBOX_EVENTS=true` on the explicitly authorized testing project. This admits only signed `RC_BILLING` events whose environment is `SANDBOX`. It works alongside `REVENUECAT_BILLING_MODE=test_store`, preserving existing Test Store renewal/expiration handling without admitting Apple, Google, Stripe Billing, Paddle or production Web Billing events. The flag defaults to false; unknown billing modes still fail closed. Leave the broader `REVENUECAT_ALLOW_SANDBOX_EVENTS` flag disabled.
+
+Verify `INITIAL_PURCHASE`, cancellation with retained paid access, and `EXPIRATION` against the same authorized household. Existing production Test Store configuration is documented in `test-store-billing.md`; switching it to Web Billing is a separate deployment change, not a frontend-only fix. Do not edit database subscription rows or fabricate webhook events to simulate provider cancellation.
+
+For rollback, set `REVENUECAT_ALLOW_WEB_BILLING_SANDBOX_EVENTS=false` before restoring the previous webhook source. Disabling the flag stops future Web Billing sandbox lifecycle updates, including cancellations and expirations; existing entitlement rows are not rewritten. Finish active sandbox tests before disabling the integration.
+
+### Setup verification — 2026-10-25
+
+The user explicitly authorized Web Billing sandbox cancellation testing on the existing project. The compatible primary webhook was deployed and verified ACTIVE at version 13 after configuration refresh, with `verify_jwt=false` and the shared-secret check retained. All six deployed source files matched the local source. Only `REVENUECAT_ALLOW_WEB_BILLING_SANDBOX_EVENTS=true` was added; all 16 prior configuration digests, including `REVENUECAT_BILLING_MODE=test_store`, were unchanged. The broad sandbox flag remains absent. Recovery source and digest snapshots are stored locally under `.netlify/web-billing-sandbox-recovery/` (ignored).
+
+`npm run check` passed (type checking, full configured Node suite, production build). Deno type checking and both actual-entrypoint tests passed without network permission, covering Web Billing sandbox purchase/cancellation/expiration routing, retained period end, invalid credentials, other-provider denial and disabling the opt-in. A headless Edge session using the real RevenueCat Web SDK confirmed the default offering contains the monthly and yearly sandbox products with prices. Live wrong-secret and authenticated-invalid-body probes returned 401 and 400; they created no subscription events. Local served environment readback confirmed Web Billing sandbox selection.
+
+The approved account's old Test Store subscription was confirmed expired in both RevenueCat and Supabase; no subscription row was manually changed. A new actual sandbox purchase, customer-portal cancellation and resulting provider webhook delivery remain to be exercised by the signed-in tester. No hosted frontend deployment, production purchase, actual cancellation or refund was performed.
+
 ## Active webhook endpoint
 
 Supabase Edge Function:

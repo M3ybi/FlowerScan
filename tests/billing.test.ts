@@ -495,6 +495,7 @@ const createMockWebBilling = (options: {
   apiKey?: string;
   activePremium?: boolean;
   activeProductId?: string;
+  store?: string;
   expiredPremium?: boolean;
   willRenew?: boolean;
   purchaseError?: unknown;
@@ -528,6 +529,7 @@ const createMockWebBilling = (options: {
           productIdentifier: activeProductId,
           expirationDate: new Date("2026-11-01T00:00:00Z"),
           willRenew: options.willRenew ?? true,
+          store: options.store,
         } } : {}, all: !premium && options.expiredPremium ? { premium: {
           isActive: false,
           productIdentifier: activeProductId,
@@ -585,6 +587,18 @@ test("web initializes with the Supabase user and loads current offering", async 
     [revenueCatProductIds.premiumYearly, "$39.99"],
   ]);
   assert.deepEqual(calls, ["configure:user-id", "offerings"]);
+});
+
+test("customer info preserves the purchased store independently of the configured SDK key", async () => {
+  const native = createMockBilling({}, [monthlyPackage], {
+    ...customerInfo,
+    entitlements: { active: { premium: { ...customerInfo.entitlements.active.premium, store: "TEST_STORE" } } },
+  });
+  assert.equal((await native.service.getCustomerInfo()).store, "TEST_STORE");
+  for (const store of ["test_store", "rc_billing", "stripe"]) {
+    const { createService } = createMockWebBilling({ activePremium: true, store, apiKey: "rcb_sb_public" });
+    assert.equal((await createService().getCustomerInfo()).store, store);
+  }
 });
 
 test("web uses the server-authorized household customer and restores the correct identity after switching", async () => {

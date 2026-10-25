@@ -20,6 +20,21 @@ test("Test Store server mode accepts only its sandbox events, independently of b
   ]) assert.equal(isRevenueCatEnvironmentAllowed(event, true, "test_store"), false);
   assert.equal(isRevenueCatEnvironmentAllowed({ environment: "PRODUCTION", store: "APP_STORE" }, true, "unknown"), false);
 });
+
+test("Web Billing sandbox opt-in preserves Test Store without admitting other providers", () => {
+  const webEvent = { environment: "SANDBOX", store: "RC_BILLING" };
+  assert.equal(isRevenueCatEnvironmentAllowed(webEvent, false, "test_store"), false);
+  assert.equal(isRevenueCatEnvironmentAllowed(webEvent, false, "test_store", true), true);
+  assert.equal(isRevenueCatEnvironmentAllowed(webEvent, false, "production", true), true);
+  assert.equal(isRevenueCatEnvironmentAllowed(webEvent, true, "unknown", true), false);
+  assert.equal(isRevenueCatEnvironmentAllowed({ store: "TEST_STORE", environment: "SANDBOX" }, false, "test_store", true), true);
+  for (const store of ["APP_STORE", "PLAY_STORE", "STRIPE", "PADDLE", "UNKNOWN", ""]) {
+    assert.equal(isRevenueCatEnvironmentAllowed({ store, environment: "SANDBOX" }, false, "test_store", true), false);
+  }
+  for (const environment of ["PRODUCTION", "unknown", ""]) {
+    assert.equal(isRevenueCatEnvironmentAllowed({ store: "RC_BILLING", environment }, false, "test_store", true), false);
+  }
+});
 import {
   handler,
   mapRevenueCatStoreToPlatform,
