@@ -79,6 +79,13 @@ export const canCancelSubscription = (subscription: SubscriptionSnapshot) =>
   (subscription.view === "monthly_active" || subscription.view === "yearly_active") &&
   subscription.customerInfo?.willRenew === true;
 
+// Test Store owners can inspect cancellation options even though no portal exists.
+export const canOpenCancellationDialog = (subscription: SubscriptionSnapshot) =>
+  canCancelSubscription(subscription) ||
+  isTestStoreSubscription(subscription) &&
+  (subscription.view === "monthly_active" || subscription.view === "yearly_active") &&
+  subscription.customerInfo?.willRenew === true;
+
 export const canSwitchToYearly = (subscription: SubscriptionSnapshot) =>
   isOwnPaidSubscription(subscription) &&
   subscription.view === "monthly_active" &&
@@ -100,7 +107,7 @@ export const createCancellationHandoff = (openManagementPage: (url: string) => P
 
   return {
     openDialog(subscription: SubscriptionSnapshot) {
-      if (inFlight || !canCancelSubscription(subscription)) return false;
+      if (inFlight || !canOpenCancellationDialog(subscription)) return false;
       dialogFor = {
         userId: subscription.userId ?? "",
         householdId: subscription.householdId,
@@ -116,10 +123,11 @@ export const createCancellationHandoff = (openManagementPage: (url: string) => P
     async confirm(subscription: SubscriptionSnapshot): Promise<"opened" | "busy" | "not_open" | "not_applicable" | "unavailable" | "failed"> {
       if (inFlight) return "busy";
       if (!dialogFor) return "not_open";
-      if (!canCancelSubscription(subscription) ||
+      if (!canOpenCancellationDialog(subscription) ||
         subscription.userId !== dialogFor.userId ||
         subscription.householdId !== dialogFor.householdId ||
         subscription.customerInfo?.productId !== dialogFor.productId) return "not_applicable";
+      if (isTestStoreSubscription(subscription)) return "unavailable";
       const managementUrl = safeBillingManagementUrl(subscription.customerInfo?.managementUrl);
       if (!managementUrl) return "unavailable";
 

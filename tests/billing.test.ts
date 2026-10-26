@@ -887,3 +887,13 @@ test("RevenueCat webhook fails closed when Supabase admin env is missing", async
   assert.equal(response.statusCode, 500);
   assert.deepEqual(JSON.parse(response.body ?? "{}"), { error: "RevenueCat webhook processing failed." });
 });
+
+
+test("explicit hosted Web Billing sandbox selects only a sandbox web key", () => {
+  const keys = { billingMode: "web_sandbox", webSandbox: "rcb_sb_fixture", web: "rcb_live_fixture", testStore: "test_fixture" };
+  assert.equal(selectRevenueCatApiKey("web", "production", keys), "rcb_sb_fixture");
+  for (const runtime of ["ios", "android"] as const) assert.equal(selectRevenueCatApiKey(runtime, "production", keys), "");
+  for (const webSandbox of ["", "rcb_sb_", "rcb_live_fixture", "test_fixture"]) {
+    assert.equal(selectRevenueCatApiKey("web", "production", { ...keys, webSandbox }), "");
+  }
+});

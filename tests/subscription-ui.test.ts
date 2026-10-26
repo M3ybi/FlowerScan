@@ -7,6 +7,7 @@ import { PricingPage } from "../src/components/PricingPage.js";
 import type { SubscriptionSnapshot } from "../src/lib/subscriptionState.js";
 import {
   canCancelSubscription,
+  canOpenCancellationDialog,
   canPurchaseHouseholdPlan,
   canSwitchToYearly,
   createCancellationHandoff,
@@ -153,7 +154,7 @@ test("yearly switching is only offered to an active monthly subscriber", () => {
   assert.equal(canSwitchToYearly(activeSubscription("yearly_active", true)), false);
 });
 
-test("Test Store purchases explain unavailable cancellation instead of offering a dead end", async () => {
+test("Test Store owners can find cancellation without opening an unsupported portal", async () => {
   const base = activeSubscription("monthly_active", true);
   for (const store of ["test_store", "TEST_STORE"]) {
     const subscription = { ...base, customerInfo: { ...base.customerInfo!, store, managementUrl: null } };
@@ -161,10 +162,19 @@ test("Test Store purchases explain unavailable cancellation instead of offering 
     const html = renderSubscription(subscription);
     assert.match(html, /RevenueCat Test Store/);
     assert.match(html, /does not support subscription cancellation/);
-    assert.doesNotMatch(html, /Cancel subscription/);
+    assert.match(html, /Cancel subscription/);
     const handoff = createCancellationHandoff(async () => { assert.fail("Test Store cannot open a cancellation portal"); });
-    assert.equal(handoff.openDialog(subscription), false);
+    assert.equal(canOpenCancellationDialog(subscription), true);
+    assert.equal(handoff.openDialog(subscription), true);
+    assert.equal(await handoff.confirm(subscription), "unavailable");
+    subscription.customerInfo.managementUrl = "https://billing.example.com/unsupported";
+    assert.equal(await handoff.confirm(subscription), "unavailable");
     assert.equal(subscription.customerInfo.willRenew, true);
+    for (const changed of [
+      { ...subscription, view: "monthly_cancelled_active" as const },
+      { ...subscription, customerInfo: { ...subscription.customerInfo, willRenew: false } },
+      { ...subscription, customerInfo: { ...subscription.customerInfo, willRenew: null } },
+    ]) assert.equal(canOpenCancellationDialog(changed), false);
   }
 });
 
@@ -177,6 +187,8 @@ test("provider management and purchases fail closed without the selected househo
   ]) {
     const snapshot = { ...paid, householdEntitlement: entitlement };
     assert.equal(canCancelSubscription(snapshot), false);
+    assert.equal(canOpenCancellationDialog(snapshot), false);
+    assert.equal(canOpenCancellationDialog({ ...snapshot, customerInfo: { ...snapshot.customerInfo!, store: "TEST_STORE" } }), false);
     assert.equal(canSwitchToYearly(snapshot), false);
   }
   const free = { ...activeSubscription("free", null), customerInfo: { ...paid.customerInfo!, hasRevenueCatPremium: false } };
@@ -274,7 +286,7 @@ test("subscription screens consume the central snapshot and preserve provider ca
   assert.match(upgrade, /subscription: SubscriptionSnapshot/);
   assert.doesNotMatch(pricing + upgrade, /billing\.getCustomerInfo\(|billing\.syncEntitlements\(|className="neutral-action"/);
   assert.match(pricing, /aria-modal="true"/);
-  assert.match(pricing, /canCancelSubscription\(subscription\)/);
+  assert.match(pricing, /canOpenCancellationDialog\(subscription\)/);
   assert.match(pricing, /cancellationHandoff\.openDialog\(subscription\)/);
   assert.match(pricing, /cancellationHandoff\.dismiss\(\)/);
   assert.match(pricing, /cancellationHandoff\.confirm\(subscription\)/);

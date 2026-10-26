@@ -120,6 +120,45 @@ try {
     assert.equal(await page.evaluate(() => window.__applicationFixture.purchaseCalls), 0, `${kind} starts no checkout after unmount`);
     checks.push(`${kind} prevents provider checkout after pending setup outlives screen`);
   }
+  await page.reload();
+  await page.waitForFunction(() => !!window.__applicationFixture);
+  for (const [width, height, language] of [[320,568,"sk"], [1440,900,"en"]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(lang => window.__applicationFixture.showSubscription("TEST_STORE", "owner", lang), language);
+    const cancel = page.locator(".pricing-cancel-action");
+    await cancel.click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor();
+    assert.match(await dialog.innerText(), /RevenueCat Test Store/);
+    assert.equal(await dialog.locator(".danger-action").count(), 0);
+    assert.equal(await dialog.getByRole("button").count(), 1);
+    await page.waitForFunction(() => document.activeElement?.classList.contains("pricing-keep-action"));
+    await page.keyboard.press("Tab");
+    assert.ok(await dialog.getByRole("button").evaluate(node => node === document.activeElement));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await page.screenshot({ path: path.join(artifacts, `cancellation-${language}-${width}.png`) });
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    assert.ok(await cancel.evaluate(node => node === document.activeElement));
+    assert.notEqual(await page.evaluate(() => document.body.style.overflow), "hidden");
+    checks.push(`Test Store cancellation explanation and keyboard focus at ${width}px (${language})`);
+  }
+  await page.evaluate(() => window.__applicationFixture.showSubscription("RC_BILLING"));
+  await page.locator(".pricing-cancel-action").click();
+  const providerDialog = page.getByRole("dialog");
+  await providerDialog.locator(".danger-action").waitFor();
+  assert.equal(await providerDialog.locator(".danger-action").isEnabled(), true);
+  const popupOpened = page.waitForEvent("popup");
+  await providerDialog.locator(".danger-action").click();
+  const popup = await popupOpened;
+  await popup.close();
+  await providerDialog.waitFor({ state: "hidden" });
+  assert.equal(await page.locator(".pricing-status-badge").innerText(), "Active");
+  checks.push("Web Billing hands off to the provider without claiming cancellation or revoking access");
+  await page.evaluate(() => window.__applicationFixture.showSubscription("TEST_STORE", "viewer"));
+  await page.getByText("Only household owners can manage").waitFor();
+  assert.equal(await page.locator(".pricing-cancel-action").count(), 0);
+  checks.push("Viewer has no cancellation controls");
   assert.deepEqual(errors, []);
   await writeFile(path.join(artifacts, "result.json"), JSON.stringify({ engine, checks }, null, 2));
   console.log(`${checks.length} ${engine} application workflow checks passed. Artifacts: ${artifacts}`);

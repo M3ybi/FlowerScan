@@ -1,3 +1,6 @@
+export const isRevenueCatWebSandboxKey = (key: unknown): key is string =>
+  typeof key === "string" && key.startsWith("rcb_sb_") && key.length > "rcb_sb_".length;
+
 export const isRevenueCatTestStoreKey = (key: unknown): key is string =>
   typeof key === "string" && key.startsWith("test_") && key.length > "test_".length;
 

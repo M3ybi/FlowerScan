@@ -3,7 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  VITE_REVENUECAT_BILLING_MODE = "test_store"
+  VITE_REVENUECAT_BILLING_MODE = "web_sandbox"
 
 [functions]
   directory = "netlify/functions"
@@ -12,8 +12,14 @@
 [context.deploy-preview]
   command = "npm run build:test-store"
 
+[context.deploy-preview.environment]
+  VITE_REVENUECAT_BILLING_MODE = "test_store"
+
 [context.branch-deploy]
   command = "npm run build:test-store"
+
+[context.branch-deploy.environment]
+  VITE_REVENUECAT_BILLING_MODE = "test_store"
 
 [[headers]]
   for = "/*"

@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import type { CustomerInfo, PurchasesPlugin, PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import type { CustomerInfo as WebCustomerInfo, Package as WebPackage, Purchases as WebPurchases } from "@revenuecat/purchases-js";
 import { getRevenueCatPlan, revenueCatProductIds } from "./revenueCatProducts.js";
-import { isRevenueCatTestStoreKey } from "./revenueCatEnvironment.js";
+import { isRevenueCatTestStoreKey, isRevenueCatWebSandboxKey } from "./revenueCatEnvironment.js";
 import { supabase } from "./supabase.js";
 
 export const revenueCatEntitlementId = "premium";
@@ -131,9 +131,10 @@ export const detectBillingRuntime = (): BillingRuntime => {
 
 export const selectRevenueCatApiKey = (runtime: BillingRuntime, mode: string, keys: RevenueCatApiKeys): string => {
   if (keys.billingMode === "test_store") return isRevenueCatTestStoreKey(keys.testStore) ? keys.testStore : "";
+  if (keys.billingMode === "web_sandbox") return runtime === "web" && isRevenueCatWebSandboxKey(keys.webSandbox) ? keys.webSandbox : "";
   if (keys.billingMode && keys.billingMode !== "production") return "";
   if (!keys.billingMode && mode === "development" && runtime === "web" && keys.webSandbox) {
-    return keys.webSandbox.startsWith("rcb_sb_") && keys.webSandbox.length > "rcb_sb_".length ? keys.webSandbox : "";
+    return isRevenueCatWebSandboxKey(keys.webSandbox) ? keys.webSandbox : "";
   }
   if (!keys.billingMode && mode !== "production") return keys.testStore ?? "";
   if (runtime === "web") {

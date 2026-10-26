@@ -52,3 +52,19 @@ test("a preview build cannot select the same approved test and production databa
   try { await assert.rejects(resolveConfig({ mode: "test", logLevel: "silent" }, "build"), /RELEASE_DATABASE_ISOLATION_REQUIRED/); }
   finally { for (const [key,value] of Object.entries(original)) if (value === undefined) delete process.env[key]; else process.env[key] = value; }
 });
+
+
+test("hosted Web Billing sandbox requires an explicit mode, web target and sandbox key", () => {
+  const live = { ...staging, CONTEXT: "production", VITE_SUPABASE_URL: staging.PLANTIE_PRODUCTION_SUPABASE_URL,
+    VITE_REVENUECAT_BILLING_MODE: "web_sandbox", VITE_REVENUECAT_API_KEY_WEB_SANDBOX: "rcb_sb_fixture" };
+  assert.equal(validateReleaseEnvironment(live, "production"), "production");
+  for (const key of ["", "rcb_sb_", "rcb_live_fixture", "test_fixture"]) {
+    assert.throws(() => validateReleaseEnvironment({ ...live, VITE_REVENUECAT_API_KEY_WEB_SANDBOX: key }, "production"), /RELEASE_TEST_BILLING_REQUIRED/);
+  }
+  for (const platform of ["android", "ios", "unknown"]) {
+    assert.throws(() => validateReleaseEnvironment({ ...live, PLANTIE_RELEASE_PLATFORM: platform }, "production"), /RELEASE_WEB_SANDBOX_WEB_REQUIRED/);
+  }
+  assert.throws(() => validateReleaseEnvironment({ ...live, VITE_SUPABASE_URL: staging.VITE_SUPABASE_URL }, "production"), /RELEASE_PRODUCTION_TARGET_MISMATCH/);
+  assert.throws(() => validateReleaseEnvironment({ ...live, CONTEXT: "deploy-preview", PLANTIE_TEST_SUPABASE_URL: live.VITE_SUPABASE_URL }, "test"), /RELEASE_DATABASE_ISOLATION_REQUIRED/);
+  assert.throws(() => validateReleaseEnvironment({ ...staging, VITE_REVENUECAT_BILLING_MODE: "web_sandbox" }, "test"), /RELEASE_TEST_BILLING_REQUIRED/);
+});

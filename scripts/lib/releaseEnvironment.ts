@@ -1,4 +1,4 @@
-import { isRevenueCatTestStoreKey } from "../../src/lib/revenueCatEnvironment.js";
+import { isRevenueCatTestStoreKey, isRevenueCatWebSandboxKey } from "../../src/lib/revenueCatEnvironment.js";
 
 type Environment = Record<string, string | undefined>;
 export type ReleaseEnvironment = "local" | "preview" | "staging" | "production";
@@ -23,7 +23,7 @@ export const validateReleaseEnvironment = (env: Environment, mode: string): Rele
   if (preview && selected !== "preview" && selected !== "staging") throw new Error("RELEASE_PREVIEW_ENVIRONMENT_REQUIRED");
   if (env.CONTEXT === "production" && selected !== "production") throw new Error("RELEASE_PRODUCTION_ENVIRONMENT_REQUIRED");
   const billingMode = env.VITE_REVENUECAT_BILLING_MODE;
-  if (billingMode && !["production", "test_store"].includes(billingMode)) throw new Error("RELEASE_BILLING_MODE_INVALID");
+  if (billingMode && !["production", "test_store", "web_sandbox"].includes(billingMode)) throw new Error("RELEASE_BILLING_MODE_INVALID");
   if (selected === "local") return selected;
   const active = releaseEndpoint(env.VITE_SUPABASE_URL);
   const production = releaseEndpoint(env.PLANTIE_PRODUCTION_SUPABASE_URL);
@@ -32,10 +32,15 @@ export const validateReleaseEnvironment = (env: Environment, mode: string): Rele
   if (selected === "preview" || selected === "staging") {
     const approved = releaseEndpoint(env.PLANTIE_TEST_SUPABASE_URL);
     if (!approved || active !== approved || active === production) throw new Error("RELEASE_DATABASE_ISOLATION_REQUIRED");
-    if (mode === "production" || billingMode === "production" || !isRevenueCatTestStoreKey(env.VITE_REVENUECAT_API_KEY_TEST_STORE)) throw new Error("RELEASE_TEST_BILLING_REQUIRED");
+    if (mode === "production" || billingMode === "production" || billingMode === "web_sandbox" || !isRevenueCatTestStoreKey(env.VITE_REVENUECAT_API_KEY_TEST_STORE)) throw new Error("RELEASE_TEST_BILLING_REQUIRED");
   } else {
     if (active !== production || mode !== "production") throw new Error("RELEASE_PRODUCTION_TARGET_MISMATCH");
     const platform = env.PLANTIE_RELEASE_PLATFORM ?? "web";
+    if (billingMode === "web_sandbox") {
+      if (platform !== "web") throw new Error("RELEASE_WEB_SANDBOX_WEB_REQUIRED");
+      if (!isRevenueCatWebSandboxKey(env.VITE_REVENUECAT_API_KEY_WEB_SANDBOX)) throw new Error("RELEASE_TEST_BILLING_REQUIRED");
+      return selected as ReleaseEnvironment;
+    }
     if (billingMode === "test_store") {
       if (platform === "ios" || platform === "android") throw new Error("RELEASE_TEST_STORE_NATIVE_DEBUG_REQUIRED");
       if (platform !== "web" || !isRevenueCatTestStoreKey(env.VITE_REVENUECAT_API_KEY_TEST_STORE)) throw new Error("RELEASE_TEST_BILLING_REQUIRED");

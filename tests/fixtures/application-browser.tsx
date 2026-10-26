@@ -66,6 +66,16 @@ const fixture = { image, calls, purchaseCalls: 0, beginCalls: 0, releasePurchase
     const props = { subscription, language: "en" as const, onSubscriptionChanged: async () => subscription };
     root.render(kind === "pricing" ? <PricingPage {...props} /> : <UpgradeModal {...props} onClose={() => {}} />);
   },
+  showSubscription(store: string, role: "owner" | "viewer" = "owner", language: "en" | "sk" = "en") {
+    root.unmount(); root = createRoot(document.getElementById("root")!);
+    const paid: SubscriptionSnapshot = { ...subscription, view: "monthly_active",
+      customerInfo: { ...subscription.customerInfo!, activeEntitlements: ["premium"], activePlan: "monthly",
+        hasRevenueCatPremium: true, willRenew: true, store, productId: "plantie_premium_monthly",
+        expiresAt: "2026-11-01T00:00:00Z", managementUrl: "https://billing.example.invalid/manage" },
+      householdEntitlement: { ...subscription.householdEntitlement!, planKey: "premium_monthly", isPremium: true,
+        role, billingBoundHere: role === "owner", maxMembers: 3, validUntil: "2026-11-01T00:00:00Z" } };
+    root.render(<PricingPage subscription={paid} language={language} onSubscriptionChanged={async () => paid} />);
+  },
   unmount() { root.unmount(); },
 };
 Object.assign(window, { __applicationFixture: fixture });

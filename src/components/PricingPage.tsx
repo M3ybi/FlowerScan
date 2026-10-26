@@ -14,7 +14,7 @@ import { createTranslator } from "../lib/i18n";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
 import {
-  canCancelSubscription,
+  canOpenCancellationDialog,
   canPurchaseHouseholdPlan,
   createCancellationHandoff,
   formatSubscriptionDate,
@@ -109,7 +109,8 @@ export const PricingPage = ({
   const billingDetailsUnavailable = subscription.status === "ready" && isOwner && !subscription.customerInfo;
   const canPurchasePlan = canPurchaseHouseholdPlan(subscription);
   const billingDisabled = !billingStatus.configured;
-  const managementUrl = isOwnPaidSubscription(subscription) ? safeBillingManagementUrl(subscription.customerInfo?.managementUrl) : null;
+  const testStoreSubscription = isTestStoreSubscription(subscription);
+  const managementUrl = !testStoreSubscription && isOwnPaidSubscription(subscription) ? safeBillingManagementUrl(subscription.customerInfo?.managementUrl) : null;
   const formattedDate = formatSubscriptionDate(presentation.date, language);
   const isBusy = isPurchasing || isRefreshing || isOpeningManagement;
   const planName = presentation.plan === "monthly" ? t("pricing.monthlyPlan")
@@ -353,7 +354,7 @@ export const PricingPage = ({
           {isOwner && (presentation.status === "cancelled" || presentation.plan === "yearly" && presentation.status === "active") && managementUrl
             ? <a className="pricing-provider-action" href={managementUrl} rel="noopener noreferrer" target="_blank" aria-disabled={isBusy} onClick={(event) => { if (isBusy) event.preventDefault(); else setBillingMessage(t("pricing.manageHint")); }}>{presentation.status === "cancelled" ? copy.resumeSubscription : t("pricing.manage")}</a>
             : null}
-          {isOwner && canCancelSubscription(subscription) ? <button ref={cancelButtonRef} className="pricing-cancel-action" type="button" disabled={isBusy} onClick={() => { if (cancellationHandoff.openDialog(subscription)) { setCancelError(""); setIsCancelModalOpen(true); } }}>{t("pricing.cancelSubscription")}</button> : null}
+          {isOwner && canOpenCancellationDialog(subscription) ? <button ref={cancelButtonRef} className="pricing-cancel-action" type="button" disabled={isBusy} onClick={() => { if (cancellationHandoff.openDialog(subscription)) { setCancelError(""); setIsCancelModalOpen(true); } }}>{t("pricing.cancelSubscription")}</button> : null}
           {hasSubscriptionError || billingDetailsUnavailable ? <LoadingButton className="pricing-secondary-action" type="button" disabled={isBusy || !subscription.userId} isLoading={isRefreshing} onClick={() => void retrySubscription()}>{t("pricing.retry")}</LoadingButton> : null}
         </div>
       </section>
@@ -409,15 +410,17 @@ export const PricingPage = ({
         <div className="modal-backdrop" role="presentation">
           <section ref={cancelDialogRef} className="confirm-modal subscription-cancel-modal" role="dialog" aria-modal="true" aria-labelledby="subscription-cancel-title" aria-describedby="subscription-cancel-description" tabIndex={-1} onKeyDown={handleCancelDialogKeyDown}>
             <div className="section-title danger-title"><h2 id="subscription-cancel-title">{t("pricing.cancelTitle")}</h2></div>
-            <p id="subscription-cancel-description">{t("pricing.cancelBody")}</p>
-            <p>{t("pricing.cancelProviderHint")}</p>
-            {formattedDate ? <p>{t("pricing.cancelPaidUntil", { date: formattedDate })}</p> : null}
-            <p>{copy.cancelImpact}</p>
-            {!managementUrl ? <p className="report-status" role="alert">{t("pricing.cancelUnavailable")}</p> : null}
+            {testStoreSubscription ? <p id="subscription-cancel-description">{t("pricing.testStoreCancellationUnavailable")}</p> : <>
+              <p id="subscription-cancel-description">{t("pricing.cancelBody")}</p>
+              <p>{t("pricing.cancelProviderHint")}</p>
+              {formattedDate ? <p>{t("pricing.cancelPaidUntil", { date: formattedDate })}</p> : null}
+              <p>{copy.cancelImpact}</p>
+            </>}
+            {!testStoreSubscription && !managementUrl ? <p className="report-status" role="alert">{t("pricing.cancelUnavailable")}</p> : null}
             {cancelError ? <p className="report-status" role="alert">{cancelError}</p> : null}
             <div className="modal-actions">
-              <button ref={keepButtonRef} className="pricing-keep-action" type="button" disabled={isOpeningManagement} onClick={closeCancelModal}>{t("pricing.keepSubscription")}</button>
-              <LoadingButton className="danger-action" type="button" disabled={isOpeningManagement || !managementUrl} isLoading={isOpeningManagement} loadingLabel={t("pricing.processing")} onClick={() => void confirmCancellation()}>{t("pricing.cancelSubscription")}</LoadingButton>
+              <button ref={keepButtonRef} className="pricing-keep-action" type="button" disabled={isOpeningManagement} onClick={closeCancelModal}>{testStoreSubscription ? t("action.close") : t("pricing.keepSubscription")}</button>
+              {!testStoreSubscription ? <LoadingButton className="danger-action" type="button" disabled={isOpeningManagement || !managementUrl} isLoading={isOpeningManagement} loadingLabel={t("pricing.processing")} onClick={() => void confirmCancellation()}>{t("pricing.cancelSubscription")}</LoadingButton> : null}
             </div>
           </section>
         </div>
