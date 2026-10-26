@@ -95,7 +95,7 @@ VITE_REVENUECAT_API_KEY_TEST_STORE=
 VITE_REVENUECAT_HOUSEHOLD_NATIVE_BILLING_ENABLED=false
 ```
 
-Local browser development uses the `rcb_sb_...` Web Billing sandbox key when provided in `.env.development.local`; otherwise it uses the `test_...` Test Store key. Native development and Netlify deploy previews use the Test Store key. Production web builds require a separate `rcb_...` public Web Billing key and a configured web billing provider; if absent, purchase buttons fail closed. Never put the Test Store or sandbox key in the production web key or expose webhook, Stripe, or Supabase service-role secrets to the browser. The production Netlify site does not enable real web billing until its Web Billing configuration is set up intentionally.
+Local browser development uses the `rcb_sb_...` Web Billing sandbox key when provided in `.env.development.local`; otherwise it uses the `test_...` Test Store key. Native development and Netlify deploy previews use the Test Store key. Live-payment production web builds require a separate `rcb_...` public Web Billing key and a configured web billing provider; if absent, purchase buttons fail closed. Never put the Test Store or sandbox key in the production web key or expose webhook, Stripe, or Supabase service-role secrets to the browser. The production Netlify site uses the explicitly authorized `web_sandbox` mode for cancellation tests; it does not enable real payments. See [hosted sandbox configuration](#hosted-web-billing-sandbox).
 
 ## Cancellation testing
 
@@ -283,7 +283,7 @@ RevenueCat Test Store can be used before App Store Connect / Google Play product
 Both handlers ignore signed sandbox/Test Store events before database writes unless `REVENUECAT_ALLOW_SANDBOX_EVENTS` is exactly `true`. Keep that opt-in on a separate test backend. Explicit unknown environments are denied; signed legacy events without environment remain compatible. Existing stored records are not reclassified. Confirm App Review/tester sandbox routing before rollout; those purchases will be ignored against the default production gate. See [V3 deployment decisions](v3-rollout.md).
 
 
-## Hosted Web Billing sandbox ? 2026-10-26
+## Hosted Web Billing sandbox
 
 The user authorized Web Billing sandbox on `plantiecare.com` for cancellation testing. The hosted web build explicitly selects `VITE_REVENUECAT_BILLING_MODE=web_sandbox` and requires `VITE_REVENUECAT_API_KEY_WEB_SANDBOX` with a nonempty `rcb_sb_` key. This mode cannot fall back to a live or Test Store key and is rejected for native production builds. Production database target checks still apply; previews retain Test Store mode and database isolation. The Netlify production context contains only the public sandbox SDK key and explicit mode as new settings. This account requires default scopes for environment variables; its plan rejects build-only scopes. Existing settings are preserved, and recovery configuration is archived locally with Windows DPAPI. Native debug builds must explicitly select Test Store as before.
 
