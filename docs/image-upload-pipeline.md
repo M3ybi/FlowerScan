@@ -65,7 +65,7 @@ Client/configuration:
 
 - `src/lib/imageUploadConfig.ts`
 - `src/lib/imageUploadErrors.ts`
-- `src/lib/validatedImageInput.ts`
+- `src/lib/imageUploadConfig.ts` (`validateProcessedImageDataUrl`, shared client validation)
 - `src/lib/imageCaptureService.ts`
 - `src/lib/imageStoragePaths.ts`
 - `src/lib/plantieRepository.ts`

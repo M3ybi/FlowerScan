@@ -3,7 +3,9 @@ dist/
 .netlify/
 .tmp-tests/
 .tmp-migration/
+/.tmp-*/
 .tmp-*.log
+/emulator-check.png
 supabase/.temp/
 .env
 .env.local

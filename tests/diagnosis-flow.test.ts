@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveAiDiagnosisAccess } from "../src/lib/aiDiagnosisAccess.js";
-import { resolveDiagnosisGate } from "../src/lib/diagnosisGateRules.js";
-import { normalizeReminderSettings } from "../src/lib/reminderService.js";
 import {
   maxDiagnosticImageBytes,
   sanitizeDiagnosticEntries,
@@ -10,35 +8,28 @@ import {
   validateDiagnosticImageFile,
 } from "../src/utils/diagnostics.js";
 
-test("free authenticated users are gated before AI diagnosis", async () => {
-  const result = resolveDiagnosisGate({
-    canDiagnose: false,
-    isAuthenticated: true,
-    wasLegacyDiagnosisAvailable: true,
-  });
-
-  assert.equal(result.allowed, false);
-  assert.equal(result.allowed ? "" : result.reason, "upgrade_required");
-});
-
-test("entitlement failures fail closed for AI diagnosis", async () => {
-  const result = resolveDiagnosisGate({
-    entitlementError: true,
-    isAuthenticated: true,
-    wasLegacyDiagnosisAvailable: true,
-  });
-
-  assert.equal(result.allowed, false);
-  assert.equal(result.allowed ? "" : result.reason, "entitlement_unavailable");
-});
-
-test("legacy anonymous users keep existing diagnosis access", async () => {
-  const result = resolveDiagnosisGate({
+test("Supabase diagnosis requires an authenticated account", () => {
+  const result = resolveAiDiagnosisAccess({
+    activeHouseholdId: "household-1",
+    householdPlanUsage: null,
     isAuthenticated: false,
-    wasLegacyDiagnosisAvailable: true,
+    requiresSupabaseHousehold: true,
   });
+  assert.deepEqual(result, { allowed: false, status: "auth_required" });
+});
 
-  assert.deepEqual(result, { allowed: true, mode: "legacy" });
+test("Supabase diagnosis requires a selected household", () => {
+  assert.deepEqual(resolveAiDiagnosisAccess({
+    activeHouseholdId: "", householdPlanUsage: null,
+    isAuthenticated: true, requiresSupabaseHousehold: true,
+  }), { allowed: false, status: "household_required" });
+});
+
+test("explicit legacy mode retains its diagnosis access decision", () => {
+  assert.deepEqual(resolveAiDiagnosisAccess({
+    activeHouseholdId: "", householdPlanUsage: null,
+    isAuthenticated: false, requiresSupabaseHousehold: false,
+  }), { allowed: true, status: "allowed" });
 });
 
 test("premium household plan usage allows AI diagnosis", () => {
@@ -130,16 +121,4 @@ test("supabase-backed diagnostics can be stored without permanent base64 image d
   assert.equal(diagnostic.imagePath, "plant-id/image.jpg");
   assert.equal(diagnostic.storageMode, "supabase");
   assert.equal(diagnostic.userNote, "overené");
-});
-
-test("reminder settings are clamped for future push delivery", () => {
-  const settings = normalizeReminderSettings({
-    fertilizingIntervalDays: 500,
-    notificationsEnabled: true,
-    preference: "web_push",
-    wateringIntervalDays: 0,
-  });
-
-  assert.equal(settings.wateringIntervalDays, 1);
-  assert.equal(settings.fertilizingIntervalDays, 120);
 });

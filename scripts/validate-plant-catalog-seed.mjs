@@ -6,9 +6,9 @@ const seedScript = readFileSync(resolve("scripts/seed-plant-catalog.mjs"), "utf8
 const authService = readFileSync(resolve("src/lib/authService.ts"), "utf8");
 const authRules = readFileSync(resolve("src/lib/authRules.ts"), "utf8");
 const authHook = readFileSync(resolve("src/hooks/useAuth.ts"), "utf8");
-const authButton = readFileSync(resolve("src/components/AuthButton.tsx"), "utf8");
+const app = readFileSync(resolve("src/App.tsx"), "utf8");
 const entitlementMigration = readFileSync(resolve("supabase/migrations/20260531213000_subscription_entitlements.sql"), "utf8");
-const entitlementService = readFileSync(resolve("src/lib/entitlementService.ts"), "utf8");
+const householdPlanService = readFileSync(resolve("src/lib/householdPlanService.ts"), "utf8");
 const pricingPage = readFileSync(resolve("src/components/PricingPage.tsx"), "utf8");
 const upgradeModal = readFileSync(resolve("src/components/UpgradeModal.tsx"), "utf8");
 const i18n = readFileSync(resolve("src/lib/i18n.ts"), "utf8");
@@ -77,8 +77,8 @@ for (const fragment of requiredHookFragments) {
   }
 }
 
-if (!authButton.includes("AuthModal") || !authButton.includes("AccountMenu")) {
-  throw new Error("AuthButton must expose both sign-in and account states.");
+if (!app.includes("AuthPanel") || !app.includes("handleAccountSignOut")) {
+  throw new Error("The active application must expose sign-in and account sign-out.");
 }
 
 const requiredEntitlementMigrationFragments = [
@@ -109,20 +109,15 @@ for (const fragment of requiredEntitlementMigrationFragments) {
 }
 
 const requiredEntitlementServiceFragments = [
-  "getMyEntitlement",
-  "isPremium",
-  "canScanPlant",
-  "canAddPlant",
-  "canCreateQrLabel",
-  "canUseAiDiagnosis",
-  "incrementAiScanUsage",
-  "get_my_entitlement",
-  "increment_usage_counter",
+  "getHouseholdPlanUsage",
+  "assertCanAddPlant",
+  "assertCanRunAiAnalyze",
+  "get_household_plan_usage",
 ];
 
 for (const fragment of requiredEntitlementServiceFragments) {
-  if (!entitlementService.includes(fragment)) {
-    throw new Error(`Entitlement service is missing required fragment: ${fragment}`);
+  if (!householdPlanService.includes(fragment)) {
+    throw new Error(`Household entitlement service is missing required fragment: ${fragment}`);
   }
 }
 

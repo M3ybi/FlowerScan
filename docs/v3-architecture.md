@@ -50,7 +50,7 @@ Image safety receipts remain session-only and bounded. A supplied receipt explic
 
 ## Source graph and dependencies
 
-Run `npm run check:source-graph`; regenerate the retained [graph](architecture-v3-graph.json) with `node scripts/analyze-source-graph.mjs --write`. It resolves relative TypeScript imports in `src`, Netlify functions and Edge functions, separates type/runtime/dynamic imports, and detects runtime/dynamic cycles. Package-internal imports, third-party implementation and computed runtime imports are outside this graph.
+Run `npm run check:source-graph`; generate an ignored `.tmp-tests/source-graph.json` report with `node scripts/analyze-source-graph.mjs --write`. The [analyzer](../scripts/analyze-source-graph.mjs) resolves relative TypeScript imports in `src`, Netlify functions and Edge functions, including URL-loaded workers, and detects runtime/dynamic cycles. Package-internal imports, third-party implementation and computed runtime imports are outside this graph. Generated reports are not maintained source files.
 
 The only added package is exact development dependency `pg@8.16.3`, justified by independent-session PostgreSQL concurrency verification. Existing PGlite cannot establish cross-session row-lock behavior. The lockfile also resolves the existing busboy dependency to 3.2.3. No production dependency or application API framework was added.
 

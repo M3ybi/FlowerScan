@@ -37,7 +37,7 @@
     "test:billing-history-browser": "node scripts/test-billing-history-browser.mjs",
     "test:revenuecat-webhook": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node netlify/functions/revenuecat-webhook.ts tests/revenuecat-webhook.test.ts && node --test .tmp-tests/tests/revenuecat-webhook.test.js",
     "test:supabase": "node scripts/validate-plant-catalog-seed.mjs",
-    "test:diagnostics": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node netlify/functions/_shared/diagnostics.ts src/utils/diagnostics.ts src/lib/aiDiagnosisAccess.ts src/lib/diagnosisGateRules.ts src/lib/reminderService.ts tests/diagnostics.test.ts tests/diagnosis-flow.test.ts && node --test .tmp-tests/tests/diagnostics.test.js .tmp-tests/tests/diagnosis-flow.test.js",
+    "test:diagnostics": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node netlify/functions/_shared/diagnostics.ts src/utils/diagnostics.ts src/lib/aiDiagnosisAccess.ts tests/diagnostics.test.ts tests/diagnosis-flow.test.ts && node --test .tmp-tests/tests/diagnostics.test.js .tmp-tests/tests/diagnosis-flow.test.js",
     "test:household": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node netlify/functions/_shared/household-scope.ts tests/household-access.test.ts && node --test .tmp-tests/tests/household-access.test.js",
     "test:legacy-backend-guard": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --types node tests/legacy-backend-guard.test.ts && esbuild tests/legacy-backend-guard.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/legacy-backend-guard.bundle.mjs && node --test .tmp-tests/legacy-backend-guard.bundle.mjs",
     "test:household-plan": "tsc --outDir .tmp-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --skipLibCheck --types node src/lib/householdPlanRules.ts tests/household-plan.test.ts && node --test .tmp-tests/tests/household-plan.test.js",
@@ -80,6 +80,7 @@
     "test:qr-header-browser": "node scripts/test-qr-header-browser.mjs",
     "test:qr-header-webkit": "node scripts/test-qr-header-browser.mjs --webkit",
     "check:source-graph": "node scripts/analyze-source-graph.mjs",
+    "test:source-graph": "node --test tests/source-graph.test.mjs",
     "check:edge-types": "deno check --node-modules-dir=none --no-lock supabase/functions/delete-account-request/index.ts supabase/functions/plant-care-ai/index.ts supabase/functions/plant-diagnosis-ai/index.ts supabase/functions/revenuecat-webhook/index.ts supabase/functions/send-auth-email/index.ts supabase/functions/send-household-invite-email/index.ts supabase/functions/send-test-email/index.ts supabase/functions/upload-validated-image/index.ts supabase/functions/validate-plant-image/index.ts",
     "test:v4-release": "node --test tests/release-environment.test.mjs tests/release-artifact.test.mjs tests/invitation-delivery-client.test.mjs tests/operational-observability.test.mjs tests/release-verification.test.mjs",
     "test:postgres-migrations": "node scripts/test-postgres-migrations.mjs",
@@ -89,12 +90,12 @@
     "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "8.5.3",
-    "@capacitor/app": "^8.1.1",
-    "@capacitor/browser": "^8.0.4",
-    "@capacitor/camera": "^8.2.0",
-    "@capacitor/core": "8.5.3",
-    "@capacitor/ios": "8.5.3",
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/camera": "^8.2.6",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0",
     "@netlify/blobs": "^10.7.7",
     "@netlify/functions": "^5.2.1",
     "@revenuecat/purchases-capacitor": "^13.1.4",
@@ -109,7 +110,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.4.3",
+    "@capacitor/cli": "8.6.0",
     "@electric-sql/pglite": "0.5.10",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.12",
@@ -120,6 +121,6 @@
     "playwright": "1.61.1",
     "supabase": "^2.119.0",
     "typescript": "^5.6.3",
-    "vite": "^6.0.1"
+    "vite": "^6.4.5"
   }
 }

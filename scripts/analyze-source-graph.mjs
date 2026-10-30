@@ -27,6 +27,10 @@ for (const file of files) {
       add(node.moduleSpecifier.text, typeOnly ? "type" : "runtime");
     } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) add(node.moduleSpecifier.text, node.isTypeOnly ? "type" : "runtime");
     else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && ts.isStringLiteral(node.arguments[0])) add(node.arguments[0].text, "dynamic");
+    else if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "URL" &&
+      node.arguments?.length === 2 && ts.isStringLiteral(node.arguments[0]) && node.arguments[1].getText(source) === "import.meta.url") {
+      if (/\.[cm]?[jt]sx?$/.test(node.arguments[0].text)) add(node.arguments[0].text, "worker");
+    }
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -44,6 +48,10 @@ files.forEach(visit);
 const fanIn = file => edges.filter(edge => edge.to === file && edge.kind !== "type").length;
 const report = { scope: roots, modules: files.length, edges: edges.length, unresolved, cycles,
   largestModules: files.map(file => ({ file, lines: fs.readFileSync(file, "utf8").split("\n").length, imports: adjacency.get(file).length, consumers: fanIn(file) })).sort((a,b) => b.lines-a.lines).slice(0,20), imports: edges };
-if (process.argv.includes("--write")) fs.writeFileSync("docs/architecture-v3-graph.json", JSON.stringify(report, null, 2) + "\n");
+if (process.argv.includes("--write")) {
+  const output = path.resolve(".tmp-tests/source-graph.json");
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  fs.writeFileSync(output, JSON.stringify(report, null, 2) + "\n");
+}
 console.log(JSON.stringify({ modules: report.modules, edges: report.edges, unresolved, cycles }, null, 2));
 if (unresolved.length || cycles.length) process.exitCode = 1;

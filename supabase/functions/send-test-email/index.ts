@@ -1,5 +1,4 @@
 import { observeOperation } from "../_shared/observability.ts";
-import { Resend } from "npm:resend";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 
@@ -26,22 +25,23 @@ Deno.serve(observeOperation("operator_email", async (request) => {
     return json(500, { message: "RESEND_API_KEY is not configured." });
   }
 
-  const resend = new Resend(apiKey);
   const from = Deno.env.get("RESEND_FROM_EMAIL") || defaultFromEmail;
   const to = Deno.env.get("RESEND_TEST_EMAIL");
 
   if (!to) return json(503, { message: "Test recipient is not configured." });
 
   try {
-    const { data, error } = await resend.emails.send({
-      from,
-      to,
-      subject: "Hello World",
-      html: "<p>Congrats on sending your <strong>first email</strong>!</p>",
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({
+        from, to, subject: "Hello World",
+        html: "<p>Congrats on sending your <strong>first email</strong>!</p>",
+      }),
     });
-
-    if (error) return json(502, { message: "Resend could not send the test email." });
-
-    return json(202, { id: data?.id ?? null, message: "Test email sent." });
+    if (!response.ok) return json(502, { message: "Resend could not send the test email." });
+    const data = await response.json() as { id?: unknown };
+    return json(202, { id: typeof data.id === "string" ? data.id : null, message: "Test email sent." });
   } catch { return json(502, { message: "Test email could not be sent." }); }
 }));

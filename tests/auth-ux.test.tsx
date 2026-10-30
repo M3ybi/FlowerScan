@@ -345,8 +345,11 @@ test("guest mode is no longer rendered in auth UI", () => {
   assert.doesNotMatch(i18nSource, /Continue as guest|Guest mode|Hos\\u0165ovsk\\u00fd re\\u017eim/);
 });
 
-test("header sign-out requires confirmation and does not expose account deletion", () => {
-  const source = readFileSync("src/components/AccountMenu.tsx", "utf8");
+test("active account sign-out requires confirmation and does not expose account deletion", () => {
+  const app = readFileSync("src/App.tsx", "utf8");
+  const start = app.indexOf("const handleAccountSignOut =");
+  assert.ok(start >= 0);
+  const source = app.slice(start, app.indexOf("\n  const ", start + 10));
   assert.doesNotMatch(source, /Delete account|#\/delete-account/);
   assert.match(source, /window\.confirm/);
 });

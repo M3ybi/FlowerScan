@@ -1,4 +1,4 @@
-import { CloudDrizzle, CloudSun, Droplet, Droplets, Flower2, Leaf, Sprout, Sun, SunDim, Waves, Wind } from "lucide-react";
+import { CloudDrizzle, CloudSun, Droplets, Flower2, Leaf, Sprout, Sun, SunDim, Waves, Wind } from "lucide-react";
 import type { Flower } from "../data/flowers";
 import { type createTranslator } from "../lib/i18n";
 import type { GeneratedCare } from "../utils/customFlower";

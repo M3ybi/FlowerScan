@@ -3,7 +3,6 @@ import { imageUploadConfig, validateProcessedImageDataUrl } from "../src/lib/ima
 import { ImageUploadError, imageErrorFromResponse, imageErrorMessage, imageDiagnosticReference, isImageSelectionCancelled, logImageProcessingFailure } from "../src/lib/imageUploadErrors.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseValidatedJpeg } from "../src/lib/validatedImageInput.js";
 
 test("decoded byte boundaries account for base64 padding and the old transport mismatch", () => {
   for (const size of [1024 * 1024, imageUploadConfig.maxProcessedBytes]) {
@@ -36,11 +35,13 @@ test("structured upload errors retain their category and localize without server
 });
 
 test("validated storage parser rejects malformed, oversized and mislabeled bytes", () => {
-  assert.equal(parseValidatedJpeg("data:image/jpeg;base64,A"), null);
-  assert.equal(parseValidatedJpeg("data:image/jpeg;base64,eA=="), null);
-  assert.equal(parseValidatedJpeg("data:image/png;base64,/9j/AA=="), null);
-  assert.equal(parseValidatedJpeg("data:image/jpeg;base64," + "A".repeat(3_000_000)), null);
-  assert.equal(parseValidatedJpeg(fixtureDataUrl())?.contentType, "image/jpeg");
+  for (const payload of ["data:image/jpeg;base64,A", "data:image/jpeg;base64,eA==",
+    "data:image/png;base64,/9j/AA==", "data:image/jpeg;base64," + "A".repeat(3_000_000)]) {
+    assert.equal("code" in validateProcessedImageDataUrl(payload), true);
+  }
+  const valid = validateProcessedImageDataUrl(fixtureDataUrl());
+  assert.equal("code" in valid, false);
+  if (!("code" in valid)) assert.equal(valid.contentType, "image/jpeg");
 });
 
 test("selection read/decode/permission errors localize in all supported app languages", () => {

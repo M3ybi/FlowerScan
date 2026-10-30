@@ -43,6 +43,7 @@ const testScripts = [
   "test:care-presentation",
   "test:revenuecat-webhook",
   "test:v4-release",
+  "test:source-graph",
 ];
 
 const runNpmScript = (script) => {

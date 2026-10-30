@@ -105,7 +105,6 @@ body::before {
 .detail-header,
 .access-card,
 .onboarding-card,
-.auth-modal,
 .plant-modal,
 .confirm-modal,
 .care-preview-modal,
@@ -192,11 +191,9 @@ body::before {
 .nav-link,
 .icon-link,
 .icon-button,
-.auth-trigger,
 .auth-google-button,
 .action-link-button,
 .text-button,
-.account-menu button,
 .plant-card-actions button,
 .plant-card-actions a,
 .plant-pagination button,
@@ -308,8 +305,7 @@ body::before {
 
 .toolbar,
 .mobile-bottom-nav,
-.app-tab-nav,
-.account-menu {
+.app-tab-nav {
   border-color: var(--glass-border);
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(248, 252, 244, 0.82)),
@@ -580,7 +576,6 @@ body::before {
 .nav-link,
 .icon-link,
 .icon-button,
-.auth-trigger,
 .auth-google-button,
 .action-link-button,
 .text-button,
@@ -1774,61 +1769,6 @@ button[aria-busy="true"] .button-spinner {
   cursor: pointer;
 }
 
-.auth-trigger {
-  border-color: rgba(18, 61, 49, 0.18);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(244, 250, 239, 0.92)),
-    #fff;
-  color: var(--brand);
-  cursor: pointer;
-}
-
-.auth-trigger:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.account-menu {
-  display: inline-flex;
-  min-height: 48px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px;
-  border: 1px solid rgba(18, 61, 49, 0.14);
-  border-radius: 999px;
-  background: rgba(255, 253, 248, 0.92);
-  box-shadow: var(--shadow-soft);
-}
-
-.account-menu-user,
-.account-menu button,
-.account-menu-link {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 12px;
-  border-radius: 999px;
-  color: var(--brand);
-  font-size: 0.88rem;
-  font-weight: 850;
-  text-decoration: none;
-}
-
-.account-menu-user {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.account-menu button,
-.account-menu-link {
-  border: 1px solid rgba(18, 61, 49, 0.12);
-  background: #fff;
-  cursor: pointer;
-}
-
 .nav-link {
   padding: 0 14px;
 }
@@ -2669,24 +2609,6 @@ textarea:focus-visible {
 
 .modal-form .field {
   gap: 7px;
-}
-
-.auth-modal {
-  position: relative;
-  width: min(460px, calc(100vw - 28px));
-  padding: 26px;
-  border: 1px solid rgba(18, 61, 49, 0.14);
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(158, 203, 122, 0.16), transparent 16rem),
-    linear-gradient(145deg, rgba(255, 253, 248, 0.98), rgba(244, 250, 239, 0.98));
-  box-shadow: var(--shadow);
-}
-
-.auth-modal p {
-  margin: 12px 0 18px;
-  color: var(--muted);
-  line-height: 1.55;
 }
 
 .auth-form {
@@ -5894,7 +5816,6 @@ textarea:focus-visible {
 
   .access-card,
   .onboarding-card,
-  .auth-modal,
   .plant-modal,
   .confirm-modal,
   .diagnosis-modal,
@@ -6013,25 +5934,8 @@ textarea:focus-visible {
   .neutral-action,
   .icon-link,
   .icon-button,
-  .account-menu button,
-  .account-menu-link,
   .mobile-bottom-nav a,
   .mobile-bottom-nav button {
-    min-height: 44px;
-  }
-
-  .account-menu {
-    width: 100%;
-    flex-wrap: wrap;
-    justify-content: stretch;
-    border-radius: 22px;
-  }
-
-  .account-menu-user,
-  .account-menu button,
-  .account-menu-link {
-    flex: 1 1 100%;
-    justify-content: center;
     min-height: 44px;
   }
 

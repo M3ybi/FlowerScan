@@ -1,6 +1,6 @@
 # Plantie legacy-to-Supabase migration
 
-This phase adds an authenticated, user-triggered import. It does not make Supabase the runtime source of truth yet.
+This document records the historical migration phases and retained operator recovery tooling. Supabase is now the default runtime source of truth; the production Menu does not expose the legacy import. Preserve `legacyMigrationService.ts` for explicitly authorized recovery and do not run it as a validation command.
 
 ## Flow
 

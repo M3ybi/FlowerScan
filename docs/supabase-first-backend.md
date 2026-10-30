@@ -92,7 +92,7 @@ The Netlify webhook URL may remain configured temporarily during rollout, but it
 
 1. Keep Supabase database/storage as the source for authenticated mobile users.
 2. For emergency web rollback, deploy an older Netlify build.
-3. To re-enable legacy function calls temporarily, set `VITE_ENABLE_NETLIFY_LEGACY_BACKEND=true`.
+3. Temporary legacy token access requires both the frontend `VITE_ENABLE_NETLIFY_LEGACY_BACKEND=true` setting and the independent server `ENABLE_NETLIFY_LEGACY_BACKEND=true` setting. The RevenueCat webhook and authenticated deletion-review endpoint have their own authorization controls; this token-backend flag does not gate them.
 4. Do not delete legacy Netlify Blobs until migrated household parity and RevenueCat webhook delivery are verified in production.
 
 ## Household invites
@@ -111,7 +111,7 @@ Invite links use:
 #/join?invite=<raw-token>
 ```
 
-The raw token is returned only once when the invite is created. Supabase stores only `token_hash`, and `list_household_invites` returns safe invite metadata without raw token material.
+Current invitation migrations store a token hash and an encrypted token in Supabase Vault. The owner-authorized delivery RPC can recover a pending invitation token for a retry. Listing invitations returns safe metadata; acceptance still requires the invited account's verified email. Preserve the complete migration history, including the recoverable-token and invitation-lifecycle migrations.
 
 ## Remaining blockers
 

@@ -78,4 +78,4 @@ These references locate the current controls; baseline vulnerable-line evidence 
 | V13 | [src/app/AppRouter.tsx:20](../src/app/AppRouter.tsx#L20) |
 | V14 | [.github/workflows/verify.yml:11](../.github/workflows/verify.yml#L11) |
 | V15 | [scripts/test-postgres-concurrency.mjs:13](../scripts/test-postgres-concurrency.mjs#L13) |
-| V16 | [src/components/AuthModal.tsx:2](../src/components/AuthModal.tsx#L2) |
+| V16 | Historical `src/components/AuthModal.tsx:2` at the baseline revision above; the unused modal was removed during the October 30 cleanup. Active authentication uses `AuthPanel` and the application account flow. |

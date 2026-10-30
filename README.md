@@ -1,86 +1,70 @@
 # Plantie
 
-Plantie is a mobile-ready React app for household plant care: plant profiles, QR labels, watering records, diagnosis, care generation, subscriptions, and household sharing.
+Plantie is the application in the FlowerScan repository: household plant care, private photos, AI identification and diagnosis, QR labels, invitations and server-confirmed subscriptions. The hosted domain is `plantiecare.com`; navigation uses hash routes, with dedicated authentication callback/recovery paths.
 
-## Local Development
+## Architecture and repository
+
+| Path | Responsibility |
+| --- | --- |
+| `src/main.tsx`, `src/App.tsx` | React entry point, session/household coordination and application composition |
+| `src/features/`, `src/hooks/`, `src/app/` | Feature actions, shared lifecycle hooks, routing and presentation |
+| `src/lib/`, `src/utils/` | Supabase repositories, billing, image processing and domain rules |
+| `supabase/functions/` | Nine Edge entry points and shared authorization, image, email and observability controls |
+| `supabase/migrations/`, `supabase/tests/` | Required forward-only database history and SQL regression fixtures |
+| `netlify/functions/`, `netlify.toml` | Web hosting, gated legacy compatibility and independently authenticated webhook/deletion routes |
+| `android/`, `ios/` | Capacitor native shells; platform-generated build outputs are ignored |
+| `FlowersImg/`, `public/`, `mobile-assets/` | Referenced catalog assets, service worker, icons and required notices |
+| `tests/`, `scripts/` | Deterministic tests, controlled browser workflows, local integration and release tooling |
+| `docs/` | Operational guides, recovery instructions and historical implementation evidence |
+
+The frontend uses React 18, TypeScript and Vite 6. Supabase is the default backend for Auth, household data/RPCs, private Storage and Edge Functions. RevenueCat events settle subscriptions on the server; Resend handles account/invitation mail. Capacitor wraps the same web application for Android/iOS. Compatibility code remains where existing deployed clients, scheduled jobs, webhooks or operator recovery may still depend on it.
+
+## Local setup
+
+Use a maintained Node.js release supported by the toolchain (Node 24 LTS is the current local default), npm, and a security-patched JDK 21 for Android. Android also requires the Android SDK; iOS compilation requires macOS/Xcode. Keep `JAVA_HOME` configured persistently; see [Android setup](docs/android-internal-testing.md).
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Copy `.env.example` to `.env.local` for local browser variables. Keep real server secrets in Netlify environment variables or Supabase Edge Function secrets, never in committed files and never under a `VITE_` prefix.
+Copy `.env.example` to `.env.local` and supply local public configuration. `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` select the frontend project. `VITE_BACKEND_PROVIDER` defaults to `supabase`. Billing mode and its matching public SDK key must be explicit; see [billing configuration](docs/revenuecat-billing.md).
 
-## Validation
+Server credentials belong in provider secret stores, never in frontend variables or committed files. Important server references include `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `REVENUECAT_WEBHOOK_SECRET` and the optional image-validation signing secret. Use `.env.example` as the configuration inventory. Never put a server secret under `VITE_`.
+
+## Development and verification
 
 ```bash
-npm run typecheck
-npm test
+npm run check                 # TypeScript unused checks, offline tests and production build
+npm run check:source-graph    # Resolved first-party imports, workers and cycles
+npm run check:client-secrets  # Scan built text artifacts without printing credentials
+npm audit
+```
+
+Tests run sequentially because several suites share `.tmp-tests` and clear generated fixtures. `npm test` covers the explicitly listed offline suites; it does not run every `test:*` command. No separate ESLint/formatter configuration is imposed; strict TypeScript checks include unused locals and parameters.
+
+Controlled browser workflows include `test:application-browser`, `test:application-webkit`, `test:image-browser`, `test:image-webkit`, `test:auth-flow-browser`, and `test:qr-header-browser`. Install the pinned Playwright browsers when needed. They test synthetic accounts/providers and do not prove a live purchase, delivered email or physical camera operation.
+
+`test:postgres` and `test:postgres-migrations` require an explicitly configured disposable loopback PostgreSQL administrator URL in `PLANTIE_TEST_POSTGRES_URL`. `test:supabase-local` requires Docker and creates a disposable local project. Edge type/signature tests require the Deno version pinned in CI. Missing infrastructure is a blocked gate, not a pass. `test:database-audit`, image-storage checks and catalog seeding contact a linked/selected backend and must not be run as routine local validation.
+
+## Critical workflows and safety contracts
+
+- Authentication uses Supabase PKCE, persisted sessions and checked web/native callback routes. Account sign-out and recovery are handled by the active application account flow.
+- Plant and household mutations use server authorization and operation scopes that discard stale account/household results. Invitations require the recipient's verified account; owners can retry delivery using encrypted Vault-backed tokens.
+- Original camera/gallery files are limited to **15 MiB**. The client normalizes them into JPEGs up to **2 MiB** and a 1600-pixel longest side. The server independently checks decoded byte bounds and normalized-image structure before authorized private storage writes. HEIC decoding remains lazy and worker-isolated.
+- Premium, Free usage and household permissions come from server state. A client SDK result cannot grant Premium. Preserve the product rules and provider lifecycle ordering.
+- Legacy token routes require a separate server opt-in. The RevenueCat webhook and deletion-review endpoint have their own authorization; a frontend flag does not disable or authorize those handlers.
+
+## Build, mobile and deployment
+
+```bash
 npm run build
-```
-
-For a single production-review command:
-
-```bash
-npm run check
-```
-
-The test runner executes all checked-in `test:*` suites sequentially to avoid shared `.tmp-tests` output races on Windows.
-
-## Backend And Hosting
-
-Supabase is the default backend provider for app data and authenticated Edge Functions. Netlify remains the web host and legacy compatibility function host.
-
-Frontend environment variables:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_BACKEND_PROVIDER=supabase` optional, because Supabase is the default
-
-Important server-only variables:
-
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENAI_API_KEY`
-- `REVENUECAT_WEBHOOK_SECRET`
-- `RESEND_API_KEY`
-- `NETLIFY_BLOBS_TOKEN`
-- `VAPID_PRIVATE_KEY`
-
-Do not expose server-only keys in frontend code or any `VITE_*` variable.
-
-See:
-
-- `docs/supabase-setup.md`
-- `docs/supabase-storage-buckets.md`
-- `docs/supabase-first-backend.md`
-- `docs/revenuecat-billing.md`
-
-## Netlify
-
-`netlify.toml` is the deployment source of truth:
-
-- build command: `npm run build`
-- publish directory: `dist`
-- functions directory: `netlify/functions`
-
-## Mobile Wrapper
-
-Capacitor is configured for iOS and Android shells.
-
-```bash
+npm run android:build
 npm run mobile:build
-npm run mobile:ios
-npm run mobile:android
 ```
 
-See `docs/mobile-capacitor.md`.
+Netlify publishes `dist` using `netlify.toml`. GitHub Pages has a separate verified workflow with the `/FlowerScan/` base path. Capacitor synchronization packages the reviewed web bundle into each native shell. Generating a graph with `node scripts/analyze-source-graph.mjs --write` writes only the ignored `.tmp-tests/source-graph.json` report.
 
-## Data Safety
+A local build does not deploy anything. Review [release operations](docs/v4-deployment-runbook.md), [billing](docs/revenuecat-billing.md), [authentication](docs/authentication-flows.md), [image handling](docs/image-upload-pipeline.md) and [mobile setup](docs/mobile-capacitor.md) for provider-specific requirements. Historical audit/deployment reports describe their recorded revision and date, not necessarily current hosted state.
 
-Use forward-only Supabase migrations. Do not run destructive database resets, drops, truncates, bulk deletes, storage wipes, or project recreation against production infrastructure. Document destructive cleanup ideas for manual review instead.
-
-## Local verification and V3 rollout
-
-Run `npm ci` and `npm run check`. CI additionally runs Edge typing, source graph, client-secret scanning, controlled Chromium/WebKit workflows, auth-browser checks and disposable PostgreSQL contention tests. These require no production credentials. The PostgreSQL runner accepts only an explicitly configured disposable loopback server; do not use a linked project.
-
-Read the [V3 engineering report](docs/v3-audit-2026-10-19.md) for exact results, the [validation scope](docs/v3-validation.md), and [migration/function ordering and operator decisions](docs/v3-rollout.md). A passing local build does not establish the affected physical phones or production provider configuration.
+Preserve all required migrations and recovery evidence. Never reset a linked database, delete production records/storage/functions, run privileged seeding, or change production configuration as part of repository hygiene. `.netlify` may contain private recovery artifacts and is intentionally excluded from source control. See the [October 30 cleanup report](docs/cleanup-2026-10-30.md) for measured changes and verification limits.

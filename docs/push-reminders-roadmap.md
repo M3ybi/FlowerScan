@@ -1,6 +1,6 @@
 # Plantie push reminder architecture
 
-Current phase keeps existing web push behavior unchanged and adds only UI/service placeholders for per-plant reminder settings.
+Native reminders remain a roadmap item. The current production UI does not expose a push-subscription control. Legacy Netlify push endpoints and `public/sw.js` remain available for existing subscriptions when the independently gated legacy backend is explicitly enabled. Unused client subscription helpers and future-only settings placeholders were removed during cleanup; this document is a design note, not an implemented feature claim.
 
 ## Reminder types
 

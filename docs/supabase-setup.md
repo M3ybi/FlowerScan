@@ -134,9 +134,7 @@ Files:
 - `src/lib/authService.ts`
 - `src/hooks/useAuth.ts`
 - `src/components/AuthPanel.tsx`
-- `src/components/AuthButton.tsx`
-- `src/components/AuthModal.tsx`
-- `src/components/AccountMenu.tsx`
+- `src/App.tsx` and `src/components/LoggedOutMenu.tsx` (active account entry and sign-out)
 
 Available auth service functions:
 
@@ -237,7 +235,7 @@ Entitlement RPCs:
 
 Frontend service:
 
-- `src/lib/entitlementService.ts`
+- `src/lib/householdPlanService.ts` and `src/lib/aiDiagnosisAccess.ts` (current household-scoped usage and diagnosis access)
 
 Standalone UI components:
 

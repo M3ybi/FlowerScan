@@ -17,7 +17,7 @@ Real Google Play subscription products are not required for the first internal t
 - Node.js and npm
 - Android Studio
 - Android SDK
-- JDK 21 for Capacitor Android 8 release builds
+- Latest security-patched JDK 21 LTS for Capacitor Android 8 builds, configured persistently through `JAVA_HOME` and `PATH`
 - Google Play Console access
 
 ## NPM commands
@@ -81,13 +81,16 @@ npm run android:sync
 npm run android:aab
 ```
 
-On this Windows workspace, the successful release build used:
+On Windows, set `JAVA_HOME` persistently to the installed JDK 21 directory and place its `bin` directory first in `PATH`. Restart terminals and VS Code after changing environment variables. Do not switch to older JDK installations for individual builds. Gradle 8.14.3 cannot run on Java 25 or newer; check the Gradle compatibility matrix before upgrading Java major versions.
+
+Verify the configured toolchain, then build:
 
 ```powershell
-$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.2.13-hotspot"
+java -version
 $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 $env:ANDROID_SDK_ROOT="$env:LOCALAPPDATA\Android\Sdk"
 cd android
+.\gradlew.bat --version
 .\gradlew.bat bundleRelease
 ```
 

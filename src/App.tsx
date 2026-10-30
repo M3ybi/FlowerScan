@@ -85,7 +85,7 @@ import {
   supportedLanguages,
   writeStoredLanguage,
 } from "./lib/onboarding";
-import type { Household, HouseholdInvitation, HouseholdInvite, HouseholdMember, HouseholdRole } from "./lib/plantieRepository";
+import type { Household, HouseholdInvitation, HouseholdInvite, HouseholdMember } from "./lib/plantieRepository";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { SupabaseReadThroughState } from "./lib/supabaseReadThrough";
 import {
@@ -304,7 +304,6 @@ export const App = () => {
     copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("diagnosis.imageReady") },
   });
   const newPlantImage = newImageSelection.image;
-  const isCapturingNewPlantImage = newImageSelection.isProcessing;
   const diagnosisImageDataUrl = diagnosisImageSelection.image?.dataUrl ?? "";
   const diagnosisImagePreviewUrl = diagnosisImageSelection.image?.previewUrl ?? "";
   const isCapturingDiagnosisImage = diagnosisImageSelection.isProcessing;
@@ -429,8 +428,6 @@ export const App = () => {
   const householdNameEditStatusClass = householdNameEditStatus
     ? `household-name-edit-status household-name-edit-status-${householdNameEditStatusTone}`
     : "";
-  const householdRoleLabel = (role: HouseholdRole) =>
-    role === "viewer" ? t("household.roleViewer") : t("household.roleOwner");
   const isSupabaseHouseholdPending =
     shouldUseSupabaseAccountData &&
     !supabaseReadState &&
@@ -1098,7 +1095,7 @@ export const App = () => {
     }
   };
 
-  const { applyRenamedHousehold, startHouseholdNameEdit, cancelHouseholdNameEdit, handleSaveHouseholdName, renderHouseholdNameEditor } = useHouseholdManagement({
+  const { startHouseholdNameEdit, renderHouseholdNameEditor } = useHouseholdManagement({
     setSupabaseReadState,
     setActiveHousehold,
     setHouseholdNameDraft,
@@ -1294,7 +1291,7 @@ export const App = () => {
     removeFlower,
   });
 
-  const { refreshHouseholdPeople, setInviteFeedback, inviteDeliveryErrorKey, handleCreateInvite, handleCopyInviteLink, handleRetryInviteEmail, handleRemoveHouseholdPerson } = useInvitationActions({
+  const { refreshHouseholdPeople, handleCreateInvite, handleCopyInviteLink, handleRetryInviteEmail, handleRemoveHouseholdPerson } = useInvitationActions({
     auth,
     activeSupabaseHouseholdId,
     isHouseholdOperationCurrent,
@@ -1469,7 +1466,7 @@ export const App = () => {
     saveFlower,
   });
 
-  const { openDiagnosisModal, closeDiagnosisModal, handleDiagnosisImageChange, runPlantDiagnosis, upsertSupabaseDiagnosisInReadState, savePlantDiagnosis, updateDiagnosticHistoryEntry, updateDiagnosticConfirmation } = useDiagnosisActions({
+  const { openDiagnosisModal, closeDiagnosisModal, handleDiagnosisImageChange, runPlantDiagnosis, savePlantDiagnosis, updateDiagnosticHistoryEntry, updateDiagnosticConfirmation } = useDiagnosisActions({
     resolveCurrentAiDiagnosisAccess,
     aiDiagnosisAccessMessage,
     setDiagnosisStatus,

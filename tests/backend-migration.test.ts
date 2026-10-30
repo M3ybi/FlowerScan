@@ -223,7 +223,7 @@ test("frontend does not reference server-only backend secrets", () => {
     "src/lib/backendConfig.ts",
     "src/utils/diagnostics.ts",
     "src/utils/customFlower.ts",
-    "src/utils/pushNotifications.ts",
+    "src/lib/validatedImageUpload.ts",
   ].map((path) => readFileSync(path, "utf8")).join("\n");
 
   assert.doesNotMatch(frontendSources, /OPENAI_API_KEY/);

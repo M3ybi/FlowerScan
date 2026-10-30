@@ -280,7 +280,7 @@ RevenueCat Test Store can be used before App Store Connect / Google Play product
 
 ## V3 webhook environment gate
 
-Both handlers ignore signed sandbox/Test Store events before database writes unless `REVENUECAT_ALLOW_SANDBOX_EVENTS` is exactly `true`. Keep that opt-in on a separate test backend. Explicit unknown environments are denied; signed legacy events without environment remain compatible. Existing stored records are not reclassified. Confirm App Review/tester sandbox routing before rollout; those purchases will be ignored against the default production gate. See [V3 deployment decisions](v3-rollout.md).
+In default production mode, sandbox/Test Store events require the broad `REVENUECAT_ALLOW_SANDBOX_EVENTS=true` opt-in. Explicit `REVENUECAT_BILLING_MODE=test_store` separately admits only Test Store sandbox events. The primary Supabase webhook also supports the narrow `REVENUECAT_ALLOW_WEB_BILLING_SANDBOX_EVENTS=true` opt-in for Web Billing sandbox events; the compatibility Netlify webhook does not consume that narrow flag. Unknown explicit environments are denied. Existing stored records are not reclassified. Check the configured handler and billing mode before rollout; see [V3 deployment decisions](v3-rollout.md) and the newer hosted sandbox notes below.
 
 
 ## Hosted Web Billing sandbox
