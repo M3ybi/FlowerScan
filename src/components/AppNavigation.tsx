@@ -10,12 +10,12 @@ type AppNavigationProps = {
 };
 
 export const MobileBottomNav = ({ currentPage, onAddPlant, t }: AppNavigationProps) => (
-  <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-    <a className={currentPage === "plants" ? "active" : ""} href="#/">
+  <nav className="mobile-bottom-nav" aria-label={t("nav.mobile")}>
+    <a aria-current={currentPage === "plants" ? "page" : undefined} className={currentPage === "plants" ? "active" : ""} href="#/">
       <Leaf size={18} aria-hidden="true" />
       {t("nav.plants")}
     </a>
-    <a className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
+    <a aria-current={currentPage === "diagnose" ? "page" : undefined} className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
       <Camera size={18} aria-hidden="true" />
       {t("nav.diagnose")}
     </a>
@@ -23,11 +23,11 @@ export const MobileBottomNav = ({ currentPage, onAddPlant, t }: AppNavigationPro
       <Plus size={18} aria-hidden="true" />
       {t("dashboard.addPlant")}
     </button>
-    <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
+    <a aria-current={currentPage === "qr" ? "page" : undefined} className={currentPage === "qr" ? "active" : ""} href="#/qr">
       <QrCodeIcon size={18} aria-hidden="true" />
       {t("nav.qr")}
     </a>
-    <a className={currentPage === "menu" ? "active" : ""} href="#/menu">
+    <a aria-current={currentPage === "menu" ? "page" : undefined} className={currentPage === "menu" ? "active" : ""} href="#/menu">
       <Home size={18} aria-hidden="true" />
       {t("nav.menu")}
     </a>
@@ -36,11 +36,11 @@ export const MobileBottomNav = ({ currentPage, onAddPlant, t }: AppNavigationPro
 
 export const AppTabNav = ({ currentPage, onAddPlant, t }: AppNavigationProps) => (
   <nav className="app-tab-nav" aria-label="Main navigation">
-    <a className={currentPage === "plants" ? "active" : ""} href="#/">
+    <a aria-current={currentPage === "plants" ? "page" : undefined} className={currentPage === "plants" ? "active" : ""} href="#/">
       <Leaf size={18} aria-hidden="true" />
       {t("nav.plants")}
     </a>
-    <a className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
+    <a aria-current={currentPage === "diagnose" ? "page" : undefined} className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
       <Camera size={18} aria-hidden="true" />
       {t("nav.diagnose")}
     </a>
@@ -48,11 +48,11 @@ export const AppTabNav = ({ currentPage, onAddPlant, t }: AppNavigationProps) =>
       <Plus size={18} aria-hidden="true" />
       {t("dashboard.addPlant")}
     </button>
-    <a className={currentPage === "qr" ? "active" : ""} href="#/qr">
+    <a aria-current={currentPage === "qr" ? "page" : undefined} className={currentPage === "qr" ? "active" : ""} href="#/qr">
       <QrCodeIcon size={18} aria-hidden="true" />
       {t("nav.qr")}
     </a>
-    <a className={currentPage === "menu" ? "active" : ""} href="#/menu">
+    <a aria-current={currentPage === "menu" ? "page" : undefined} className={currentPage === "menu" ? "active" : ""} href="#/menu">
       <Home size={18} aria-hidden="true" />
       {t("nav.menu")}
     </a>

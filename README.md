@@ -45,6 +45,8 @@ Tests run sequentially because several suites share `.tmp-tests` and clear gener
 
 Controlled browser workflows include `test:application-browser`, `test:application-webkit`, `test:image-browser`, `test:image-webkit`, `test:auth-flow-browser`, and `test:qr-header-browser`. Install the pinned Playwright browsers when needed. They test synthetic accounts/providers and do not prove a live purchase, delivered email or physical camera operation.
 
+Mobile navigation and pagination checks run with `test:mobile-navigation-browser` and `test:mobile-navigation-webkit`; see [mobile navigation architecture and verification](docs/mobile-navigation.md).
+
 `test:postgres` and `test:postgres-migrations` require an explicitly configured disposable loopback PostgreSQL administrator URL in `PLANTIE_TEST_POSTGRES_URL`. `test:supabase-local` requires Docker and creates a disposable local project. Edge type/signature tests require the Deno version pinned in CI. Missing infrastructure is a blocked gate, not a pass. `test:database-audit`, image-storage checks and catalog seeding contact a linked/selected backend and must not be run as routine local validation.
 
 ## Critical workflows and safety contracts

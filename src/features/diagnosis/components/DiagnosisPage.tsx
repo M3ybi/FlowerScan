@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowRight,
   Camera,
   ChevronRight,
   Search,
@@ -11,7 +10,8 @@ import {
   flowerDiagnosticsCount
 } from "../../../app/localDiagnostics";
 import type { AppRoute } from "../../../app/routes";
-import { AppTabNav, MobileBottomNav } from "../../../components/AppNavigation";
+import { PlantPagination } from "../../../components/PlantPagination";
+import { AppTabNav } from "../../../components/AppNavigation";
 import type { Flower } from "../../../data/flowers";
 import { createTranslator } from "../../../lib/i18n";
 import type { PlantDiagnosticEntry } from "../../../utils/diagnostics";
@@ -110,38 +110,10 @@ export const DiagnosisPage = ({
           )}
         </section>
         {filteredFlowers.length > plantPageSize ? (
-          <nav className="plant-pagination" aria-label="Plant pages">
-            <button type="button" disabled={plantPage === 1} onClick={() => setPlantPage(1)} aria-label="First page">
-              <ArrowLeft size={16} aria-hidden="true" />
-              <ArrowLeft size={16} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={plantPage === 1}
-              onClick={() => setPlantPage((currentPage) => Math.max(1, currentPage - 1))}
-              aria-label="Previous page"
-            >
-              <ArrowLeft size={18} aria-hidden="true" />
-            </button>
-            <span>
-              {plantPage} / {plantPageCount}
-            </span>
-            <button
-              type="button"
-              disabled={plantPage === plantPageCount}
-              onClick={() => setPlantPage((currentPage) => Math.min(plantPageCount, currentPage + 1))}
-              aria-label="Next page"
-            >
-              <ArrowRight size={18} aria-hidden="true" />
-            </button>
-            <button type="button" disabled={plantPage === plantPageCount} onClick={() => setPlantPage(plantPageCount)} aria-label="Last page">
-              <ArrowRight size={16} aria-hidden="true" />
-              <ArrowRight size={16} aria-hidden="true" />
-            </button>
-          </nav>
+          <PlantPagination page={plantPage} pageCount={plantPageCount} setPage={setPlantPage} t={t} />
         ) : null}
         {renderHouseholdSheet()}
-        <MobileBottomNav currentPage="diagnose" onAddPlant={openAddPlantFromMobileNav} t={t} />
+
       </main>
     );
   }

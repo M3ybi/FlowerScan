@@ -7,7 +7,7 @@ import {
   Sprout,
   UserRound
 } from "lucide-react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   currentBaseUrl,
@@ -30,7 +30,8 @@ import {
 } from "./app/localDiagnostics";
 import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
-import { AppTabNav, MobileBottomNav } from "./components/AppNavigation";
+import { AppTabNav } from "./components/AppNavigation";
+import { AppShell } from "./components/AppShell";
 import { AuthMessage, AuthPanel } from "./components/AuthPanel";
 import { HouseholdInvitationInbox, InvitationInboxButton } from "./components/HouseholdInvitationInbox";
 import { HouseholdInvitationReview } from "./components/HouseholdInvitationReview";
@@ -49,6 +50,7 @@ import { useHouseholdSelectionActions } from "./features/households/hooks/useHou
 import type { HouseholdLookupStatus, HouseholdNameEditSurface } from "./features/households/types";
 import { useInvitationActions } from "./features/invitations/hooks/useInvitationActions";
 import { useInvitationReviewActions } from "./features/invitations/hooks/useInvitationReviewActions";
+import { AddPlantModal } from "./features/plants/components/AddPlantModal";
 import { usePlantActions } from "./features/plants/hooks/usePlantActions";
 import { usePlantPersistence } from "./features/plants/hooks/usePlantPersistence";
 import { useAccountDeletion } from "./features/settings/hooks/useAccountDeletion";
@@ -59,6 +61,7 @@ import { useFlowerRecords } from "./hooks/useFlowerRecords";
 import { useHouseholdDirectory } from "./hooks/useHouseholdDirectory";
 import { useHouseholdInvitation, useHouseholdInvitations } from "./hooks/useHouseholdInvitations";
 import { useImageSelection } from "./hooks/useImageSelection";
+import { usePagination } from "./hooks/usePagination";
 import { useSubscriptionState } from "./hooks/useSubscriptionState";
 import type { AiDiagnosisAccessResult } from "./lib/aiDiagnosisAccess";
 import { resolveAiDiagnosisAccess } from "./lib/aiDiagnosisAccess";
@@ -276,7 +279,6 @@ export const App = () => {
   const plantSubmissionRef = useRef<symbol | null>(null);
   const pendingPlantIdRef = useRef<string | null>(null);
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
-  const [plantPage, setPlantPage] = useState(1);
   const [deleteFlowerId, setDeleteFlowerId] = useState("");
   const [isRemovingPlant, setIsRemovingPlant] = useState(false);
   const [carePreview, setCarePreview] = useState<CarePreview | null>(null);
@@ -295,7 +297,7 @@ export const App = () => {
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
   const imageSelectionScope = `${householdOperationScope.userId}:${householdOperationScope.householdToken}:${householdOperationScope.generation}`;
   const newImageSelection = useImageSelection({
-    enabled: isAddPlantModalOpen && route.page === "dashboard" && !isAddingPlant, scopeKey: imageSelectionScope, language: selectedLanguage,
+    enabled: isAddPlantModalOpen && !isAddingPlant, scopeKey: imageSelectionScope, language: selectedLanguage,
     onStatus: setNewPlantStatus, copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("image.ready") },
   });
   const diagnosisImageSelection = useImageSelection({
@@ -1266,7 +1268,6 @@ export const App = () => {
         </div>
       </section>
       {renderHouseholdSheet()}
-      <MobileBottomNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
     </main>
   );
 
@@ -1437,16 +1438,8 @@ export const App = () => {
   }, [allFlowers, query]);
 
   const plantPageSize = 10;
-  const plantPageCount = Math.max(1, Math.ceil(filteredFlowers.length / plantPageSize));
+  const { page: plantPage, pageCount: plantPageCount, setPage: setPlantPage } = usePagination(filteredFlowers.length, plantPageSize);
   const visibleFlowers = filteredFlowers.slice((plantPage - 1) * plantPageSize, plantPage * plantPageSize);
-
-  useEffect(() => {
-    setPlantPage(1);
-  }, [query, allFlowers.length]);
-
-  useEffect(() => {
-    setPlantPage((currentPage) => Math.min(currentPage, plantPageCount));
-  }, [plantPageCount]);
 
   const { handleGenerateCarePreview, confirmCareUpdate, isApplyingCare } = useCareActions({
     isHouseholdOperationCurrent,
@@ -1579,7 +1572,6 @@ export const App = () => {
     setIsRemovingPlant,
     removeFlowerById,
     setDeleteFlowerId,
-    route,
   });
   const navigateBack = (fallbackHash = "#/") => (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -1590,6 +1582,17 @@ export const App = () => {
 
     window.location.hash = fallbackHash;
   };
+
+  const renderAppShell = (children: ReactNode) => (
+    <AppShell enabled={auth.isAuthenticated} route={route} t={t} onAddPlant={openAddPlantFromMobileNav}
+      addPlantModal={isAddPlantModalOpen ? (
+        <AddPlantModal t={t} newPlantName={newPlantName} setNewPlantName={setNewPlantName}
+          newPlantStatus={newPlantStatus} isAddingPlant={isAddingPlant} plantLimitReached={plantLimitReached}
+          newImageSelection={newImageSelection} handleAddCustomFlower={handleAddCustomFlower} closeAddPlantModal={closeAddPlantModal} />
+      ) : null}>
+      {children}
+    </AppShell>
+  );
 
   if ((isSupabaseAuthIdentityTransition && !auth.isPasswordRecovery && !auth.invalidRecoveryLink) ||
     (auth.loading && isSupabaseConfigured && route.page !== "legal" && route.page !== "health" && route.page !== "release-readiness")) {
@@ -1653,7 +1656,7 @@ export const App = () => {
   }
 
   if (route.page === "join") {
-    return (
+    return renderAppShell(
       <main className="app-shell compact">
         <header className="topbar topbar-with-actions">
           <a className="icon-link" href="#/menu" onClick={navigateBack("#/menu")} aria-label={t("nav.backToMenu")}>
@@ -1684,7 +1687,7 @@ export const App = () => {
   }
 
   if (route.page === "legal" || route.page === "release-readiness" || route.page === "health") {
-    return (
+    return renderAppShell(
       <main className="app-shell compact">
         <header className="topbar topbar-with-actions">
           <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.backToPlantie")}>
@@ -1717,7 +1720,7 @@ export const App = () => {
   }
 
   if ((isSupabaseHouseholdPending || (!shouldUseSupabaseAccountData && isAccessChecking)) && !currentRouteAllowedWithoutHousehold) {
-    return renderHouseholdLoading();
+    return renderAppShell(renderHouseholdLoading());
   }
 
   if (auth.isAuthenticated && route.page !== "menu" && onboardingStep !== "complete" && !activeHousehold && !supabaseReadState) {
@@ -1868,10 +1871,9 @@ export const App = () => {
     );
   }
 
-  return <AppRouter route={route} shared={{ t, renderHeroActions, renderHouseholdSheet, openAddPlantFromMobileNav }}
+  return renderAppShell(<AppRouter route={route} shared={{ t, renderHeroActions, renderHouseholdSheet, openAddPlantFromMobileNav }}
     detail={{
       flowerById,
-      navigateBack,
       records,
       baseUrl,
       carePreview,
@@ -2026,14 +2028,6 @@ export const App = () => {
       isAddPlantModalOpen,
       query,
       setQuery,
-      newPlantName,
-      setNewPlantName,
-      newPlantStatus,
-      isAddingPlant,
-      plantLimitReached,
-      newImageSelection,
-      handleAddCustomFlower,
-      closeAddPlantModal,
       isNewOnboardingHousehold,
       customFlowers,
       openAddPlantModal,
@@ -2047,5 +2041,5 @@ export const App = () => {
       setPlantPage,
       plantPageCount,
     }}
-  />;
+  />);
 };

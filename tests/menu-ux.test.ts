@@ -7,6 +7,7 @@ const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.js
 const authPanelSource = readFileSync("src/components/AuthPanel.tsx", "utf8");
 const loggedOutMenuSource = readFileSync("src/components/LoggedOutMenu.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
+const shellSource = readFileSync("src/components/AppShell.tsx", "utf8");
 const i18nSource = readFileSync("src/lib/i18n.ts", "utf8");
 const repositorySource = readFileSync("src/lib/plantieRepository.ts", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
@@ -47,7 +48,8 @@ test("signed-out Menu hides application navigation while the authenticated branc
   assert.doesNotMatch(loggedOutMenuSource, /AppTabNav|MobileBottomNav|HouseholdInvitationInbox|InvitationInboxButton|user-menu-trigger|household-switcher/);
   const signedInBranch = menuRoute.slice(signedInStart);
   assert.match(signedInBranch, /<AppTabNav currentPage="menu"/);
-  assert.match(signedInBranch, /<MobileBottomNav currentPage="menu"/);
+  assert.doesNotMatch(signedInBranch, /<MobileBottomNav/);
+  assert.match(appSource, /<AppShell enabled=\{auth\.isAuthenticated\}/);
 });
 
 test("dashboard account access opens the household sheet with account actions", () => {
@@ -238,7 +240,7 @@ test("QR labels live in app tab navigation instead of Menu content", () => {
 test("primary navigation provides secondary app routes", () => {
   assert.match(navigationSource, /export const AppTabNav/);
   assert.match(navigationSource, /export const MobileBottomNav/);
-  assert.match(appSource, /<MobileBottomNav/);
+  assert.match(shellSource, /<MobileBottomNav currentPage=\{navigationPageForRoute\(route\)\}/);
   assert.match(styleSource, /\.app-tab-nav\s*\{/);
   assert.match(styleSource, /\.mobile-bottom-nav\s*\{/);
 });

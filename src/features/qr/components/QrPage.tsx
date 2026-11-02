@@ -9,7 +9,7 @@ import {
   publicFlowerUrl
 } from "../../../app/appFormatting";
 import type { AppRoute } from "../../../app/routes";
-import { AppTabNav, MobileBottomNav } from "../../../components/AppNavigation";
+import { AppTabNav } from "../../../components/AppNavigation";
 import { LoadingButton } from "../../../components/LoadingButton";
 import { QrCode } from "../../../components/QrCode";
 import type { Flower } from "../../../data/flowers";
@@ -150,7 +150,6 @@ export const QrPage = ({
           </section>
         )}
         {renderHouseholdSheet()}
-        <MobileBottomNav currentPage="qr" onAddPlant={openAddPlantFromMobileNav} t={t} />
       </main>
     );
   }

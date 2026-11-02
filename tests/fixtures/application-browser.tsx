@@ -23,7 +23,10 @@ localStorage.clear();
 localStorage.setItem("plantie-language-v1", parameters.get("language") ?? "en");
 localStorage.setItem("plantie-onboarding-v1", "complete");
 localStorage.setItem("flowscan-active-household-v1", JSON.stringify({ name: "Fixture household", publicToken: parameters.has("qr") ? "33333333-3333-4333-8333-333333333333" : "fixture-household-token-12345" }));
-localStorage.setItem("flowscan-custom-flowers-v1", JSON.stringify(parameters.has("qr") && parameters.has("empty") ? [] : [plant]));
+const plantCount = Math.max(0, Math.min(40, Number(parameters.get("plants") ?? 1)));
+const fixturePlants = Array.from({ length: plantCount }, (_, index) => ({ ...plant,
+  id: index === 0 ? plant.id : `fixture-plant-${index}`, displayName: index === 0 ? plant.displayName : `Fixture plant ${index + 1}` }));
+localStorage.setItem("flowscan-custom-flowers-v1", JSON.stringify(parameters.has("qr") && parameters.has("empty") ? [] : fixturePlants));
 localStorage.setItem("flowscan-removed-flower-ids-v1", JSON.stringify(flowers.map(value => value.id)));
 window.__entryFixtureAuth.setAuthenticated(true);
 const calls: Record<string, number> = {};

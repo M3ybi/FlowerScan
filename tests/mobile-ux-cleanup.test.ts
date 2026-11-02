@@ -4,6 +4,7 @@ import test from "node:test";
 
 const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n") + "\n" + readFileSync("src/features/plants/components/PlantGrid.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
+const paginationSource = readFileSync("src/components/PlantPagination.tsx", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 
 test("mobile dashboard removes report and reminder configuration clutter", () => {
@@ -39,11 +40,11 @@ test("dashboard plant list is paginated", () => {
   assert.match(appSource, /const plantPageSize = 10/);
   assert.match(appSource, /visibleFlowers = filteredFlowers\.slice/);
   assert.match(appSource, /\{visibleFlowers\.map\(\(flower\) =>/);
-  assert.match(appSource, /className="plant-pagination"/);
-  assert.match(appSource, /setPlantPage\(plantPageCount\)/);
+  assert.match(appSource, /<PlantPagination page=\{plantPage\}/);
+  assert.match(paginationSource, /setPage\(pageCount\)/);
   assert.match(styleSource, /\.flower-grid\s*\{[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(styleSource, /\.plant-pagination\s*\{/);
-  assert.match(styleSource, /bottom: calc\(84px \+ var\(--safe-area-bottom\)\)/);
+  assert.match(styleSource, /bottom: calc\(var\(--mobile-nav-bottom\) \+ var\(--mobile-nav-height\) \+ 12px\)/);
 });
 
 test("diagnose plant picker has search, pagination, and open affordance", () => {
@@ -56,7 +57,7 @@ test("diagnose plant picker has search, pagination, and open affordance", () => 
   assert.match(diagnoseRoute, /filteredFlowers\.length > 0/);
   assert.match(diagnoseRoute, /visibleFlowers\.map\(\(flower\) =>/);
   assert.match(diagnoseRoute, /filteredFlowers\.length > plantPageSize/);
-  assert.match(diagnoseRoute, /setPlantPage\(plantPageCount\)/);
+  assert.match(diagnoseRoute, /<PlantPagination page=\{plantPage\}/);
   assert.match(diagnoseRoute, /href=\{flowerPath\(flower\.id, false, "diagnostics"\)\}/);
   assert.match(diagnoseRoute, /className="diagnose-picker-open-icon"/);
   assert.match(styleSource, /\.diagnose-picker-open-icon\s*\{/);
@@ -123,7 +124,7 @@ test("compact mobile care/status styling is present", () => {
   assert.match(styleSource, /\.status-band div\s*\{[\s\S]*grid-template-columns: auto 1fr;[\s\S]*border-radius: 999px;/);
   assert.match(styleSource, /\.care-summary\s*\{[\s\S]*max-width: 62ch;[\s\S]*line-height: 1\.65;/);
   assert.match(styleSource, /\.plant-card-actions button,\s*\.plant-card-actions a\s*\{[\s\S]*min-height: 38px;/);
-  assert.match(styleSource, /\.mobile-bottom-nav a,\s*\.mobile-bottom-nav button\s*\{[\s\S]*min-height: 48px;/);
+  assert.match(styleSource, /\.mobile-bottom-nav a,\s*\.mobile-bottom-nav button\s*\{[\s\S]*min-height: var\(--mobile-nav-item-height\);/);
 });
 
 test("visible Slovak UI text no longer contains replacement placeholders", () => {

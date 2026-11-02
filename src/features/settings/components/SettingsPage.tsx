@@ -17,7 +17,7 @@ import {
 } from "../../../app/householdInvites";
 import type { HouseholdPersonItem } from "../../../app/householdPeople";
 import type { AppRoute } from "../../../app/routes";
-import { AppTabNav, MobileBottomNav } from "../../../components/AppNavigation";
+import { AppTabNav } from "../../../components/AppNavigation";
 import type { AuthNotice } from "../../../components/AuthPanel";
 import { AuthPanel } from "../../../components/AuthPanel";
 import { HouseholdPeopleList } from "../../../components/HouseholdPeopleList";
@@ -439,7 +439,6 @@ export const SettingsPage = ({
           </details>
         </section>
         {renderHouseholdSheet()}
-        <MobileBottomNav currentPage="menu" onAddPlant={openAddPlantFromMobileNav} t={t} />
       </main>
     );
   }

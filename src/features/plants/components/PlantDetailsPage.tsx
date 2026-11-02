@@ -12,7 +12,6 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import type { MouseEvent } from "react";
 import { useEffect } from "react";
 import {
   publicFlowerUrl,
@@ -51,7 +50,6 @@ type Props = {
   flowerById: Map<string, Flower>;
   renderHeroActions: () => JSX.Element;
   renderHouseholdSheet: () => JSX.Element | null;
-  navigateBack: (fallbackHash?: string) => (event: MouseEvent<HTMLAnchorElement>) => void;
   t: ReturnType<typeof createTranslator>;
   records: FlowerRecords;
   baseUrl: string;
@@ -125,7 +123,6 @@ export const PlantDetailsPage = ({
   flowerById,
   renderHeroActions,
   renderHouseholdSheet,
-  navigateBack,
   t,
   records,
   baseUrl,
@@ -218,7 +215,7 @@ export const PlantDetailsPage = ({
         <main className="app-shell compact">
           {renderHeroActions()}
           {renderHouseholdSheet()}
-          <a className="nav-link" href="#/" onClick={navigateBack("#/")}>
+          <a className="nav-link" href="#/">
             <ArrowLeft size={18} aria-hidden="true" />
             {t("nav.plants")}
           </a>
@@ -258,7 +255,7 @@ export const PlantDetailsPage = ({
     return (
       <main className="app-shell detail-shell">
         <header className="detail-header">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
+          <a className="icon-link floating-back-link" href="#/" aria-label={t("nav.back")}>
             <ArrowLeft size={22} aria-hidden="true" />
           </a>
           <div>

@@ -152,7 +152,7 @@ const plantActionHarness = () => {
       setEditingNameFlowerId: value => { if (value === "") nameEditorClosed = true; }, setDraftFlowerName() {},
       draftFlowerName: "New name", saveFlower: async () => false, deleteFlowerId: "plant", isRemovingPlant: false,
       setIsRemovingPlant() {}, removeFlowerById: async () => false,
-      setDeleteFlowerId: value => { if (value === "") deletionClosed = true; }, route: { page: "dashboard" },
+      setDeleteFlowerId: value => { if (value === "") deletionClosed = true; },
     });
     return null;
   };

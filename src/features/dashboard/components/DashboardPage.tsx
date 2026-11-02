@@ -6,14 +6,12 @@ import {
   Search,
   Sprout
 } from "lucide-react";
-import type { FormEvent } from "react";
-import { AppTabNav, MobileBottomNav } from "../../../components/AppNavigation";
+import { AppTabNav } from "../../../components/AppNavigation";
+import { PlantPagination } from "../../../components/PlantPagination";
 import type { Flower } from "../../../data/flowers";
 import type { FlowerRecords } from "../../../hooks/useFlowerRecords";
-import { useImageSelection } from "../../../hooks/useImageSelection";
 import { createTranslator } from "../../../lib/i18n";
 import { getWateringProgress } from "../../../utils/watering";
-import { AddPlantModal } from "../../plants/components/AddPlantModal";
 import { PlantGrid } from "../../plants/components/PlantGrid";
 
 type Props = {
@@ -25,14 +23,6 @@ type Props = {
   query: string;
   setQuery: React.Dispatch<React.SetStateAction<string>>;
   renderHouseholdSheet: () => JSX.Element | null;
-  newPlantName: string;
-  setNewPlantName: React.Dispatch<React.SetStateAction<string>>;
-  newPlantStatus: string;
-  isAddingPlant: boolean;
-  plantLimitReached: boolean;
-  newImageSelection: ReturnType<typeof useImageSelection>;
-  handleAddCustomFlower: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  closeAddPlantModal: () => void;
   isNewOnboardingHousehold: boolean;
   customFlowers: Flower[];
   openAddPlantModal: () => void;
@@ -56,14 +46,6 @@ export const DashboardPage = ({
   query,
   setQuery,
   renderHouseholdSheet,
-  newPlantName,
-  setNewPlantName,
-  newPlantStatus,
-  isAddingPlant,
-  plantLimitReached,
-  newImageSelection,
-  handleAddCustomFlower,
-  closeAddPlantModal,
   isNewOnboardingHousehold,
   customFlowers,
   openAddPlantModal,
@@ -103,12 +85,6 @@ export const DashboardPage = ({
 
       {renderHouseholdSheet()}
 
-      {isAddPlantModalOpen ? (
-        <AddPlantModal t={t} newPlantName={newPlantName} setNewPlantName={setNewPlantName}
-          newPlantStatus={newPlantStatus} isAddingPlant={isAddingPlant} plantLimitReached={plantLimitReached}
-          newImageSelection={newImageSelection} handleAddCustomFlower={handleAddCustomFlower} closeAddPlantModal={closeAddPlantModal} />
-      ) : null}
-
       {isNewOnboardingHousehold && customFlowers.length === 0 ? (
         <section className="empty-state onboarding-empty-dashboard" aria-labelledby="empty-dashboard-title">
           <Sprout size={36} aria-hidden="true" />
@@ -135,33 +111,7 @@ export const DashboardPage = ({
       )}
 
       {!isNewOnboardingHousehold && filteredFlowers.length > plantPageSize ? (
-        <nav className="plant-pagination" aria-label="Plant pages">
-          <button type="button" disabled={plantPage === 1} onClick={() => setPlantPage(1)} aria-label="First page">
-            &lt;&lt;
-          </button>
-          <button
-            type="button"
-            disabled={plantPage === 1}
-            onClick={() => setPlantPage((currentPage) => Math.max(1, currentPage - 1))}
-            aria-label="Previous page"
-          >
-            &lt;
-          </button>
-          <span>
-            {plantPage} / {plantPageCount}
-          </span>
-          <button
-            type="button"
-            disabled={plantPage === plantPageCount}
-            onClick={() => setPlantPage((currentPage) => Math.min(plantPageCount, currentPage + 1))}
-            aria-label="Next page"
-          >
-            &gt;
-          </button>
-          <button type="button" disabled={plantPage === plantPageCount} onClick={() => setPlantPage(plantPageCount)} aria-label="Last page">
-            &gt;&gt;
-          </button>
-        </nav>
+        <PlantPagination page={plantPage} pageCount={plantPageCount} setPage={setPlantPage} t={t} />
       ) : null}
 
       {!isNewOnboardingHousehold && filteredFlowers.length === 0 ? (
@@ -171,7 +121,6 @@ export const DashboardPage = ({
           <p>{t("dashboard.emptySearchBody")}</p>
         </section>
       ) : null}
-      <MobileBottomNav currentPage="plants" onAddPlant={openAddPlantFromMobileNav} t={t} />
     </main>
   );
 };

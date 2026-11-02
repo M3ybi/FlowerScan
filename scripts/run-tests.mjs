@@ -36,6 +36,7 @@ const testScripts = [
   "test:household-membership",
   "test:household-permissions",
   "test:mobile-ux",
+  "test:mobile-navigation",
   "test:menu-ux",
   "test:logged-out-menu-facts",
   "test:app-helpers",

@@ -1,6 +1,5 @@
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { AppRoute } from "../../../app/routes";
 import type { Flower } from "../../../data/flowers";
 import { useImageSelection } from "../../../hooks/useImageSelection";
 import type { HouseholdPlanUsage } from "../../../lib/householdPlanService";
@@ -46,7 +45,6 @@ type Dependencies = {
   setIsRemovingPlant: React.Dispatch<React.SetStateAction<boolean>>;
   removeFlowerById: (flowerId: string) => Promise<boolean>;
   setDeleteFlowerId: React.Dispatch<React.SetStateAction<string>>;
-  route: AppRoute;
 };
 
 export const usePlantActions = ({
@@ -74,8 +72,7 @@ export const usePlantActions = ({
   isRemovingPlant,
   setIsRemovingPlant,
   removeFlowerById,
-  setDeleteFlowerId,
-  route
+  setDeleteFlowerId
 }: Dependencies) => {
   const mutation = useRef<symbol | null>(null);
   const [isSavingPlantName, setIsSavingPlantName] = useState(false);
@@ -200,11 +197,6 @@ export const usePlantActions = ({
     setIsAddPlantModalOpen(false);
   };
 
-  const openAddPlantFromMobileNav = () => {
-    openAddPlantModal();
-    if (route.page !== "dashboard") {
-      window.location.hash = "#/";
-    }
-  };
+  const openAddPlantFromMobileNav = openAddPlantModal;
   return { startNameEdit, cancelNameEdit, confirmNameEdit, confirmRemoveCustomFlower, handleAddCustomFlower, openAddPlantModal, closeAddPlantModal, openAddPlantFromMobileNav, isSavingPlantName, plantMutationStatus };
 };
