@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { BillingCustomerInfo } from "../src/lib/billingService.js";
 import type { HouseholdEntitlement, HouseholdPlanUsage } from "../src/lib/householdPlanService.js";
-import { createSubscriptionStateController, resolveSubscriptionView } from "../src/lib/subscriptionState.js";
+import { createSubscriptionStateController as createController, resolveSubscriptionView } from "../src/lib/subscriptionState.js";
+
+// These lifecycle fixtures straddle September/November 2026. Use the controller's
+// clock boundary so active-plan assertions do not expire with the calendar.
+const createSubscriptionStateController = (dependencies: Parameters<typeof createController>[0]) => createController({
+  now: () => Date.parse("2026-10-07T12:00:00Z"),
+  ...dependencies,
+});
 
 const usage = (isPremium: boolean): HouseholdPlanUsage => ({
   aiAnalyzesMonthlyLimit: isPremium ? null : 10,
