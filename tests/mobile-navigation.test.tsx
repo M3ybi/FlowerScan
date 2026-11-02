@@ -3,11 +3,36 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppShell, navigationPageForRoute } from "../src/components/AppShell";
 import { PlantPagination } from "../src/components/PlantPagination";
+import { BackLink } from "../src/components/BackLink";
+import { MobileBottomNav } from "../src/components/AppNavigation";
 import { parseHashRoute } from "../src/app/routes";
 import { clampPage, pageCountForItems } from "../src/hooks/usePagination";
 import { createTranslator } from "../src/lib/i18n";
 
 const t = createTranslator("sk");
+
+test("compact mobile labels preserve the full action's accessible name", () => {
+  const german = createTranslator("de");
+  const html = renderToStaticMarkup(<MobileBottomNav currentPage="plants" onAddPlant={() => {}} t={german} />);
+  assert.ok(html.includes(german("nav.mobileAddPlant")));
+  assert.ok(html.includes(`aria-label="${german("dashboard.addPlant")}"`));
+  assert.ok(html.includes(`aria-label="${german("nav.diagnose")}"`));
+  assert.ok(html.includes("Menü"));
+  assert.equal(t("nav.mobileAddPlant"), "Pridať rastlinu");
+  assert.equal(t("nav.mobileDiagnose"), "Diagnóza");
+});
+
+test("the shared back control preserves each explicit parent destination", () => {
+  for (const href of ["#/", "#/menu"] as const) {
+    const label = href === "#/menu" ? t("nav.backToMenu") : t("nav.back");
+    const html = renderToStaticMarkup(<BackLink href={href} label={label} />);
+    assert.equal(html.match(/<a /g)?.length, 1);
+    assert.match(html, /class="icon-link floating-back-link"/);
+    assert.ok(html.includes(`href="${href}"`));
+    assert.ok(html.includes(`aria-label="${label}"`));
+    assert.equal(html.match(/<svg /g)?.length, 1);
+  }
+});
 
 test("pagination labels retain Slovak diacritics", () => {
   assert.equal(t("pagination.first"), "Prvá stránka");
@@ -59,7 +84,9 @@ test("pagination uses four SVG controls with localized status and native boundar
     const buttons = html.match(/<button[^>]*>/g)!;
     assert.equal(buttons.length, 4);
     assert.equal(html.match(/<svg /g)?.length, 4);
-    assert.match(html, new RegExp(`${Math.min(page, 3)} z 3`));
+    assert.ok(html.includes(`aria-label="${t("pagination.status", { page: Math.min(page, 3), total: 3 })}"`));
+    assert.match(html, new RegExp(`<strong>${Math.min(page, 3)}</strong>`));
+    assert.equal(html.match(/role="status"/g)?.length, 1);
     assert.match(html, /role="status" aria-live="polite" aria-atomic="true"/);
     assert.equal(buttons[0].includes("disabled="), page === 1);
     assert.equal(buttons[1].includes("disabled="), page === 1);

@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   CircleHelp,
   Crown,
   Home,
@@ -18,6 +17,7 @@ import {
 import type { HouseholdPersonItem } from "../../../app/householdPeople";
 import type { AppRoute } from "../../../app/routes";
 import { AppTabNav } from "../../../components/AppNavigation";
+import { BackLink } from "../../../components/BackLink";
 import type { AuthNotice } from "../../../components/AuthPanel";
 import { AuthPanel } from "../../../components/AuthPanel";
 import { HouseholdPeopleList } from "../../../components/HouseholdPeopleList";
@@ -59,7 +59,6 @@ type Props = {
   inviteStatus: string;
   inviteStatusClass: string;
   setAuthEntry: React.Dispatch<React.SetStateAction<{ id: number; mode: AuthMode; email: string; notice?: AuthNotice; } | null>>;
-  navigateBack: (fallbackHash?: string) => (event: MouseEvent<HTMLAnchorElement>) => void;
   t: ReturnType<typeof createTranslator>;
   renderHeroActions: () => JSX.Element;
   openAddPlantFromMobileNav: () => void;
@@ -125,7 +124,6 @@ export const SettingsPage = ({
   inviteStatus,
   inviteStatusClass,
   setAuthEntry,
-  navigateBack,
   t,
   renderHeroActions,
   openAddPlantFromMobileNav,
@@ -216,9 +214,7 @@ export const SettingsPage = ({
     return (
       <main className="app-shell compact">
         <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
+          <BackLink href="#/" label={t("nav.back")} />
           <div>
             <p className="eyebrow">Plantie</p>
             <h1>{t("menu.heading")}</h1>

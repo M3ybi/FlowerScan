@@ -44,7 +44,8 @@ const browser = await (engine === 'webkit' ? webkit : chromium).launch({ headles
 
 const checks = [], failures = [];
 const scenario = async (name, width, run) => {
-  const page = await browser.newPage({ viewport: { width, height: 844 }, reducedMotion: 'reduce' });
+  const viewport = typeof width === 'number' ? { width, height: 844 } : width;
+  const page = await browser.newPage({ viewport, reducedMotion: 'reduce' });
   page.setDefaultTimeout(8000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -92,6 +93,12 @@ const cancelAdd = async page => {
     const nav = document.querySelector('.mobile-bottom-nav').getBoundingClientRect();
     return !!document.elementFromPoint(nav.x + nav.width / 2, nav.y + nav.height / 2)?.closest('.modal-backdrop');
   }), 'Modal backdrop intercepts navigation');
+  if (await page.locator('.floating-back-link').count()) {
+    assert.ok(await page.locator('.floating-back-link').evaluate(node => {
+      const bounds = node.getBoundingClientRect();
+      return !!document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)?.closest('.modal-backdrop');
+    }), 'Modal backdrop covers the floating back button');
+  }
   await page.keyboard.press('Shift+Tab');
   assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'Focus stays in the modal');
   await page.keyboard.press('Escape');
@@ -100,7 +107,58 @@ const cancelAdd = async page => {
 };
 
 try {
-  for (const width of [320, 360, 375, 390, 430, 768]) await scenario(`responsive-${width}`, width, async page => {
+  await scenario('navigation-proportions', 320, async page => {
+    await page.goto(`${origin}/?plants=23&language=sk#/`);
+    await page.locator('.flower-card').first().waitFor();
+    const navigation = page.locator('.mobile-bottom-nav');
+    for (const item of await navigation.locator(':scope > *').all()) {
+      const icon = await item.locator('svg').boundingBox();
+      assert.ok(icon.width >= 21 && icon.height >= 21, 'Navigation icons must be at least 21px');
+      assert.ok(await item.evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 11), 'Navigation text must be at least 11px');
+    }
+    assert.ok((await navigation.boundingBox()).height <= 72, 'The refined bar should be compact');
+  });
+  await scenario('global-back-controls', 390, async page => {
+    for (const [hash, destination, selector] of [
+      ['/flower/fixture-plant', '#/', '.detail-shell'], ['/flower/missing-plant', '#/', '.empty-state h1'],
+      ['/diagnose', '#/', '#diagnose-picker-title'], ['/qr', '#/', '.qr-shell'],
+      ['/menu?section=account', '#/', '.menu-stack'], ['/join?invite=fixture-token-1234567890', '#/menu', '.topbar'],
+      ['/privacy', '#/', '.release-page'], ['/terms', '#/', '.release-page'],
+      ['/support', '#/', '.release-page'], ['/delete-account', '#/', '.release-page'],
+      ['/subscription-terms', '#/', '.release-page'], ['/release-readiness', '#/', '.release-page'], ['/health', '#/', '.release-page'],
+    ]) {
+      await page.goto(`${origin}/?plants=23#${hash}`);
+      await page.locator(selector).waitFor();
+      const back = page.locator('.floating-back-link');
+      assert.equal(await back.count(), 1, `${hash} has one shared back control`);
+      assert.equal(await back.getAttribute('href'), destination);
+      assert.equal(await back.evaluate(node => getComputedStyle(node).position), 'fixed');
+      const initial = await back.boundingBox();
+      assert.ok(initial.width >= 44 && initial.height >= 44);
+      if (await page.locator('header h1').count()) {
+        assert.ok((await page.locator('header h1').boundingBox()).y >= initial.y + initial.height, 'Header title clears floating navigation');
+      }
+      for (const fraction of [0.5, 1]) {
+        await page.evaluate(value => window.scrollTo(0, document.documentElement.scrollHeight * value), fraction);
+        const bounds = await back.boundingBox();
+        assert.equal(bounds.x, initial.x); assert.equal(bounds.y, initial.y);
+        assert.ok(await back.evaluate(node => {
+          const box = node.getBoundingClientRect();
+          return node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+        }), `${hash} back link remains clickable while scrolling`);
+      }
+      if (['/qr', '/menu?section=account', '/terms', '/join?invite=fixture-token-1234567890'].includes(hash)) {
+        await page.screenshot({ path: path.join(artifacts, `back-${hash.split(/[/?]/).filter(Boolean)[0]}-390.png`) });
+      }
+      await page.reload();
+      await page.locator('.floating-back-link').waitFor();
+      assert.equal(await page.locator('.floating-back-link').getAttribute('href'), destination);
+      await page.locator('.floating-back-link').click();
+      await page.waitForFunction(value => location.hash === value, destination);
+      await page.locator(destination === '#/' ? '.flower-grid' : '.menu-stack').waitFor();
+    }
+  });
+  for (const [width, height] of [[320, 568], [360, 800], [375, 667], [390, 844], [414, 896], [430, 932], [768, 1024]]) await scenario(`responsive-${width}`, { width, height }, async page => {
     await page.goto(`${origin}/?plants=23#/`);
     await page.locator('.flower-card').first().waitFor();
     await assertNavigation(page, '#/');
@@ -229,8 +287,12 @@ try {
     assert.equal(await page.locator('.plant-pagination svg').count(), 4);
     assert.ok(await page.locator('.plant-pagination [role="status"]').getAttribute('aria-label'));
     for (const item of await page.locator('.mobile-bottom-nav > *').all()) {
-      assert.ok(await item.evaluate(node => node.scrollHeight <= node.clientHeight), 'Translated label fits its touch target');
+      assert.ok(await item.evaluate(node => {
+        const item = node.getBoundingClientRect(), label = node.querySelector('.mobile-nav-label').getBoundingClientRect();
+        return node.scrollHeight <= node.clientHeight && label.left >= item.left - 1 && label.right <= item.right + 1;
+      }), `Translated label fits its touch target: ${await item.textContent()}`);
     }
+    await page.screenshot({ path: path.join(artifacts, `localized-${language}-320.png`) });
     if (language === 'sk') {
       await page.getByRole('button', { name: 'Posledná stránka', exact: true }).click();
       assert.equal(await page.locator('.plant-pagination [role="status"]').textContent(), '3 z 3');
@@ -266,6 +328,16 @@ try {
     await page.locator('.flower-card').waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('flowscan-flower-records-v1')), records);
     assert.equal(await page.locator('.image-watering-label strong').textContent(), '100 %');
+  });
+  await scenario('print-excludes-navigation', 390, async page => {
+    await page.goto(`${origin}/?plants=23#/qr`);
+    await page.locator('.qr-shell').waitFor();
+    await page.emulateMedia({ media: 'print' });
+    assert.equal(await page.locator('.floating-back-link').isVisible(), false);
+    assert.equal(await page.locator('.mobile-bottom-nav').isVisible(), false);
+    assert.equal(await page.locator('.qr-label').count(), 23);
+    await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('.qr-shell')).paddingTop) === 0);
+    assert.equal(await page.locator('.qr-shell').evaluate(node => parseFloat(getComputedStyle(node).paddingTop)), 0);
   });
   for (const width of [1024, 1440]) await scenario(`desktop-${width}`, width, async page => {
     await page.goto(`${origin}/?plants=23#/flower/fixture-plant`);

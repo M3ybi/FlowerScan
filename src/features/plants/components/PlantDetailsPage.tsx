@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   BadgeCheck,
   Camera,
   Check,
@@ -24,6 +23,7 @@ import {
 } from "../../../app/carePresentation";
 import type { AppRoute } from "../../../app/routes";
 import { AppTabNav } from "../../../components/AppNavigation";
+import { BackLink } from "../../../components/BackLink";
 import { LoadingButton } from "../../../components/LoadingButton";
 import { ModalDialog } from "../../../components/ModalDialog";
 import { QrCode } from "../../../components/QrCode";
@@ -215,10 +215,7 @@ export const PlantDetailsPage = ({
         <main className="app-shell compact">
           {renderHeroActions()}
           {renderHouseholdSheet()}
-          <a className="nav-link" href="#/">
-            <ArrowLeft size={18} aria-hidden="true" />
-            {t("nav.plants")}
-          </a>
+          <BackLink href="#/" label={t("nav.back")} />
           <section className="empty-state">
             <Leaf size={34} aria-hidden="true" />
             <h1>{t("detail.missing")}</h1>
@@ -255,9 +252,7 @@ export const PlantDetailsPage = ({
     return (
       <main className="app-shell detail-shell">
         <header className="detail-header">
-          <a className="icon-link floating-back-link" href="#/" aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
+          <BackLink href="#/" label={t("nav.back")} />
           <div>
             <p className="eyebrow">{t("detail.title")}</p>
             {isEditingName ? (

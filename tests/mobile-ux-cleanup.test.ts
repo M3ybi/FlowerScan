@@ -5,6 +5,7 @@ import test from "node:test";
 const appSource = JSON.parse(readFileSync("tests/fixtures/application-sources.json", "utf8")).map((sourcePath: string) => readFileSync(sourcePath, "utf8")).join("\n") + "\n" + readFileSync("src/features/plants/components/PlantGrid.tsx", "utf8");
 const navigationSource = readFileSync("src/components/AppNavigation.tsx", "utf8");
 const paginationSource = readFileSync("src/components/PlantPagination.tsx", "utf8");
+const backLinkSource = readFileSync("src/components/BackLink.tsx", "utf8");
 const styleSource = readFileSync("src/styles.css", "utf8");
 
 test("mobile dashboard removes report and reminder configuration clutter", () => {
@@ -73,10 +74,11 @@ test("detail page no longer exposes the nonfunctional notification toggle UI", (
   assert.doesNotMatch(styleSource, /\.toggle-field/);
 });
 
-test("page back controls use browser history with a fallback", () => {
-  assert.match(appSource, /const navigateBack = \(fallbackHash = "#\/"\)/);
-  assert.match(appSource, /window\.history\.back\(\)/);
-  assert.match(appSource, /onClick=\{navigateBack\("#\/"\)\}/);
+test("page back controls use explicit parent destinations for direct links and refreshes", () => {
+  assert.match(appSource, /<BackLink href="#\/"/);
+  assert.match(appSource, /<BackLink href="#\/menu"/);
+  assert.match(backLinkSource, /className="icon-link floating-back-link" href=\{href\}/);
+  assert.doesNotMatch(appSource, /window\.history\.back\(\)/);
 });
 
 test("AI diagnosis actions are disabled when household access is unavailable", () => {

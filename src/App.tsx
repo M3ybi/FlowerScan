@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Home,
   KeyRound,
   Leaf,
@@ -7,7 +6,7 @@ import {
   Sprout,
   UserRound
 } from "lucide-react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   currentBaseUrl,
@@ -31,6 +30,7 @@ import {
 import { areStringRecordsEqual, mergeCloudRecords } from "./app/records";
 import { isRouteAllowedWithoutHousehold, useHashRoute } from "./app/routes";
 import { AppTabNav } from "./components/AppNavigation";
+import { BackLink } from "./components/BackLink";
 import { AppShell } from "./components/AppShell";
 import { AuthMessage, AuthPanel } from "./components/AuthPanel";
 import { HouseholdInvitationInbox, InvitationInboxButton } from "./components/HouseholdInvitationInbox";
@@ -1573,16 +1573,6 @@ export const App = () => {
     removeFlowerById,
     setDeleteFlowerId,
   });
-  const navigateBack = (fallbackHash = "#/") => (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    if (window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-
-    window.location.hash = fallbackHash;
-  };
-
   const renderAppShell = (children: ReactNode) => (
     <AppShell enabled={auth.isAuthenticated} route={route} t={t} onAddPlant={openAddPlantFromMobileNav}
       addPlantModal={isAddPlantModalOpen ? (
@@ -1659,9 +1649,7 @@ export const App = () => {
     return renderAppShell(
       <main className="app-shell compact">
         <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/menu" onClick={navigateBack("#/menu")} aria-label={t("nav.backToMenu")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
+          <BackLink href="#/menu" label={t("nav.backToMenu")} />
           <div>
             <p className="eyebrow">{t("household.familyInvite")}</p>
             <h1>{t("household.joinTitle")}</h1>
@@ -1690,9 +1678,7 @@ export const App = () => {
     return renderAppShell(
       <main className="app-shell compact">
         <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.backToPlantie")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
+          <BackLink href="#/" label={t("nav.backToPlantie")} />
           <div>
             <p className="eyebrow">Plantie release</p>
             <h1>{route.page === "health" ? "Health" : route.page === "release-readiness" ? "Readiness" : "Compliance"}</h1>
@@ -1951,7 +1937,6 @@ export const App = () => {
       inviteStatus,
       inviteStatusClass,
       setAuthEntry,
-      navigateBack,
       handleAccountSignOut,
       isSigningOut,
       accountActionStatus,
@@ -2000,7 +1985,6 @@ export const App = () => {
       refreshPlanAfterSubscription,
     }}
     diagnose={{
-      navigateBack,
       query,
       setQuery,
       filteredFlowers,
@@ -2013,7 +1997,6 @@ export const App = () => {
       plantPageCount,
     }}
     qr={{
-      navigateBack,
       handleQrPdfExport,
       isExportingQrPdf,
       baseUrl,

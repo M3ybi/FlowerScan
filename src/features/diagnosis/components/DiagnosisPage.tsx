@@ -1,17 +1,16 @@
 import {
-  ArrowLeft,
   Camera,
   ChevronRight,
   Search,
   Sprout
 } from "lucide-react";
-import type { MouseEvent } from "react";
 import {
   flowerDiagnosticsCount
 } from "../../../app/localDiagnostics";
 import type { AppRoute } from "../../../app/routes";
 import { PlantPagination } from "../../../components/PlantPagination";
 import { AppTabNav } from "../../../components/AppNavigation";
+import { BackLink } from "../../../components/BackLink";
 import type { Flower } from "../../../data/flowers";
 import { createTranslator } from "../../../lib/i18n";
 import type { PlantDiagnosticEntry } from "../../../utils/diagnostics";
@@ -19,7 +18,6 @@ import { flowerPath } from "../../../utils/links";
 
 type Props = {
   route: AppRoute;
-  navigateBack: (fallbackHash?: string) => (event: MouseEvent<HTMLAnchorElement>) => void;
   t: ReturnType<typeof createTranslator>;
   renderHeroActions: () => JSX.Element;
   openAddPlantFromMobileNav: () => void;
@@ -38,7 +36,6 @@ type Props = {
 
 export const DiagnosisPage = ({
   route,
-  navigateBack,
   t,
   renderHeroActions,
   openAddPlantFromMobileNav,
@@ -58,9 +55,7 @@ export const DiagnosisPage = ({
     return (
       <main className="app-shell compact">
         <header className="topbar topbar-with-actions">
-          <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-            <ArrowLeft size={22} aria-hidden="true" />
-          </a>
+          <BackLink href="#/" label={t("nav.back")} />
           <div>
             <p className="eyebrow">{t("diagnosis.premiumReady")}</p>
             <h1>{t("diagnosis.heading")}</h1>

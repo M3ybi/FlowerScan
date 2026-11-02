@@ -1,15 +1,14 @@
 import {
-  ArrowLeft,
   FileDown,
   Printer,
   QrCodeIcon
 } from "lucide-react";
-import type { MouseEvent } from "react";
 import {
   publicFlowerUrl
 } from "../../../app/appFormatting";
 import type { AppRoute } from "../../../app/routes";
 import { AppTabNav } from "../../../components/AppNavigation";
+import { BackLink } from "../../../components/BackLink";
 import { LoadingButton } from "../../../components/LoadingButton";
 import { QrCode } from "../../../components/QrCode";
 import type { Flower } from "../../../data/flowers";
@@ -19,7 +18,6 @@ import { qrLabelSpec } from "../../../utils/qrPdf";
 
 type Props = {
   route: AppRoute;
-  navigateBack: (fallbackHash?: string) => (event: MouseEvent<HTMLAnchorElement>) => void;
   t: ReturnType<typeof createTranslator>;
   handleQrPdfExport: () => Promise<void>;
   isExportingQrPdf: boolean;
@@ -36,7 +34,6 @@ type Props = {
 
 export const QrPage = ({
   route,
-  navigateBack,
   t,
   handleQrPdfExport,
   isExportingQrPdf,
@@ -55,9 +52,7 @@ export const QrPage = ({
       <main className="app-shell qr-shell">
         <header className="topbar qr-header">
           <div className="qr-header-title">
-            <a className="icon-link" href="#/" onClick={navigateBack("#/")} aria-label={t("nav.back")}>
-              <ArrowLeft size={22} aria-hidden="true" />
-            </a>
+            <BackLink href="#/" label={t("nav.back")} />
             <div>
               <p className="eyebrow">{t("qr.printable")}</p>
               <h1>{t("qr.heading")}</h1>

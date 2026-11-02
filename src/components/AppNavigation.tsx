@@ -12,24 +12,24 @@ type AppNavigationProps = {
 export const MobileBottomNav = ({ currentPage, onAddPlant, t }: AppNavigationProps) => (
   <nav className="mobile-bottom-nav" aria-label={t("nav.mobile")}>
     <a aria-current={currentPage === "plants" ? "page" : undefined} className={currentPage === "plants" ? "active" : ""} href="#/">
-      <Leaf size={18} aria-hidden="true" />
-      {t("nav.plants")}
+      <Leaf size={22} aria-hidden="true" />
+      <span className="mobile-nav-label">{t("nav.plants")}</span>
     </a>
-    <a aria-current={currentPage === "diagnose" ? "page" : undefined} className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
-      <Camera size={18} aria-hidden="true" />
-      {t("nav.diagnose")}
+    <a aria-label={t("nav.diagnose")} aria-current={currentPage === "diagnose" ? "page" : undefined} className={currentPage === "diagnose" ? "active" : ""} href="#/diagnose">
+      <Camera size={22} aria-hidden="true" />
+      <span className="mobile-nav-label">{t("nav.mobileDiagnose")}</span>
     </a>
-    <button type="button" className="mobile-bottom-nav-action" onClick={onAddPlant}>
-      <Plus size={18} aria-hidden="true" />
-      {t("dashboard.addPlant")}
+    <button type="button" className="mobile-bottom-nav-action" onClick={onAddPlant} aria-label={t("dashboard.addPlant")}>
+      <Plus size={22} aria-hidden="true" />
+      <span className="mobile-nav-label">{t("nav.mobileAddPlant")}</span>
     </button>
     <a aria-current={currentPage === "qr" ? "page" : undefined} className={currentPage === "qr" ? "active" : ""} href="#/qr">
-      <QrCodeIcon size={18} aria-hidden="true" />
-      {t("nav.qr")}
+      <QrCodeIcon size={22} aria-hidden="true" />
+      <span className="mobile-nav-label">{t("nav.qr")}</span>
     </a>
     <a aria-current={currentPage === "menu" ? "page" : undefined} className={currentPage === "menu" ? "active" : ""} href="#/menu">
-      <Home size={18} aria-hidden="true" />
-      {t("nav.menu")}
+      <Home size={22} aria-hidden="true" />
+      <span className="mobile-nav-label">{t("nav.mobileMenu")}</span>
     </a>
   </nav>
 );

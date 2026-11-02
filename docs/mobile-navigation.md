@@ -12,16 +12,30 @@ existing image validation, submission guards and household authorization still a
 The existing dialog handles focus trapping, Escape, focus restoration, scroll locking
 and visual viewport resizing.
 
-On screens up to 780 CSS pixels wide, the plant detail back link is fixed in the
-upper-left safe area. Its `#/` destination deliberately returns to the plant overview
-for direct links, refreshes and in-app visits, without relying on browser history.
-Search and pagination remain in `App`, so returning from details preserves them.
-Desktop back-link positioning and desktop tab navigation retain their existing layout.
+On screens up to 780 CSS pixels wide, `BackLink` keeps page-level back navigation
+fixed in the upper-left safe area. Each caller supplies its existing parent `href`;
+the component does not inspect browser history. Direct links and refreshes therefore
+return to the same destination as in-app visits. Search and pagination remain in
+`App`, so returning from details preserves them. Desktop links remain in their
+existing header positions and desktop tab navigation retains its layout.
+
+| Page or route | Back destination |
+| --- | --- |
+| Plant detail, diagnostics panel and missing-plant fallback | `#/` |
+| Diagnosis, QR, authenticated menu and its subsections | `#/` |
+| Invitation review (`#/join`) | `#/menu` |
+| Privacy, terms, support, account deletion, subscription terms | `#/` |
+| Release readiness and health | `#/` |
+
+The dashboard and authentication/onboarding screens do not gain a new back button.
+The invitation overlay's return-to-inbox button, authentication tab arrows and
+onboarding step controls remain local interactions inside their existing flows.
 
 Shared CSS variables define the bottom bar height, safe-area offset and content
 clearance. The authenticated shell reserves that space, and sticky pagination sits
 above it. Controls use the existing sticky/navigation/modal stacking tokens. The
-detail header reserves space for the floating back button; no scroll listener is used.
+page shell reserves space whenever it contains `BackLink`; no route-specific header
+offsets or scroll listeners are used for floating navigation.
 Form fields have scroll margins. While an editable field outside a modal is focused,
 the shell checks that it clears fixed navigation, including on viewport resizing,
 and scrolls it into view if needed. These resize subscriptions are removed on blur;
@@ -34,6 +48,23 @@ have native disabled semantics, localized labels and a polite page-status indica
 invalid page immediately, then commits the correction. Empty and single-page
 collections do not render pagination. The existing ten-item page size is unchanged.
 
+## Visual proportions
+
+Navigation controls share a theme-aware surface, thin border, restrained shadow,
+green active surface and 1.8-pixel icon stroke. The floating back target is 46 pixels.
+The bottom bar uses equal columns, 22-pixel icons, 11–12-pixel labels and a 66-pixel
+container, capped at 540 pixels on tablets. Text labels have their own row; Add Plant
+may use two balanced lines. Compact localized labels keep longer translations
+readable without changing desktop labels, destinations or full accessible action
+names. Print layouts exclude floating navigation and its reserved top space.
+
+Pagination retains all four 44-pixel targets and its existing state logic. Flat icon
+buttons surround an inner capsule: current page is emphasized, separator and total
+are secondary. The localized template supplies the order and wording. There is one
+polite status region. Disabled icons remain visible, and the existing reduced-motion
+rule covers color transitions. Earlier competing navigation/pagination decoration
+rules are removed rather than layered underneath component overrides.
+
 ## Verification
 
 ```bash
@@ -44,7 +75,7 @@ npm run check                          # Type checking, all offline suites and b
 ```
 
 Browser checks use synthetic local data and mocked provider boundaries. They cover
-320, 360, 375, 390, 430, 768, 1024 and 1440 pixel widths; scrolling, route transitions,
+320, 360, 375, 390, 414, 430, 768, 1024 and 1440 pixel widths; scrolling, route transitions,
 modal focus/stacking, additions/deletions, pagination operations, rapid input, search,
 localization, simulated safe-area insets, shortened viewports and horizontal overflow.
 They do not replace physical iOS/Android keyboard, browser chrome or camera testing.
@@ -57,16 +88,12 @@ verified web deploy.
 
 | Files | Purpose |
 | --- | --- |
-| `src/App.tsx`, `src/components/AppShell.tsx` | Compose persistent navigation and the shared Add Plant modal; keep focused fields clear of navigation. |
-| `src/components/AppNavigation.tsx` | Localized navigation label and accessible active-page state. |
-| `src/features/plants/components/PlantDetailsPage.tsx` | Floating back-link styling hook and deterministic overview destination. |
-| `src/features/plants/hooks/usePlantActions.ts` | Open Add Plant without a route change. |
-| `src/components/PlantPagination.tsx`, `src/hooks/usePagination.ts` | Shared Lucide controls and bounded, preserved pagination state. |
-| `src/features/dashboard/components/DashboardPage.tsx`, `src/features/diagnosis/components/DiagnosisPage.tsx` | Use shared pagination; remove page-owned mobile navigation and dashboard-owned modal. |
-| `src/features/qr/components/QrPage.tsx`, `src/features/settings/components/SettingsPage.tsx` | Remove page-owned mobile navigation. |
-| `src/styles.css`, `src/lib/i18n.ts` | Responsive navigation, safe-area spacing, floating back control, pagination states and translations. |
-| `tests/mobile-navigation.test.tsx`, `scripts/test-mobile-navigation-browser.mjs`, `tests/fixtures/application-browser.tsx` | Unit/rendered-component coverage and composed browser workflows with configurable synthetic collections. |
-| `tests/mobile-ux-cleanup.test.ts`, `tests/menu-ux.test.ts`, `tests/audit-reliability.test.ts` | Update existing tests for shared component ownership and the removed route dependency. |
-| `tests/subscription-state.test.ts` | Fix pre-existing calendar-sensitive fixtures through the controller's existing clock dependency. |
-| `package.json`, `scripts/run-tests.mjs`, `.github/workflows/verify.yml` | Register offline coverage and both browser engines in CI. |
-| `README.md`, `docs/mobile-navigation.md` | Document architecture, checks and verification limits. |
+| `src/components/BackLink.tsx` | Reusable page-level back link with explicit parent destinations. |
+| `src/App.tsx` | Use the shared back link on invitation and release/legal pages; remove history guessing and obsolete props. |
+| `src/features/plants/components/PlantDetailsPage.tsx` | Share the back control on detail and missing-plant screens. |
+| `src/features/diagnosis/components/DiagnosisPage.tsx`, `src/features/qr/components/QrPage.tsx`, `src/features/settings/components/SettingsPage.tsx` | Replace page-specific back anchors with the shared component. |
+| `src/components/AppNavigation.tsx` | Larger mobile icons and explicit label rows, preserving all five actions. |
+| `src/components/PlantPagination.tsx` | Emphasized current-page capsule using the existing localized template and pagination handlers. |
+| `src/styles.css`, `src/lib/i18n.ts` | Consolidated component styling, shared navigation tokens and compact localized diagnosis labels. |
+| `tests/mobile-navigation.test.tsx`, `tests/mobile-ux-cleanup.test.ts`, `scripts/test-mobile-navigation-browser.mjs` | Shared-back coverage, updated component assertions, responsive visual/geometry checks and existing behavioral regressions. |
+| `docs/mobile-navigation.md` | Navigation coverage, proportions, architecture and verification limits. |
