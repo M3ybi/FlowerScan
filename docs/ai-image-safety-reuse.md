@@ -21,7 +21,7 @@ Optional HMAC receipts are actor/action/exact-byte/time bound. Version 2 additio
 | Same photo selected again | exact normalized bytes can replay; visually similar bytes cannot |
 | New image / metadata / incompatible preprocessing | normalized bytes checked; new fingerprint or rejection |
 | New policy/model/prompt | incompatible evidence rejected; changed inputs/version invalidate database identity |
-| Concurrent validation/upload | one authoritative operation; in-progress response or completed reuse, not two fabricated zero-cost attempts |
+| Concurrent validation/upload | unchanged one-account concurrency gate rejects competing fresh work while validation runs; completed evidence then replays |
 | Same actor, another authorized household | safety can reuse; upload authorization still checked |
 | Forged/nonmember/suspended household | denied before upload/inference |
 | Client `validated`, model or detail fields | cannot authorize or change ordinary high-detail/model policy |
@@ -37,3 +37,24 @@ Low-detail probes and safety evaluations use distinct prompt namespaces. Neither
 **NOT VERIFIED for a cheaper classifier or diagnostic representation.** Existing public photos cover some tropical/flowering plants and dark backgrounds; catalog names are weak reference labels. No reviewed examples establish mites, thrips, scale, subtle lesions, nutrient/root disorders, sensitive documents, faces or dangerous-care regression thresholds. A public-photo QR overlay is one deliberately restricted mixed-content example, not a representative safety corpus. Existing malformed/oversized/metadata/authorization tests verify deterministic boundaries, not classifier false-acceptance rates. No lower-detail production policy is activated.
 
 Required future activation evidence: reviewed positive/negative botanical and sensitive-content labels; paired old/candidate trials on identical originals/prompts/model/schema; explicit symptom and recommendation thresholds; no newly accepted high-risk case; bounded ledger-backed costs; reversible server flag and monitoring. Until then retain the current high-detail configuration.
+
+## Executed security verification
+
+| Required verification | Status | Evidence / boundary |
+|---|---|---|
+| Invalid authentication, forged household, revoked membership | PASS | Edge handlers, real PostgreSQL roles and hosted synthetic denials |
+| Forged/tampered/expired/other-account/different-image receipt | PASS | Actual local HMAC verification tests; production signing deliberately absent |
+| Exact-byte/hash enforcement and metadata mismatch | PASS | Actual SHA-256 from decoded bytes; wrapper tests reject registered hash/dimension/byte mismatch and replay metadata conflict |
+| Construct a real SHA-256 collision | NOT EXECUTED | No collision corpus exists; cryptographic collision resistance is an explicit assumption, not a tested theorem |
+| Cached replay across households | PASS | Real PostgreSQL: authorized second household replays; foreign household denied; hosted nonmember denied |
+| Fingerprint/version mismatch | PASS | Immutable baseline comparison; changed version identity conflicts; changed bytes reserve independently |
+| Concurrent upload/validation and duplicate replays | PASS | 100 independent sessions: in-progress competing inference denied, completed result reused without another attempt |
+| Unauthorized Storage writes | PASS | Existing real-role PostgreSQL/Supabase release fixtures and handler boundaries |
+| Client model/detail/validated override | PASS | Ordinary request remains high/configured model; benchmark override denied before provider |
+| Unsupported/malformed content, oversized payload, metadata leakage | PASS | Edge/image/codec suites; exact normalized privacy contract retained |
+| Financial circuit breaker / direct OpenAI bypass | PASS | Real PostgreSQL guards/timeout storms; source search finds the only provider fetch in shared `aiOperation.ts` |
+| Current-rule cached decision, policy-bound receipt | PASS | Stale low-confidence/unsafe cached verdict rejected; model/policy receipt digest mismatch rejected locally |
+| Live production policy/model switch | NOT EXECUTED | Explicitly outside scope; no live model or signing-secret change |
+| Representative visual safety false-acceptance rate | NOT EXECUTED | No reviewed corpus; isolated QR result is reported separately without generalization |
+
+The final evaluation budget/safety suite has 44 assertions, including the cross-household, changed-byte, expiry and 100-session reuse cases. It uses disposable PostgreSQL and synthetic provider facts; it is not paid classifier-quality evidence.

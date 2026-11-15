@@ -57,3 +57,9 @@ No new savings are attributed to safety reuse already demonstrated in Step 2. Cl
 | Old clients | unchanged request/response contracts; missing/old receipts fall back to authorized database-backed validation |
 
 Physical iOS/Android camera/gallery, store binaries and real low-memory devices require device acceptance. Browser/codec tests exercise real decoding and native-boundary mocks, not physical-device certification.
+
+## Measured client boundary
+
+The pre-change reproduction executed one data-URL fetch, one byte FileReader and one data-URL FileReader while saving an already normalized image. The updated real-browser assertion executes zero of each and returns the same Blob and encoded bytes. Ten local 640×480 generated-image samples per engine measured median cached time below timer resolution versus 1ms Chromium and 46ms WebKit for the current uncached fallback. A displayed 0ms is timer quantization, not zero computation. These numbers compare two current paths on this machine; they are not a whole-device latency or memory benchmark. Encoding/read counts and byte identity are the reliable conclusions.
+
+Physical memory pressure, device backgrounding and slow-device behavior remain NOT EXECUTED. Bounded provider streams, cancellation, native picker recovery, ten sequential selections including HEIC, orientation, metadata removal, old-browser feature fallbacks and rapid/context replacement pass deterministic/browser checks.

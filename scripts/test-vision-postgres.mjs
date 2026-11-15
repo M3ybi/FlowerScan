@@ -74,12 +74,37 @@ try{
   await rejects(owner.query("update ai_private.vision_evaluation_runs set max_attempts=51 where id=$1",[zeroRun]),/check constraint/);
   await rejects(owner.query("update ai_private.vision_evaluation_runs set max_usd=0.400000000001 where id=$1",[zeroRun]),/check constraint/);
 
+  // Exercise unchanged safety reuse with the new metadata wrapper and real
+  // household authorization, including simultaneous selection/upload work.
+  const safeActor=await actor(),otherActor=await actor();
+  const household=async user=>{const id=randomUUID();await owner.query("insert into public.households(id,name,created_by) values($1,'Synthetic safety scope',$2)",[id,user]);await owner.query("insert into public.household_members(household_id,user_id,role,status) values($1,$2,'owner','active') on conflict do nothing",[id,user]);return id;};
+  const homeA=await household(safeActor),homeB=await household(safeActor),foreignHome=await household(otherActor);
+  const safeArgs=args(safeActor,hash("safe-image"),{prompt_schema_version:"plant-image-safety-v1",output_limit:700,preprocessing_profile:"normalized-jpeg-v1"});
+  const selected=await start(safeArgs);
+  const uploadArgs={...safeArgs,household:homeA,kind:"upload_validation",retry_key:randomUUID()};
+  const competing=await Promise.allSettled(sessions.map(c=>claim(uploadArgs,c)));
+  equal(competing.filter(r=>r.status==="fulfilled").length,0,"in-progress selection blocks a competing upload inference under the unchanged account concurrency guard");
+  equal(competing.every(r=>r.status==="rejected"&&/AI_BUSY/.test(r.reason.message)),true);
+  const validation={containsPlant:true,plantConfidence:1,hasSensitiveBackground:false,hasExplicitOrUnsafeContent:false,hasRestrictedFootageOrPrivateContent:false,shouldAllowUpload:true,failureReasons:[],safeUserMessage:"Allowed"};
+  await aiRpc(owner,"ai_finish_attempt",{operation:selected.op.operationId,lease:selected.op.leaseId,attempt:selected.attempt,outcome:"COMPLETED",final_result:{validation},facts:syntheticFacts()});
+  const reused=await Promise.all(sessions.map(c=>claim(uploadArgs,c)));
+  equal(reused.every(v=>v.decision==="REPLAY"&&v.operationId===selected.op.operationId),true,"one hundred completed upload lookups reuse one paid safety result");
+  equal((await claim({...uploadArgs,household:homeB})).decision,"REPLAY","same actor can reuse safety only after authorization to its second household");
+  await rejects(claim({...uploadArgs,household:foreignHome}),/HOUSEHOLD_ACCESS_DENIED/);
+  equal((await owner.query("select count(*)::int n from ai_private.attempts a join ai_private.operations o on o.id=a.operation_id where o.actor_id=$1",[safeActor])).rows[0].n,1);
+  await rejects(claim({...safeArgs,request_fingerprint:hash("new-version")}),/AI_IDEMPOTENCY_CONFLICT/);
+  await rejects(claim({...uploadArgs,image_width:9}),/AI_IDEMPOTENCY_CONFLICT/);
+  const changed=await claim({...safeArgs,retry_key:randomUUID(),request_fingerprint:hash("changed-bytes"),image_sha256:hash("changed-bytes")});equal(changed.decision,"RUN","visually similar but different bytes do not reuse safety");
+  await expire();
+  await owner.query("update ai_private.operations set expires_at=now()-interval '1 second' where id=$1",[selected.op.operationId]);await aiRpc(owner,"ai_maintain_operations");
+  equal((await claim(uploadArgs)).decision,"RUN","expired safety cannot authorize a fresh upload");await expire();
+
   for(const role of ["anon","authenticated"]){await owner.query(`set role ${role}`);
     await rejects(owner.query("select * from ai_private.vision_evaluation_runs"),/permission denied/);
     await rejects(owner.query("select public.ai_resolve_vision_input(null,null,null)"),/permission denied/);
     await rejects(owner.query("select public.ai_start_image_attempt(null,null)"),/permission denied/);
     await owner.query("reset role");}
   equal((await owner.query("select count(*)::int n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'ai_%' and (has_function_privilege('anon',p.oid,'EXECUTE') or has_function_privilege('authenticated',p.oid,'EXECUTE'))")).rows[0].n,0);
-  const report={status:"PASS",sessions:100,assertions,checks:["approved actor/exact-byte/dimension/profile/model/schema binding","default high-detail restriction and closed-run start denial","100-session aggregate pre-spend budget; rollback without orphan reservations","unknown financial exposure retained; trusted measured reconciliation","fifty-attempt ceiling including explicitly reported zero; USD ceiling constraints","real client-role denials and service-only RPCs"],limitation:"Disposable PostgreSQL/platform adapters; provider facts synthetic; no hosted data mutation"};
+  const report={status:"PASS",sessions:100,assertions,checks:["approved actor/exact-byte/dimension/profile/model/schema binding","default high-detail restriction and closed-run start denial","100-session aggregate pre-spend budget; rollback without orphan reservations","unknown financial exposure retained; trusted measured reconciliation","fifty-attempt ceiling including explicitly reported zero; USD ceiling constraints","100 concurrent in-progress upload denials/completed safety replays; authorized cross-household reuse; changed bytes/expiry/fingerprint/metadata isolation","real client-role denials and service-only RPCs"],limitation:"Disposable PostgreSQL/platform adapters; provider facts synthetic; no hosted data mutation"};
   await mkdir(".tmp-tests",{recursive:true});await writeFile(".tmp-tests/vision-postgres-results.json",JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{await db.close();}
