@@ -261,9 +261,15 @@ try {
     await page.reload(); await page.locator('.detail-shell').waitFor();
     await page.addStyleTag({ content: ':root { --safe-area-top: 24px; --safe-area-bottom: 34px; --safe-area-left: 8px; --safe-area-right: 8px; }' });
     const back = await page.locator('.floating-back-link').boundingBox();
-    const nav = await page.locator('.mobile-bottom-nav').boundingBox();
+    const safeArea = await page.locator('.mobile-bottom-nav').evaluate(node => ({
+      viewportHeight: innerHeight,
+      bottom: getComputedStyle(node).bottom,
+      clearance: innerHeight - node.getBoundingClientRect().bottom,
+    }));
     assert.equal(back.y, 40); assert.equal(back.x, 24);
-    assert.ok(844 - nav.y - nav.height >= 46);
+    assert.equal(safeArea.viewportHeight, 844);
+    assert.equal(safeArea.bottom, '46px');
+    assert.ok(safeArea.clearance >= 46, `Safe-area geometry: ${JSON.stringify(safeArea)}`);
     await page.locator('.floating-back-link').click();
     await page.locator('.flower-grid').waitFor();
     assert.equal(await page.evaluate(() => location.hash), '#/', 'Refreshed details return to plants instead of unrelated history');
