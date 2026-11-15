@@ -180,7 +180,7 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     facts.httpStatus = response.status;
     facts.requestId = providerRequestId(response.headers.get("x-request-id"));
     responseAt = new Date().toISOString();
-    if (!response.ok) { outcome = "FAILED"; facts.failureCategory = providerHttpCategory(response.status, null); }
+    if (!response.ok) facts.failureCategory = providerHttpCategory(response.status, null);
     const body = await readProviderJson(response);
     providerBody = body; parseStatus = "PARSED";
     facts.model = typeof body.model === "string" ? body.model : null;
