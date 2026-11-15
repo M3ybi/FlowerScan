@@ -2,6 +2,7 @@ import { createServiceClient } from "./auth.ts";
 import { ImageUploadError, imageErrorResponse, imageNetworkError, imageProviderFailure } from "./imageUpload.ts";
 import { aiOperationMessage, type AiOperationCode } from "../../../src/lib/imageUploadErrors.ts";
 import { json } from "./cors.ts";
+import { getModelConfiguration, modelConfigurationHash, applyModelConfiguration, routeForKind } from "./aiModelRegistry.ts";
 
 type Kind = "initial_care" | "care_refresh" | "diagnosis" | "image_validation" | "upload_validation";
 type JsonObject = Record<string, unknown>;
@@ -23,6 +24,7 @@ type Options<T extends JsonObject> = {
   preprocessingProfile?: string;
   evaluationInputKey?: string;
   promptEvaluation?: { runId: string; inputKey: string; definitionHash: string; contextHash: string };
+  modelEvaluation?: { runId: string; inputKey: string; configurationId: string; configurationHash: string; contextHash: string };
   payload: JsonObject;
   timeoutMs: number;
   parse: (payload: JsonObject) => T;
@@ -105,9 +107,13 @@ const readProviderJson = async (response: Response): Promise<JsonObject> => {
 
 export const runAiOperation = async <T extends JsonObject>(apiKey: string, options: Options<T>): Promise<T> => {
   const client = createServiceClient();
-  const model = Deno.env.get("OPENAI_MODEL") || "gpt-4o";
+  const evaluationConfiguration = options.modelEvaluation ? getModelConfiguration(options.modelEvaluation.configurationId) : undefined;
+  if (options.modelEvaluation && (!evaluationConfiguration || options.promptEvaluation || options.evaluationInputKey
+    || await modelConfigurationHash(evaluationConfiguration) !== options.modelEvaluation.configurationHash)) throw publicFailure("AI_EVALUATION_FORBIDDEN");
+  const model = evaluationConfiguration?.model ?? (Deno.env.get("OPENAI_MODEL") || "gpt-4o");
   // Explicit standard tier makes the versioned standard-price registry applicable.
-  const payload: JsonObject = { ...options.payload, model, service_tier: "default", store: false };
+  let payload: JsonObject = { ...options.payload, model, service_tier: "default", store: false };
+  if (evaluationConfiguration) payload = applyModelConfiguration(payload, evaluationConfiguration);
   const detail = options.imageDetail ?? "high";
   if (Array.isArray(payload.input)) payload.input = payload.input.map(message => ({
     ...message, content: message.content.map((content: Record<string, unknown>) => content.type === "input_image" ? { ...content, detail } : content),
@@ -119,28 +125,42 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     throw publicFailure("AI_INVALID_OPERATION");
   }
   const retryKey = typeof options.retryKey === "string" ? `${options.retryKey}${day ? `:${day}` : ""}` : `legacy:${fingerprint}`;
-  const claim = await rpc(client, options.promptEvaluation ? "ai_claim_prompt_operation" : "ai_claim_image_operation", {
+  const claim = await rpc(client, options.modelEvaluation ? "ai_claim_model_operation" : options.promptEvaluation ? "ai_claim_prompt_operation" : "ai_claim_image_operation", {
     actor: options.actorId, household: options.householdId || null, plant: options.plantId || null, kind: options.kind,
     retry_key: retryKey, request_fingerprint: fingerprint, image_sha256: hash,
     model_name: model, prompt_schema_version: options.promptVersion, output_limit: payload.max_output_tokens,
     image_width: options.image.width, image_height: options.image.height,
     image_detail: detail, preprocessing_profile: options.preprocessingProfile ?? "normalized-jpeg-v1",
     encoded_image_bytes: options.image.bytes.byteLength,
-    ...(options.promptEvaluation ? {
+    ...(options.modelEvaluation ? {
+      model_campaign: options.modelEvaluation.runId, model_input_key: options.modelEvaluation.inputKey,
+      configuration_id: options.modelEvaluation.configurationId, configuration_hash: options.modelEvaluation.configurationHash, context_hash: options.modelEvaluation.contextHash,
+    } : options.promptEvaluation ? {
       evaluation_run: options.promptEvaluation.runId, evaluation_input_key: options.promptEvaluation.inputKey,
       definition_hash: options.promptEvaluation.definitionHash, context_hash: options.promptEvaluation.contextHash,
     } : { evaluation_input_key: options.evaluationInputKey ?? null }),
-  }) as { decision?: string; operationId?: string; leaseId?: string; result?: T; warning?: boolean; state?: string } | null;
+  }) as { decision?: string; operationId?: string; leaseId?: string; result?: T; warning?: boolean; state?: string; effectiveConfiguration?: string; configurationHash?: string; stopCode?: string } | null;
+  if (claim?.decision === "CAMPAIGN_STOP") throw publicFailure(claim.stopCode === "AI_CIRCUIT_OPEN" ? "AI_CIRCUIT_OPEN" : "AI_EVALUATION_LIMIT");
   if (claim?.decision === "REPLAY" && claim.result) return claim.result;
   if (claim?.decision === "WAIT") throw new AiOperationError(409, "AI_IN_PROGRESS", "This AI request is still processing. Retry shortly to retrieve its result.");
   if (claim?.decision === "STOP") throw new AiOperationError(503, "AI_RESULT_UNCERTAIN", "The previous AI attempt has no recoverable result. Please retry later; your form is preserved.");
   if (claim?.decision !== "RUN" || !claim.operationId || !claim.leaseId) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+  let timeoutMs = options.timeoutMs;
+  if (claim.effectiveConfiguration) {
+    const selected = getModelConfiguration(claim.effectiveConfiguration);
+    if (!selected || await modelConfigurationHash(selected) !== claim.configurationHash || selected.promptVersion !== options.promptVersion
+      || selected.outputLimit !== payload.max_output_tokens || selected.detail !== detail
+      || (options.modelEvaluation ? selected.id !== evaluationConfiguration?.id : selected.route !== routeForKind(options.kind))) {
+      throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+    }
+    payload = applyModelConfiguration(payload, selected); timeoutMs = selected.timeoutMs;
+  } else if (options.modelEvaluation) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   if (claim.warning) console.warn("plantie.ai_financial_warning", { code: "DAILY_AI_SPEND_WARNING" });
   const attemptId = await rpc(client, "ai_start_image_attempt", { operation: claim.operationId, lease: claim.leaseId });
   if (typeof attemptId !== "string") throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   const started = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new DOMException("Provider deadline", "TimeoutError")), options.timeoutMs);
+  const timer = setTimeout(() => controller.abort(new DOMException("Provider deadline", "TimeoutError")), timeoutMs);
   let result: T | null = null;
   let failure: unknown;
   let outcome = "UNKNOWN";
@@ -158,12 +178,18 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     facts.responseId = typeof body.id === "string" ? body.id : null;
     facts.providerStatus = typeof body.status === "string" ? body.status : null;
     // Whitelist token counts, never provider errors/input/output into cost facts.
-    const usage = body.usage as { input_tokens?: unknown; output_tokens?: unknown; total_tokens?: unknown; input_tokens_details?: { cached_tokens?: unknown; cache_write_tokens?: unknown }; output_tokens_details?: { reasoning_tokens?: unknown } } | undefined;
+    const usage = body.usage as { input_tokens?: unknown; output_tokens?: unknown; total_tokens?: unknown; input_tokens_details?: { cached_tokens?: unknown; cache_write_tokens?: unknown; cache_write_tokens_details?: { ttl_30m_tokens?: unknown; ttl_12h_tokens?: unknown } }; output_tokens_details?: { reasoning_tokens?: unknown } } | undefined;
     if (usage && typeof usage === "object") facts.usage = {
       input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, total_tokens: usage.total_tokens,
-      input_tokens_details: { cached_tokens: usage.input_tokens_details?.cached_tokens, cache_write_tokens: usage.input_tokens_details?.cache_write_tokens },
+      input_tokens_details: { cached_tokens: usage.input_tokens_details?.cached_tokens, cache_write_tokens: usage.input_tokens_details?.cache_write_tokens,
+        ...(usage.input_tokens_details?.cache_write_tokens_details ? { cache_write_tokens_details: {
+          ttl_30m_tokens: usage.input_tokens_details.cache_write_tokens_details.ttl_30m_tokens,
+          ttl_12h_tokens: usage.input_tokens_details.cache_write_tokens_details.ttl_12h_tokens,
+        } } : {}) },
       output_tokens_details: { reasoning_tokens: usage.output_tokens_details?.reasoning_tokens },
     };
+    const reasoning = body.reasoning as { effort?: unknown } | undefined;
+    if (typeof reasoning?.effort === "string") facts.reasoningEffort = reasoning.effort;
     outcome = "FAILED";
     if (!response.ok) throw await imageProviderFailure(Response.json(body, { status: response.status }));
     if (body.status === "incomplete" || body.status === "failed" || body.status === "cancelled") {

@@ -23,6 +23,7 @@ const testScripts = [
   "test:ai-accounting",
   "test:vision-images",
   "test:ai-prompts",
+  "test:ai-models",
   "test:release-readiness",
   "test:onboarding",
   "test:auth-ux",

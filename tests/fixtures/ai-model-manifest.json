@@ -1,0 +1,66 @@
+[
+  {
+    "id": "image_safety:gpt-4o:legacy:v1",
+    "hash": "9fc6571236f21835dc7f35096dc266983630b45caab1b6fed6aa54d98217a62a"
+  },
+  {
+    "id": "initial_care:gpt-4o:legacy:v1",
+    "hash": "a562ace4e32816e0fda61b7282b70e39e39bc8a69e72c2e12ba6117d82267329"
+  },
+  {
+    "id": "initial_care:gpt-6-luna:none:v1",
+    "hash": "b59db590cc7c698388690e1c92d5fe9d18b356031a331d1e1505f6a47425ae0f"
+  },
+  {
+    "id": "initial_care:gpt-6-luna:low:v1",
+    "hash": "9fd5a7d7dc35be3d9bb2e9519e6a2c904a48bf5cdabb39fbb2a494be446ef24f"
+  },
+  {
+    "id": "initial_care:gpt-6.1-terra:none:v1",
+    "hash": "b177cb7426d21f87111bfbe8e566e1c9675b7f141b521652ea2c54ccbbba6c03"
+  },
+  {
+    "id": "initial_care:gpt-6.1-terra:low:v1",
+    "hash": "ad3e93f3eba7c3bcde55f92e14e3592cbd7d1a0b3c0dd63b70db0096dd2e6e48"
+  },
+  {
+    "id": "care_refresh:gpt-4o:legacy:v1",
+    "hash": "42e21608ff1f8557e7c53d2ffb8c54f1e5f964b0b9d586d0ca7581512a77c659"
+  },
+  {
+    "id": "care_refresh:gpt-6-luna:none:v1",
+    "hash": "87f437e90fdd05f0bb60324d3e92abbf013da118b7b62a474a780d46a3b6c334"
+  },
+  {
+    "id": "care_refresh:gpt-6-luna:low:v1",
+    "hash": "4fe0ea021debdb36bf4e04701715c7d26001dc30cb843816bc48600581d6545c"
+  },
+  {
+    "id": "care_refresh:gpt-6.1-terra:none:v1",
+    "hash": "32e274d4c6b786f9d55530027fdaafa6300461a6828a4776afefa0c09fd01819"
+  },
+  {
+    "id": "care_refresh:gpt-6.1-terra:low:v1",
+    "hash": "f04d1e6014d884146963205d0a7e8fe8627ee4209723adb7ee65c823a0481761"
+  },
+  {
+    "id": "diagnosis:gpt-4o:legacy:v1",
+    "hash": "a7b5b9edcc85f4ff33a7a0b44ad2fbc7fc2f62c8078261429312f44dd9f92142"
+  },
+  {
+    "id": "diagnosis:gpt-6-luna:none:v1",
+    "hash": "ea2831490bc8e2a382636fa36148ea27612bdddfb2278d4342f91a5c200d5765"
+  },
+  {
+    "id": "diagnosis:gpt-6-luna:low:v1",
+    "hash": "66a0305c83cd30bb82f6303284deef80fc06eb69066502099e8173754ec55ae9"
+  },
+  {
+    "id": "diagnosis:gpt-6.1-terra:none:v1",
+    "hash": "ec2cbfd47387f06b9caa8f0b3485815474c507bc2ba17d632353d115a8513677"
+  },
+  {
+    "id": "diagnosis:gpt-6.1-terra:low:v1",
+    "hash": "9489c12e86b24ce666a44b129f07459abf0b3c2447b5114486f5640b18de350c"
+  }
+]

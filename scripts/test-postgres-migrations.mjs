@@ -63,14 +63,14 @@ try {
       await admin.query(`create role ${role}`); createdRoles.push(role);
     }
   }
-  for (const kind of ["clean", "upgrade", "step2-upgrade", "step3-upgrade", "step4-upgrade"]) {
+  for (const kind of ["clean", "upgrade", "step2-upgrade", "step3-upgrade", "step4-upgrade", "step5-upgrade"]) {
     const name = `plantie_v4_${randomUUID().replaceAll("-", "")}`;
     await admin.query(`create database ${name} encoding 'UTF8' template template0 lc_collate 'C' lc_ctype 'C'`); names.push(name);
     url.pathname = `/${name}`;
     const client = new pg.Client({ connectionString: url.toString() });
     await client.connect(); clients.push(client);
     await client.query(platform);
-    const baseline = migrations.filter(name => name < (kind === "step4-upgrade" ? "20261115163555" : kind === "step3-upgrade" ? "20261115151650" : kind === "step2-upgrade" ? "20261115140000" : "20261018190000"));
+    const baseline = migrations.filter(name => name < (kind === "step5-upgrade" ? "20261115174859" : kind === "step4-upgrade" ? "20261115163555" : kind === "step3-upgrade" ? "20261115151650" : kind === "step2-upgrade" ? "20261115140000" : "20261018190000"));
     await apply(client, kind === "clean" ? migrations : baseline);
     if (kind !== "clean") {
       await client.query(`insert into auth.users(id,email) values ('${owner}','synthetic@example.invalid');
@@ -107,6 +107,7 @@ try {
   assert.deepEqual(snapshots[0], snapshots[2], "current-production/Step 2 upgrade schemas, grants, owners and RLS match");
   assert.deepEqual(snapshots[0], snapshots[3], "deployed Step 2/Step 3 upgrade schemas, grants, owners and RLS match");
   assert.deepEqual(snapshots[0], snapshots[4], "deployed Step 3/Step 4 upgrade schemas, grants, owners and RLS match");
+  assert.deepEqual(snapshots[0], snapshots[5], "deployed Step 4/Step 5 upgrade schemas, grants, owners and RLS match");
   releaseChecks = await verifyDatabaseRelease(clients.at(-1), url.toString());
   const report = { platform: "PostgreSQL with Auth/Storage fixtures and plaintext Vault adapter", migrations: migrations.length,
     cleanReplay: "PASS_WITH_PLATFORM_ADAPTERS", syntheticUpgrade: "PASS_WITH_PLATFORM_ADAPTERS", fixturesPerReplay: fixtures.length,

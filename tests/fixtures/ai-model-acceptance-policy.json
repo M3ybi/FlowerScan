@@ -1,0 +1,28 @@
+{
+  "version": "model-qualification-policy-v1",
+  "mode": "benchmark_only",
+  "minimumIndependentCases": 60,
+  "engineeringReview": {
+    "status": "reviewed",
+    "reviewerReference": "Codex engineering review of Step 5 request and existing accounting contracts; not botanical ground truth",
+    "requiredUnauthorizedCalls": 0,
+    "requiredUnmeteredAttempts": 0,
+    "maximumUnknownPricingBeforeActivation": 0,
+    "maximumCriticalTreatmentRegressions": 0,
+    "maximumNewHighRiskSafetyAcceptances": 0,
+    "maximumStructuredContractFailuresInQualificationSet": 0,
+    "maximumProviderP95Ms": 30000,
+    "maximumInitialCanaryPercent": 5,
+    "automaticStageAdvancement": false
+  },
+  "botanicalReview": {
+    "status": "not_reviewed",
+    "reviewerReference": null,
+    "approvalSha256": null
+  },
+  "botanicalMinimums": null,
+  "nonInferiorityMargin": null,
+  "requiredLanguageCoverage": ["en", "sk", "de", "fr", "es"],
+  "activationAllowed": false,
+  "limitations": "No botanical acceptance percentages, non-inferiority margin or specialist approval has been invented. Published disease labels alone cannot approve treatment, uncertainty handling, houseplant generalization or localization."
+}
