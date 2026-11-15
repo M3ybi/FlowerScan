@@ -119,7 +119,9 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     ...message, content: message.content.map((content: Record<string, unknown>) => content.type === "input_image" ? { ...content, detail } : content),
   }));
   const hash = await imageHash(options.image.bytes);
-  const day = options.kind === "care_refresh" ? new Date().toISOString().slice(0, 10) : "";
+  // A registered campaign input remains the same operation across midnight.
+  // Ordinary care refreshes retain the existing UTC-day product identity.
+  const day = options.kind === "care_refresh" && !options.modelEvaluation ? new Date().toISOString().slice(0, 10) : "";
   const fingerprint = await requestFingerprint(payload, hash, options.promptVersion, day);
   if (options.retryKey !== undefined && (typeof options.retryKey !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(options.retryKey))) {
     throw publicFailure("AI_INVALID_OPERATION");

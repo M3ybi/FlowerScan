@@ -17,6 +17,8 @@ The existing `ai_claim_image_operation` signature remains compatible. Its new wr
 
 The original guarded claim/start/settlement functions remain service-only compatibility helpers. Step3/4 evaluator paths retain their original approved-run behavior. A new model-evaluation wrapper validates exact registered context/image/configuration before delegating admission. All provider requests still use `runAiOperation` and its one Responses fetch; settlement can retry safely,but inference cannot automatically repeat or escalate.
 
+Registered model-evaluation identity remains stable across UTC midnight within its expiring campaign. Ordinary care-refresh identity retains the existing UTC-day boundary. A controlled-clock regression checks both behaviors without sleeping or changing product rules.
+
 Ordinary provider JSON remains byte-equivalent when the selected route is GPT-4o. Candidate reasoning/cache parameters are added only after the trusted SQL configuration binding matches the compiled registry hash. Unknown or mismatched configuration fails before provider work. No frontend-supplied model,reasoning,ceiling,prompt,schema,household or rollout percentage can select a route.
 
 ## Default-off rollout and rollback

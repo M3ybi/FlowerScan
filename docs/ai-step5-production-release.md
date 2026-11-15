@@ -21,7 +21,7 @@ On a regression,disable the affected private candidate route,close the campaign 
 | Starting remote main / clean scope |PASS|Exact7c7a474 match|
 | Configured-project model metadata |PASS|Three exact-ID HTTP200 metadata responses;zero inference attempts|
 | Production preflight/recovery |PASS|37 migrations,six guarded bundles,encrypted logical backup|
-| Dedicated model/framework tests |PASS|12 tests;16 immutable configurations,exact guarded SQL copies,all five locale payloads,auth/override/fault/replay/cache boundaries,partial-review gate|
+| Dedicated model/framework tests |PASS|13 tests;16 immutable configurations,exact guarded SQL copies,all five locale payloads,auth/override/fault/replay/cache boundaries,UTC-midnight identity and partial-review gate|
 | npm run check |PASS|Actual TypeScript,complete offline suite and build|
 | test:edge-images / ai-accounting / ai-prompts |PASS|21 /13 /13 actual tests|
 | test:vision-images |PASS|7 actual tests|

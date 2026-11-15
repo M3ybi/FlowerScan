@@ -97,6 +97,21 @@ test('all cache-write lifetimes and reasoning usage reach authoritative settleme
  const unknown=await setup({provider:()=>Response.json({status:'failed'})});assert.equal((await unknown.invoke()).status,503);assert.equal(unknown.settlements[0].facts.usage,undefined);assert.equal(unknown.settlements[0].facts.costUsd,undefined);
 });
 
+test('registered evaluation replays remain stable across UTC midnight while ordinary refresh identity advances',async()=>{
+ const config=api.modelConfigurations.find(c=>c.route==='care_refresh'&&c.model==='gpt-6-luna'&&c.reasoning==='none'),captures=[],ordinary=[];
+ for(const now of ['2026-11-15T23:59:59Z','2026-11-16T00:00:01Z']){
+  const invoke=await aiEdgeHandler('model-evaluation',{actorId:actor,now,rpc:async(name,args)=>{
+   if(name==='ai_resolve_model_input')return{configurationId:config.id,configurationHash:await api.modelConfigurationHash(config),contextHash:await api.botanicalContextHash(context),language:context.language,householdId:home,plantId:run};
+   assert.equal(name,'ai_claim_model_operation');captures.push(args);return{decision:'REPLAY',result:{evaluation:{retained:true}}};
+  },fetch:()=>{throw Error('Replay must never infer');}});
+  assert.equal((await invoke({runId:run,inputKey:'sample',imageDataUrl,...context})).status,200);
+  const refresh=await aiEdgeHandler('plant-care-ai',{actorId:actor,now,rpc:async(name,args)=>{assert.equal(name,'ai_claim_image_operation');ordinary.push(args);return{decision:'REPLAY',result:{care:syntheticCare}};},fetch:()=>{throw Error('Replay must never infer');}});
+  assert.equal((await refresh({householdId:home,plantId:run,plantName:'Ficus',imageDataUrl,generationSource:'manual_refresh',language:'en'})).status,200);
+ }
+ assert.equal(captures[0].request_fingerprint,captures[1].request_fingerprint);assert.equal(captures[0].retry_key,captures[1].retry_key);
+ assert.notEqual(ordinary[0].request_fingerprint,ordinary[1].request_fingerprint);
+});
+
 test('ordinary per-purpose selection applies only a trusted bound configuration and preserves old clients',async()=>{
  for(const model of ['gpt-4o','gpt-6-luna','gpt-6.1-terra']){
   const c=api.modelConfigurations.find(c=>c.route==='initial_care'&&c.model===model&&(c.reasoning===null||c.reasoning==='none'));let sent;

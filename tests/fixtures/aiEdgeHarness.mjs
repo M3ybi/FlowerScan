@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import vm from "node:vm";
 
 const bundles = new Map();
-export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true, sourceOverrides = {} }) => {
+export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true, sourceOverrides = {}, now }) => {
   const key = name + createHash("sha256").update(JSON.stringify(sourceOverrides)).digest("hex");
   if (!bundles.has(key)) {
     const bundle = await build({ entryPoints: [`supabase/functions/${name}/index.ts`], bundle: true, write: false, format: "iife", logLevel: "silent",
@@ -21,11 +21,12 @@ export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true
   }
   let handler;
   const client = { rpc: async (name, args) => { try { return { data: await rpc(name, JSON.parse(JSON.stringify(args))), error: null }; } catch (error) { return { data: null, error: { message: error.message } }; } } };
+  const FixtureDate = now ? class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return Date.parse(now); } } : Date;
   vm.runInNewContext(bundles.get(key), {
     Deno: { env: { get: name => name === "OPENAI_MODEL" ? "gpt-4o" : name === "OPENAI_API_KEY" ? "synthetic-key" : undefined }, serve: value => { handler = value; } },
     fixture: { auth: signedIn ? { user: { id: actorId }, client } : null, client },
     crypto: webcrypto, structuredClone, btoa, atob, TextEncoder, TextDecoder, Request, Response, Headers, AbortSignal, AbortController,
-    Uint8Array, Error, TypeError, SyntaxError, DOMException, setTimeout, clearTimeout, fetch,
+    Uint8Array, Error, TypeError, SyntaxError, DOMException, setTimeout, clearTimeout, fetch, Date: FixtureDate,
     console: { error() {}, warn() {}, info() {} },
   });
   return body => handler(new Request("https://synthetic.invalid", { method: "POST", headers: { authorization: "Bearer synthetic", "content-type": "application/json" }, body: JSON.stringify(body) }));
