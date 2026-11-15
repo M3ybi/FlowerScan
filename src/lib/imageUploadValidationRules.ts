@@ -1,6 +1,8 @@
 export const imageUploadRejectionMessage =
   "Image contains sensitive/explicit information or does not contain a valid plant/tree. Please upload a clear plant image without sensitive background content.";
 
+export const imageUploadSafetyPolicy = { version: 1, minimumPlantConfidence: 0.75 } as const;
+
 export type ImageUploadValidationPayload = {
   containsPlant: boolean;
   failureReasons: string[];
@@ -35,7 +37,7 @@ export const isImageUploadValidationPayload = (value: unknown): value is ImageUp
 
 export const isImageUploadAllowed = (payload: ImageUploadValidationPayload) =>
   payload.containsPlant === true &&
-  payload.plantConfidence >= 0.75 &&
+  payload.plantConfidence >= imageUploadSafetyPolicy.minimumPlantConfidence &&
   payload.hasSensitiveBackground === false &&
   payload.hasExplicitOrUnsafeContent === false &&
   payload.hasRestrictedFootageOrPrivateContent === false &&

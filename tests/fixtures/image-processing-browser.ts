@@ -1,4 +1,5 @@
 import { runImageSelectionChecks, renderImagePickerPreview } from "./image-selection-browser";
+import { runImageRoundTripChecks } from "./image-roundtrip-browser";
 import { preprocessImageFile, prepareImageBlobForUpload, captureImage } from "../../src/lib/imageCaptureService";
 import { Capacitor } from "@capacitor/core";
 import { callBackendFunction } from "../../src/lib/backendConfig";
@@ -18,6 +19,7 @@ const canvas = (width: number, height: number) => {
 const inspect = async (blob: Blob) => jpegDimensions(new Uint8Array(await blob.arrayBuffer()))!;
 
 const run = async () => {
+  await runImageRoundTripChecks(assert);
   const timeout = AbortSignal.timeout;
   const originalFetch = globalThis.fetch;
   try {
@@ -264,7 +266,7 @@ const run = async () => {
 
 };
 void run().then(() => {
-  document.getElementById("results")!.textContent = JSON.stringify({ checks, failures: [] });
+  document.getElementById("results")!.textContent = JSON.stringify({ checks, failures: [], roundTripTiming: (globalThis as typeof globalThis & { __imageRoundTripTiming?: unknown }).__imageRoundTripTiming });
 }).catch((error) => {
   document.getElementById("results")!.textContent = JSON.stringify({ checks, failures: [String(error)] });
 });

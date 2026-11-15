@@ -239,7 +239,10 @@ test("Supabase Edge Functions declare server-only secret usage", () => {
   assert.match(diagnosisEdge, /runAiOperation/);
   const aiAdapter = readFileSync("supabase/functions/_shared/aiOperation.ts", "utf8");
   assert.match(aiAdapter, /createServiceClient/);
-  assert.match(aiAdapter, /ai_claim_operation/);
+  assert.match(aiAdapter, /ai_claim_image_operation/);
+  const imageEvaluation = readFileSync("supabase/migrations/20261115151650_ai_image_evaluation.sql", "utf8");
+  assert.match(imageEvaluation, /decision:=public\.ai_claim_operation\(/);
+  assert.match(imageEvaluation, /return public\.ai_start_attempt\(operation,lease\)/);
   assert.match(aiAdapter, /ai_finish_attempt/);
   assert.match(revenueCatEdge, /Deno\.env\.get\("REVENUECAT_WEBHOOK_SECRET"\)/);
   assert.match(revenueCatEdge, /createServiceClient/);

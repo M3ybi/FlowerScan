@@ -1,21 +1,27 @@
 import { build } from "esbuild";
-import { webcrypto } from "node:crypto";
+import { webcrypto, createHash } from "node:crypto";
+import { resolve } from "node:path";
 import vm from "node:vm";
 
 const bundles = new Map();
-export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true }) => {
-  if (!bundles.has(name)) {
+export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true, sourceOverrides = {} }) => {
+  const key = name + createHash("sha256").update(JSON.stringify(sourceOverrides)).digest("hex");
+  if (!bundles.has(key)) {
     const bundle = await build({ entryPoints: [`supabase/functions/${name}/index.ts`], bundle: true, write: false, format: "iife", logLevel: "silent",
       plugins: [{ name: "external-auth-boundary", setup(builder) {
         builder.onResolve({ filter: /\/_shared\/auth\.ts$|^\.\/auth\.ts$|^\.\.\/_shared\/auth\.ts$/ }, () => ({ path: "auth", namespace: "fixture" }));
         builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: "export const requireUser=async()=>globalThis.fixture.auth; export const createServiceClient=()=>globalThis.fixture.client;" }));
+        builder.onLoad({ filter: /\.ts$/ }, args => {
+          const entry = Object.entries(sourceOverrides).find(([path]) => resolve(path) === args.path);
+          if (entry) return { contents: entry[1], loader: "ts" };
+        });
       } }],
     });
-    bundles.set(name, bundle.outputFiles[0].text);
+    bundles.set(key, bundle.outputFiles[0].text);
   }
   let handler;
   const client = { rpc: async (name, args) => { try { return { data: await rpc(name, JSON.parse(JSON.stringify(args))), error: null }; } catch (error) { return { data: null, error: { message: error.message } }; } } };
-  vm.runInNewContext(bundles.get(name), {
+  vm.runInNewContext(bundles.get(key), {
     Deno: { env: { get: name => name === "OPENAI_MODEL" ? "gpt-4o" : name === "OPENAI_API_KEY" ? "synthetic-key" : undefined }, serve: value => { handler = value; } },
     fixture: { auth: signedIn ? { user: { id: actorId }, client } : null, client },
     crypto: webcrypto, structuredClone, btoa, atob, TextEncoder, TextDecoder, Request, Response, Headers, AbortSignal, AbortController,

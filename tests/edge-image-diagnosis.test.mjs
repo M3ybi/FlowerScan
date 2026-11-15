@@ -35,10 +35,10 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
   const service = {
     rpc: (method, args) => {
       calls.push(`service:${method}`);
-      if (method === "ai_claim_operation" && admissionError) return Promise.resolve({ data: null, error: admissionError });
+      if (method === "ai_claim_image_operation" && admissionError) return Promise.resolve({ data: null, error: admissionError });
       let data = null;
-      if (method === "ai_claim_operation") data = { decision: "RUN", operationId: imageId, leaseId: imageId };
-      if (method === "ai_start_attempt") data = imageId;
+      if (method === "ai_claim_image_operation") data = { decision: "RUN", operationId: imageId, leaseId: imageId };
+      if (method === "ai_start_image_attempt") data = imageId;
       if (method === "ai_finish_attempt") { settlements.push(args); data = { state: args.outcome }; }
       // PostgREST builders are PromiseLike; they do not expose Promise.catch.
       return { then: (fulfilled, rejected) => Promise.resolve({ data, error: null }).then(fulfilled, rejected) };
@@ -104,7 +104,7 @@ test("active member upload uses a household path after server validation", async
   const response = await invoke(uploadBody);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).path, `${householdId}/plants/${imageId}/original.jpg`);
-  assert.deepEqual(calls, ["user:can_manage_household_content", "user:admit_image_operation", "user:reserve_image_upload", "service:ai_claim_operation", "service:ai_start_attempt", "service:ai_finish_attempt", "storage:upload", "service:ai_bind_uploaded_image"]);
+  assert.deepEqual(calls, ["user:can_manage_household_content", "user:admit_image_operation", "user:reserve_image_upload", "service:ai_claim_image_operation", "service:ai_start_image_attempt", "service:ai_finish_attempt", "storage:upload", "service:ai_bind_uploaded_image"]);
 });
 
 test("case variants of UUIDs use the canonical reservation and Storage namespace", async () => {
@@ -229,12 +229,12 @@ test("incomplete provider diagnoses release quota and return a safe service erro
   const response = await invoke(diagnosisBody);
   assert.equal(response.status, 503);
   assert.equal((await response.json()).code, "IMAGE_SERVICE_UNAVAILABLE");
-  assert.deepEqual(calls, ["service:ai_claim_operation", "service:ai_start_attempt", "service:ai_finish_attempt"]);
+  assert.deepEqual(calls, ["service:ai_claim_image_operation", "service:ai_start_image_attempt", "service:ai_finish_attempt"]);
 });
 test("diagnosis network rejection releases quota through the trusted service", async () => {
   const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => { throw new Error("Network unavailable"); } });
   assert.equal((await invoke(diagnosisBody)).status, 502);
-  assert.deepEqual(calls, ["service:ai_claim_operation", "service:ai_start_attempt", "service:ai_finish_attempt"]);
+  assert.deepEqual(calls, ["service:ai_claim_image_operation", "service:ai_start_image_attempt", "service:ai_finish_attempt"]);
 });
 
 test("initial care provider failure returns an actionable failure", async () => {
@@ -247,7 +247,7 @@ test("valid diagnosis commits quota once through the trusted service", async () 
       disclaimer: "Estimate", reasoning_summary: "Dry soil", observed_symptoms: ["Dry leaf"], recommended_steps: ["Check soil"] }),
   }) });
   assert.equal((await invoke(diagnosisBody)).status, 200);
-  assert.deepEqual(calls, ["service:ai_claim_operation", "service:ai_start_attempt", "service:ai_finish_attempt"]);
+  assert.deepEqual(calls, ["service:ai_claim_image_operation", "service:ai_start_image_attempt", "service:ai_finish_attempt"]);
 });
 
 test("primary webhook forwards grace periods and effective refund revocations", async () => {

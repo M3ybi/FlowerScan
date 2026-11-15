@@ -9,7 +9,8 @@ type RpcResult = { data: unknown; error: { message?: string } | null };
 type RpcCall = PromiseLike<RpcResult> & { abortSignal?: (signal: AbortSignal) => PromiseLike<RpcResult> };
 type Rpc = { rpc: (name: string, args: JsonObject) => RpcCall };
 type Image = { bytes: Uint8Array; width: number; height: number };
-export type SafetyOperationContext = { actorId: string; householdId?: string; kind: "image_validation" | "upload_validation"; image: Image; retryKey?: unknown };
+export type SafetyOperationContext = { actorId: string; householdId?: string; kind: "image_validation" | "upload_validation"; image: Image; retryKey?: unknown;
+  imageDetail?: "high" | "low"; preprocessingProfile?: string; evaluationInputKey?: string };
 type Options<T extends JsonObject> = {
   actorId: string;
   householdId?: string;
@@ -18,6 +19,9 @@ type Options<T extends JsonObject> = {
   retryKey?: unknown;
   image: Image;
   promptVersion: string;
+  imageDetail?: "high" | "low";
+  preprocessingProfile?: string;
+  evaluationInputKey?: string;
   payload: JsonObject;
   timeoutMs: number;
   parse: (payload: JsonObject) => T;
@@ -32,6 +36,8 @@ export const aiErrorResponse = (error: unknown, language?: unknown) => error ins
   : imageErrorResponse(error instanceof ImageUploadError ? error : new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503), language);
 
 const publicFailure = (message = "") => {
+  if (/AI_EVALUATION_FORBIDDEN|AI_EVALUATION_CLOSED/.test(message)) return new ImageUploadError("HOUSEHOLD_ACCESS_DENIED", 403);
+  if (/AI_EVALUATION_LIMIT/.test(message)) return new AiOperationError(429, "AI_BUSY", "Controlled evaluation limit reached.");
   if (/IMAGE_RATE_LIMITED/.test(message)) return new ImageUploadError("IMAGE_RATE_LIMITED", 429);
   if (/HOUSEHOLD_ACCESS_DENIED|AUTHENTICATION_REQUIRED/.test(message)) return new ImageUploadError("HOUSEHOLD_ACCESS_DENIED", 403);
   if (/AI_(CARE_LIMIT|DIAGNOSIS_LIMIT|PLANT_LIMIT)/.test(message)) return new AiOperationError(403, "AI_ALLOWANCE_UNAVAILABLE", "The household's current AI allowance is unavailable.");
@@ -65,10 +71,12 @@ export const imageHash = async (bytes: Uint8Array) => Array.from(new Uint8Array(
 // The fingerprint uses a content hash in place of photo bytes. No prompts or
 // photos enter SQL or logs. Object construction order is controlled by callers.
 export const requestFingerprint = async (payload: JsonObject, imageSha256: string, version: string, day = "") => {
-  const input = structuredClone(payload);
-  for (const message of (input.input as Array<{ content?: Array<Record<string, unknown>> }> | undefined) ?? []) {
-    for (const content of message.content ?? []) if (content.type === "input_image") content.image_url = imageSha256;
-  }
+  const input = { ...payload };
+  if (Array.isArray(payload.input)) input.input = payload.input.map(message => {
+    if (!message || typeof message !== "object" || !Array.isArray(message.content)) return message;
+    return { ...message, content: message.content.map((content: Record<string, unknown>) =>
+      content.type === "input_image" ? { ...content, image_url: imageSha256 } : content) };
+  });
   return imageHash(new TextEncoder().encode(JSON.stringify({ version, day, input })));
 };
 
@@ -99,6 +107,10 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
   const model = Deno.env.get("OPENAI_MODEL") || "gpt-4o";
   // Explicit standard tier makes the versioned standard-price registry applicable.
   const payload: JsonObject = { ...options.payload, model, service_tier: "default", store: false };
+  const detail = options.imageDetail ?? "high";
+  if (Array.isArray(payload.input)) payload.input = payload.input.map(message => ({
+    ...message, content: message.content.map((content: Record<string, unknown>) => content.type === "input_image" ? { ...content, detail } : content),
+  }));
   const hash = await imageHash(options.image.bytes);
   const day = options.kind === "care_refresh" ? new Date().toISOString().slice(0, 10) : "";
   const fingerprint = await requestFingerprint(payload, hash, options.promptVersion, day);
@@ -106,18 +118,20 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     throw publicFailure("AI_INVALID_OPERATION");
   }
   const retryKey = typeof options.retryKey === "string" ? `${options.retryKey}${day ? `:${day}` : ""}` : `legacy:${fingerprint}`;
-  const claim = await rpc(client, "ai_claim_operation", {
+  const claim = await rpc(client, "ai_claim_image_operation", {
     actor: options.actorId, household: options.householdId || null, plant: options.plantId || null, kind: options.kind,
     retry_key: retryKey, request_fingerprint: fingerprint, image_sha256: hash,
     model_name: model, prompt_schema_version: options.promptVersion, output_limit: payload.max_output_tokens,
     image_width: options.image.width, image_height: options.image.height,
+    image_detail: detail, preprocessing_profile: options.preprocessingProfile ?? "normalized-jpeg-v1",
+    encoded_image_bytes: options.image.bytes.byteLength, evaluation_input_key: options.evaluationInputKey ?? null,
   }) as { decision?: string; operationId?: string; leaseId?: string; result?: T; warning?: boolean; state?: string } | null;
   if (claim?.decision === "REPLAY" && claim.result) return claim.result;
   if (claim?.decision === "WAIT") throw new AiOperationError(409, "AI_IN_PROGRESS", "This AI request is still processing. Retry shortly to retrieve its result.");
   if (claim?.decision === "STOP") throw new AiOperationError(503, "AI_RESULT_UNCERTAIN", "The previous AI attempt has no recoverable result. Please retry later; your form is preserved.");
   if (claim?.decision !== "RUN" || !claim.operationId || !claim.leaseId) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   if (claim.warning) console.warn("plantie.ai_financial_warning", { code: "DAILY_AI_SPEND_WARNING" });
-  const attemptId = await rpc(client, "ai_start_attempt", { operation: claim.operationId, lease: claim.leaseId });
+  const attemptId = await rpc(client, "ai_start_image_attempt", { operation: claim.operationId, lease: claim.leaseId });
   if (typeof attemptId !== "string") throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   const started = Date.now();
   const controller = new AbortController();

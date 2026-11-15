@@ -46,6 +46,47 @@ export type SignedUrlClient = {
 const allowedImageTypes = new Set<string>(imageUploadConfig.supportedInputMimeTypes);
 export const defaultMaxImageBytes = imageUploadConfig.maxOriginalBytes;
 
+// Encoding provenance is independent of safety/authorization. Blob bytes are
+// immutable; only output checked by this module may skip a later byte read.
+const normalizedEncodings = new WeakMap<Blob, string | null>();
+type BlobReference = { deref: () => Blob | undefined };
+type EncodingReference = { blob: BlobReference; expiresAt: number; timer: ReturnType<typeof setTimeout> };
+const recentEncodings = new Map<string, EncodingReference>();
+const encodingLifetimeMs = 120_000;
+const forgetEncodingReference = (value: string) => {
+  const entry = recentEncodings.get(value);
+  if (entry) clearTimeout(entry.timer);
+  recentEncodings.delete(value);
+};
+const rememberNormalizedEncoding = (blob: Blob, dataUrl: string) => {
+  normalizedEncodings.set(blob, dataUrl);
+  const WeakBlobReference = (globalThis as typeof globalThis & { WeakRef?: new (value: Blob) => BlobReference }).WeakRef;
+  if (typeof WeakBlobReference !== "function") return;
+  forgetEncodingReference(dataUrl);
+  while (recentEncodings.size >= 2) forgetEncodingReference(recentEncodings.keys().next().value!);
+  const entry: EncodingReference = {
+    blob: new WeakBlobReference(blob), expiresAt: Date.now() + encodingLifetimeMs,
+    timer: setTimeout(() => { if (recentEncodings.get(dataUrl) === entry) forgetEncodingReference(dataUrl); }, encodingLifetimeMs),
+  };
+  recentEncodings.set(dataUrl, entry);
+};
+const recentNormalizedBlob = (dataUrl: string) => {
+  const entry = recentEncodings.get(dataUrl);
+  const blob = entry?.blob.deref();
+  if (!entry || entry.expiresAt <= Date.now() || !blob || normalizedEncodings.get(blob) !== dataUrl) {
+    forgetEncodingReference(dataUrl);
+    return undefined;
+  }
+  return blob;
+};
+
+export const releaseNormalizedImage = (image: Pick<NormalizedImage, "blob" | "previewUrl">) => {
+  const dataUrl = normalizedEncodings.get(image.blob);
+  if (dataUrl && recentEncodings.get(dataUrl)?.blob.deref() === image.blob) forgetEncodingReference(dataUrl);
+  normalizedEncodings.delete(image.blob);
+  URL.revokeObjectURL(image.previewUrl);
+};
+
 export const detectImageRuntime = (platform = Capacitor.getPlatform()): ImageRuntime =>
   platform === "ios" || platform === "android" ? platform : "web";
 
@@ -335,6 +376,7 @@ const preprocessImageFileInternal = async (
       checkCancelled(options.signal);
       setStage("preview-create");
       const previewUrl = (options.createPreviewUrl ?? ((value: Blob) => URL.createObjectURL(value)))(blob);
+      if (!options.dataUrlFromBlob) rememberNormalizedEncoding(blob, dataUrl);
       return { blob, dataUrl, mimeType: imageUploadConfig.outputMimeType,
         name: (file.name?.replace(/\.[^.]+$/, "") || "plantie-image") + ".jpg", previewUrl, sizeBytes: blob.size };
     }
@@ -425,16 +467,26 @@ export const captureImage = async ({
 
 export const prepareImageBlobForUpload = async (blob: Blob) => {
   validateImageInput(blob);
+  if (normalizedEncodings.has(blob)) return blob;
   if (blob.type === imageUploadConfig.outputMimeType && blob.size <= imageUploadConfig.maxProcessedBytes) {
     const dimensions = jpegDimensions(await readImageBytes(blob));
-    if (dimensions && !dimensions.hasPrivateMetadata && Math.max(dimensions.width, dimensions.height) <= imageUploadConfig.maxDimension) return blob;
+    if (dimensions && !dimensions.hasPrivateMetadata && Math.max(dimensions.width, dimensions.height) <= imageUploadConfig.maxDimension) {
+      normalizedEncodings.set(blob, null);
+      return blob;
+    }
   }
   const image = await preprocessImageFile(blob);
   try { return image.blob; } finally { URL.revokeObjectURL(image.previewUrl); }
 };
 
-export const imageBlobToDataUrl = async (blob: Blob) => blobToDataUrl(blob);
-export const imageDataUrlToBlob = async (dataUrl: string) => dataUrlToBlob(dataUrl);
+export const imageBlobToDataUrl = async (blob: Blob) => {
+  const known = normalizedEncodings.get(blob);
+  if (known) return known;
+  const dataUrl = await blobToDataUrl(blob);
+  if (normalizedEncodings.has(blob)) rememberNormalizedEncoding(blob, dataUrl);
+  return dataUrl;
+};
+export const imageDataUrlToBlob = async (dataUrl: string) => recentNormalizedBlob(dataUrl) ?? dataUrlToBlob(dataUrl);
 
 export const createPrivateImageSignedUrl = async (
   client: SignedUrlClient,

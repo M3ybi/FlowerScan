@@ -17,8 +17,8 @@ const setup = async ({ claim = { decision: "RUN", operationId: actor, leaseId: a
     rpc: async (name, args) => {
       calls.push({ name, args });
       if (name === failAt) throw new Error("Synthetic database unavailable; sensitive internal text must not escape");
-      if (name === "ai_claim_operation") return claim;
-      if (name === "ai_start_attempt") return household;
+      if (name === "ai_claim_image_operation") return claim;
+      if (name === "ai_start_image_attempt") return household;
       if (name === "ai_finish_attempt") { facts.push(args); return { state: settlementState }; }
       throw new Error("Unexpected RPC");
     },
@@ -84,7 +84,7 @@ test("existing client image-error handling preserves actionable operation errors
 });
 
 test("database failure before claim/start fails closed with no provider spend or raw error leakage", async () => {
-  for (const failAt of ["ai_claim_operation", "ai_start_attempt"]) {
+  for (const failAt of ["ai_claim_image_operation", "ai_start_image_attempt"]) {
     const h = await setup({ failAt }); const response = await h.invoke(body);
     assert.equal(response.status, 503); assert.equal(h.count(), 0); assert.equal((await response.text()).includes("sensitive"), false);
   }

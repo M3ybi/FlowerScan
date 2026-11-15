@@ -21,6 +21,7 @@ const testScripts = [
   "test:add-plant-image",
   "test:edge-images",
   "test:ai-accounting",
+  "test:vision-images",
   "test:release-readiness",
   "test:onboarding",
   "test:auth-ux",

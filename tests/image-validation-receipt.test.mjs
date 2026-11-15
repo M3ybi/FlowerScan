@@ -24,3 +24,17 @@ test("safety receipts bind the exact bytes, user, expiry and signing key", async
   assert.equal(await verify(receipt.token, bytes, "user-one", undefined, now), false);
   assert.equal(await issue(bytes, "user-one", "short", now), undefined);
 });
+
+test("signed evidence is invalid after a configured model/policy change", async () => {
+  const previous = globalThis.Deno;
+  let model = "gpt-4o";
+  globalThis.Deno = { env: { get: key => key === "OPENAI_MODEL" ? model : undefined } };
+  try {
+    const receipt = await issue(bytes,"user-one",secret,now);
+    const claims = JSON.parse(atob(receipt.token.split(".")[0]));
+    assert.equal(claims.version,2); assert.match(claims.policy,/^[0-9a-f]{64}$/);
+    assert.equal(await verify(receipt.token,bytes,"user-one",secret,now),true);
+    model = "synthetic-incompatible-policy-model";
+    assert.equal(await verify(receipt.token,bytes,"user-one",secret,now),false);
+  } finally { if(previous === undefined)delete globalThis.Deno;else globalThis.Deno=previous; }
+});

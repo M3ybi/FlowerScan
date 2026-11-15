@@ -49,12 +49,12 @@ const apply = async (client, files) => {
   }
 };
 const schema = async client => (await client.query(`select jsonb_build_object(
- 'tables',(select jsonb_agg(row_to_json(t) order by t.table_name,t.ordinal_position) from (select table_name,column_name,ordinal_position,data_type,is_nullable,column_default from information_schema.columns where table_schema='public') t),
- 'constraints',(select jsonb_agg(row_to_json(t) order by t.table_name,t.name) from (select c.relname table_name,k.conname name,pg_get_constraintdef(k.oid) definition from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public') t),
- 'functions',(select jsonb_agg(row_to_json(t) order by t.name,t.args) from (select p.proname name,pg_get_function_identity_arguments(p.oid) args,pg_get_functiondef(p.oid) definition,p.prosecdef security_definer,p.proacl::text grants,pg_get_userbyid(p.proowner) owner from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public') t),
- 'policies',(select jsonb_agg(row_to_json(t) order by t.schemaname,t.tablename,t.policyname) from (select * from pg_policies where schemaname in ('public','storage')) t),
- 'indexes',(select jsonb_agg(row_to_json(t) order by t.tablename,t.indexname) from (select tablename,indexname,indexdef from pg_indexes where schemaname='public') t),
- 'table_grants',(select jsonb_agg(row_to_json(t) order by t.table_name,t.grantee,t.privilege_type) from (select table_name,grantee,privilege_type from information_schema.role_table_grants where table_schema='public') t)
+ 'tables',(select jsonb_agg(row_to_json(t) order by t.table_schema,t.table_name,t.ordinal_position) from (select table_schema,table_name,column_name,ordinal_position,data_type,is_nullable,column_default from information_schema.columns where table_schema in ('public','ai_private')) t),
+ 'constraints',(select jsonb_agg(row_to_json(t) order by t.table_name,t.name) from (select c.relname table_name,k.conname name,pg_get_constraintdef(k.oid) definition from pg_constraint k join pg_class c on c.oid=k.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','ai_private')) t),
+ 'functions',(select jsonb_agg(row_to_json(t) order by t.name,t.args) from (select p.proname name,pg_get_function_identity_arguments(p.oid) args,pg_get_functiondef(p.oid) definition,p.prosecdef security_definer,p.proacl::text grants,pg_get_userbyid(p.proowner) owner from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','ai_private')) t),
+ 'policies',(select jsonb_agg(row_to_json(t) order by t.schemaname,t.tablename,t.policyname) from (select * from pg_policies where schemaname in ('public','storage','ai_private')) t),
+ 'indexes',(select jsonb_agg(row_to_json(t) order by t.tablename,t.indexname) from (select tablename,indexname,indexdef from pg_indexes where schemaname in ('public','ai_private')) t),
+ 'table_grants',(select jsonb_agg(row_to_json(t) order by t.table_name,t.grantee,t.privilege_type) from (select table_name,grantee,privilege_type from information_schema.role_table_grants where table_schema in ('public','ai_private')) t)
  ) as snapshot`)).rows[0].snapshot;
 try {
   await admin.query("select pg_advisory_lock(hashtext('plantie-disposable-fixture-roles'))");
@@ -63,14 +63,14 @@ try {
       await admin.query(`create role ${role}`); createdRoles.push(role);
     }
   }
-  for (const kind of ["clean", "upgrade", "step2-upgrade"]) {
+  for (const kind of ["clean", "upgrade", "step2-upgrade", "step3-upgrade"]) {
     const name = `plantie_v4_${randomUUID().replaceAll("-", "")}`;
     await admin.query(`create database ${name} encoding 'UTF8' template template0 lc_collate 'C' lc_ctype 'C'`); names.push(name);
     url.pathname = `/${name}`;
     const client = new pg.Client({ connectionString: url.toString() });
     await client.connect(); clients.push(client);
     await client.query(platform);
-    const baseline = migrations.filter(name => name < (kind === "step2-upgrade" ? "20261115140000" : "20261018190000"));
+    const baseline = migrations.filter(name => name < (kind === "step3-upgrade" ? "20261115151650" : kind === "step2-upgrade" ? "20261115140000" : "20261018190000"));
     await apply(client, kind === "clean" ? migrations : baseline);
     if (kind !== "clean") {
       await client.query(`insert into auth.users(id,email) values ('${owner}','synthetic@example.invalid');
@@ -105,6 +105,7 @@ try {
   const snapshots = await Promise.all(clients.map(schema));
   assert.deepEqual(snapshots[0], snapshots[1], "clean/upgrade schemas, grants, owners and RLS match");
   assert.deepEqual(snapshots[0], snapshots[2], "current-production/Step 2 upgrade schemas, grants, owners and RLS match");
+  assert.deepEqual(snapshots[0], snapshots[3], "deployed Step 2/Step 3 upgrade schemas, grants, owners and RLS match");
   releaseChecks = await verifyDatabaseRelease(clients.at(-1), url.toString());
   const report = { platform: "PostgreSQL with Auth/Storage fixtures and plaintext Vault adapter", migrations: migrations.length,
     cleanReplay: "PASS_WITH_PLATFORM_ADAPTERS", syntheticUpgrade: "PASS_WITH_PLATFORM_ADAPTERS", fixturesPerReplay: fixtures.length,

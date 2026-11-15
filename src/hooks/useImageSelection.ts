@@ -1,6 +1,6 @@
 import { clearImageValidationReceipts } from "../lib/imageValidationReceipts.js";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { captureImage, detectImageRuntime } from "../lib/imageCaptureService.js";
+import { captureImage, detectImageRuntime, releaseNormalizedImage } from "../lib/imageCaptureService.js";
 import type { ImageCaptureSource, ImagePickerLabels, NormalizedImage } from "../lib/imageCaptureService.js";
 import { ImageUploadError, imageErrorMessage, imageDiagnosticReference, isImageSelectionCancelled, logImageProcessingFailure } from "../lib/imageUploadErrors.js";
 import { validatePlantImageForUpload } from "../utils/imageUploadValidation.js";
@@ -33,7 +33,7 @@ export const useImageSelection = (options: Options) => {
   const clear = useCallback(() => {
     cancel();
     clearImageValidationReceipts();
-    if (ownedImage.current) URL.revokeObjectURL(ownedImage.current.previewUrl);
+    if (ownedImage.current) releaseNormalizedImage(ownedImage.current);
     ownedImage.current = null;
     status.current = "";
     if (mounted.current) setImage(null);
@@ -45,7 +45,7 @@ export const useImageSelection = (options: Options) => {
       mounted.current = false;
       operation.current?.abort();
       operation.current = null;
-      if (ownedImage.current) URL.revokeObjectURL(ownedImage.current.previewUrl);
+      if (ownedImage.current) releaseNormalizedImage(ownedImage.current);
       ownedImage.current = null;
     };
   }, []);
@@ -72,7 +72,7 @@ export const useImageSelection = (options: Options) => {
       reportStatus(latest.current.copy.validating);
       await validatePlantImageForUpload(candidate.dataUrl, latest.current.language, controller.signal);
       if (!current()) return;
-      if (ownedImage.current) URL.revokeObjectURL(ownedImage.current.previewUrl);
+      if (ownedImage.current) releaseNormalizedImage(ownedImage.current);
       ownedImage.current = candidate;
       setImage(candidate);
       candidate = null; // Ownership transfers to the hook until replacement/clear/unmount.
@@ -89,7 +89,7 @@ export const useImageSelection = (options: Options) => {
         { runtime: detectImageRuntime(), inputMime: file?.type, originalBytes: file?.size });
       reportStatus(imageErrorMessage(failure, latest.current.language)! + imageDiagnosticReference(failure));
     } finally {
-      if (candidate) URL.revokeObjectURL(candidate.previewUrl);
+      if (candidate) releaseNormalizedImage(candidate);
       // An older result must never clear the spinner or lock of a newer operation.
       if (operation.current === controller) {
         operation.current = null;

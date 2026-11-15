@@ -1,3 +1,5 @@
+import { imageSafetyPolicyFingerprint } from "./imageSafetyPolicy.ts";
+
 const encoder = new TextEncoder();
 const lifetimeSeconds = 300;
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), value => value.toString(16).padStart(2, "0")).join("");
@@ -10,7 +12,7 @@ export const issueImageValidationReceipt = async (bytes: Uint8Array, userId: str
   if (!secret || secret.length < 32) return undefined;
   const issuedAt = Math.floor(now / 1000);
   const expiresAt = issuedAt + lifetimeSeconds;
-  const claims = btoa(JSON.stringify({ version: 1, action: "upload", userId, hash: await hash(bytes), issuedAt, expiresAt }));
+  const claims = btoa(JSON.stringify({ version: 2, policy: await imageSafetyPolicyFingerprint(), action: "upload", userId, hash: await hash(bytes), issuedAt, expiresAt }));
   const signature = hex(await crypto.subtle.sign("HMAC", await key(secret), encoder.encode(claims)));
   return { token: `${claims}.${signature}`, expiresAt: expiresAt * 1000 };
 };
@@ -24,7 +26,7 @@ export const verifyImageValidationReceipt = async (token: unknown, bytes: Uint8A
     if (!await crypto.subtle.verify("HMAC", await key(secret), signature, encoder.encode(parts[0]))) return false;
     const claims = JSON.parse(atob(parts[0]));
     const seconds = Math.floor(now / 1000);
-    return claims.version === 1 && claims.action === "upload" && claims.userId === userId
+    return claims.version === 2 && claims.policy === await imageSafetyPolicyFingerprint() && claims.action === "upload" && claims.userId === userId
       && Number.isSafeInteger(claims.issuedAt) && Number.isSafeInteger(claims.expiresAt)
       && claims.issuedAt <= seconds && claims.expiresAt > seconds
       && claims.expiresAt - claims.issuedAt === lifetimeSeconds && claims.hash === await hash(bytes);
