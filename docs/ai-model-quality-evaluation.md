@@ -1,5 +1,7 @@
 # Model quality evidence and activation gates
 
+Step5.1 adds an offline blinded review package for36 existing care responses/eight contexts/five images and a diagnosis-first preparation plan. It adds no specialist scores or diagnosis outputs. Model/cost fields are withheld and the operator mapping is separate;previously published outputs can still be recognized. All botanical,treatment and localization gates remain unapproved. See [qualification decision](ai-model-qualification-decision.md).
+
 **No Luna or Terra route is qualified for ordinary users.** Published labels improve the available evidence, but no model output or model confidence is treated as independent ground truth.
 
 ## Corpus and provenance

@@ -1,0 +1,19 @@
+import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';import {resolve,join} from 'node:path';import {build} from 'esbuild';import {createHash} from 'node:crypto';
+import {recoveryContexts,recoveryCampaignPreflight} from './lib/modelRecoveryCampaign.mjs';import {validateModelCase} from './lib/modelEvaluation.mjs';
+const [assets,oraclePath,destination]=process.argv.slice(2);if(!assets||!oraclePath||!destination)throw Error('Usage: node scripts/prepare-model-recovery-campaign.mjs <approved-corpus> <read-only-price-oracle.json> <new-output-directory>');
+const output=resolve(destination);if(existsSync(output))throw Error('Use a new campaign-plan path');const oracle=JSON.parse(readFileSync(oraclePath,'utf8')),corpus=JSON.parse(readFileSync('tests/fixtures/botanical-model-corpus.json','utf8'));corpus.forEach(validateModelCase);
+const bundled=await build({stdin:{resolveDir:process.cwd(),loader:'ts',contents:'export * from "./supabase/functions/_shared/aiModelRegistry.ts";export * from "./supabase/functions/_shared/botanicalPromptCandidates.ts";export {requireProcessedImage} from "./supabase/functions/_shared/imageUpload.ts";'},bundle:true,write:false,format:'esm'}),api=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
+const inputs=[],references=[],images=new Map(),reservations=Object.fromEntries(oracle.configurations.map(c=>[c.id,c.reservationUsd]));
+for(const[index,[route,id,language,category]]of recoveryContexts.entries()){
+ const c=corpus.find(c=>c.id===id);if(!c)throw Error('Missing approved case');const bytes=readFileSync(resolve(assets,id+'.jpg')),sha=createHash('sha256').update(bytes).digest('hex');if(sha!==c.imageSha256)throw Error('Corpus bytes changed');const imageData='data:image/jpeg;base64,'+bytes.toString('base64'),image=api.requireProcessedImage(imageData),context=api.normalizeBotanicalContext({...c,language}),contextKey=route+':'+id+':'+language;
+ images.set(sha,bytes);references.push({contextKey,caseId:id,route,language,category,imageSha256:sha,originalImage:'assets/'+sha+'.jpg',references:{sourceUrl:c.sourceUrl??null,rightsBasis:c.rightsBasis,license:c.license??null,label:c.referenceIdentities,visibleSymptoms:c.referenceVisibleSymptoms.length?c.referenceVisibleSymptoms:'UNKNOWN',differential:c.acceptableDifferentials,uncertainty:c.referenceUncertainty},candidateResponses:'NOT EXECUTED',reviewStatus:'UNREVIEWED'});
+ for(const config of api.modelConfigurations.filter(x=>x.route===route)){
+  const hash=await api.modelConfigurationHash(config),registered=oracle.configurations.find(c=>c.id===config.id);if(registered?.hash!==hash)throw Error('Production configuration hash differs');
+  const payload=api.buildModelEvaluationPayload(config,context,imageData);
+  inputs.push({inputKey:'recovery_'+inputs.length,contextKey,caseId:id,route,language,category,syntheticActorSlot:index%2,configurationId:config.id,configurationHash:hash,context,contextHash:await api.botanicalContextHash(context),imageSha256:sha,imageWidth:image.width,imageHeight:image.height,encodedBytes:bytes.length,providerPayloadSha256:createHash('sha256').update(JSON.stringify(payload)).digest('hex')});
+ }
+}
+const preflight=recoveryCampaignPreflight({inputs,reservations}),canonical=JSON.stringify({preflight,inputs}),manifestSha256=createHash('sha256').update(canonical).digest('hex');mkdirSync(output,{recursive:true});
+mkdirSync(join(output,'assets'));for(const[sha,data]of images)writeFileSync(join(output,'assets',sha+'.jpg'),data,{flag:'wx'});
+writeFileSync(join(output,'campaign-plan.json'),JSON.stringify({preflight,manifestSha256,inputs},null,2));writeFileSync(join(output,'diagnosis-reference-preparation.json'),JSON.stringify(references,null,2));
+console.log(JSON.stringify({...preflight,manifestSha256,exactInputBindings:inputs.length,referenceContexts:references.length,providerRequests:0}));

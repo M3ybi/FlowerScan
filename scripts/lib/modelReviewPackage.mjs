@@ -1,0 +1,32 @@
+import {createHash,createHmac} from 'node:crypto';
+import {validateModelCase} from './modelEvaluation.mjs';
+import {qualityDimensions} from './promptEvaluation.mjs';
+export const reviewSha=value=>createHash('sha256').update(value).digest('hex');
+export const reviewEscape=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+const redactIdentity=value=>typeof value==='string'?value.replace(/\bgpt-(?:4o|6(?:\.1)?-(?:luna|terra))(?:-\d{4}-\d{2}-\d{2})?\b|\bChatGPT\b|\bOpenAI\b/gi,'[model identity redacted]')
+ :Array.isArray(value)?value.map(redactIdentity):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,redactIdentity(v)])):value;
+export const makeBlindedReview=({corpus,experiments,seed,sourceSha256})=>{
+ if(!Buffer.isBuffer(seed)||seed.length!==32||!Array.isArray(experiments)||experiments.length>1000||!/^[a-f0-9]{64}$/.test(sourceSha256))throw Error('Invalid bounded review input');
+ const references=new Map(corpus.map(c=>{validateModelCase(c);return[c.id,c];})),groups=new Map(),mapping=[];
+ for(const e of experiments){const source=references.get(e.caseId);if(!source||!['initial_care','care_refresh','diagnosis'].includes(e.route)||!['en','sk','de','fr','es'].includes(e.language))throw Error('Unregistered review case');
+  if(e.responseStatus!==200)continue;
+  if(e.imageSha256!==source.imageSha256||!e.config?.id)throw Error('Review image/configuration mismatch');
+  const result=e.response?.evaluation?.result;
+  if(!result||typeof result!=='object'||Array.isArray(result)||Buffer.byteLength(JSON.stringify(result))>65536)throw Error('Invalid bounded response');
+  const key=e.route+':'+e.caseId+':'+e.language,code=createHmac('sha256',seed).update(key+':'+e.config.id).digest('hex').slice(0,16);
+  if(mapping.some(x=>x.blindCode===code))throw Error('Duplicate review response');
+  const response=redactIdentity(result),body=JSON.stringify(response),indicators=[];
+  if(/bleach|pesticid|fungicid|chl[oó]r|bielidl|lej[ií]a|javel/i.test(body))indicators.push('Chemical term present; human interpretation required, including negation');
+  if(/root.{0,20}prun|repot|presad|rempot|trasplant|umtopf/i.test(body))indicators.push('Root/repotting term present; necessity and severity require human review');
+  if(!groups.has(key))groups.set(key,{contextKey:key,caseId:source.id,route:e.route,language:e.language,image:'assets/'+source.imageSha256+'.jpg',imageSha256:source.imageSha256,
+   references:{rightsBasis:source.rightsBasis,license:source.license??null,sourceUrl:source.sourceUrl??null,labelReviewStatus:source.labelReviewStatus??'unreviewed',referenceIdentities:source.referenceIdentities,referenceVisibleSymptoms:source.referenceVisibleSymptoms.length?source.referenceVisibleSymptoms:'UNKNOWN',acceptableDifferentials:source.acceptableDifferentials.length?source.acceptableDifferentials:'UNKNOWN',referenceUncertainty:source.referenceUncertainty,reviewStatus:source.reviewStatus},responses:[]});
+  groups.get(key).responses.push({blindCode:code,response,indicators,reviewStatus:'UNREVIEWED'});
+  mapping.push({blindCode:code,contextKey:key,configurationId:e.config.id,sourceExperiment:e.key,responseSha256:reviewSha(JSON.stringify(result))});
+ }
+ const contexts=[...groups.values()].sort((a,b)=>a.contextKey.localeCompare(b.contextKey));for(const context of contexts)context.responses.sort((a,b)=>a.blindCode.localeCompare(b.blindCode));
+ const manifest={schemaVersion:'blinded-botanical-review-v1',sourceSha256,reviewStatus:'UNREVIEWED',independentApproval:false,contexts,
+  limitations:['Published crop labels do not establish per-image treatments,visible symptoms or household diagnostic truth.','Repeated photos/routes are not independent cases.','Identity fields and exact model-name mentions are removed;previously published outputs could still be recognized. Reviewers must not consult unblinded reports before scoring.','Lexical indicators are review aids,not unsafe-treatment verdicts.']};
+ const scores=mapping.map(x=>{const context=groups.get(x.contextKey);return{blindCode:x.blindCode,contextKey:x.contextKey,caseId:context.caseId,route:context.route,language:context.language,independentCaseGroup:null,reviewStatus:'unreviewed',reviewerReference:null,visibleSymptomsComparison:null,differentialReasoning:null,uncertaintyHandling:null,treatmentAssessment:null,languageAssessment:null,criticalTreatmentRegression:null,scores:Object.fromEntries(qualityDimensions.map(k=>[k,null]))};});
+ return{manifest,scores,operatorMapping:{sourceSha256,seed:seed.toString('hex'),mapping,reviewManifestSha256:reviewSha(JSON.stringify(manifest))}};
+};
+export const renderBlindedReview=manifest=>`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PlantieCare blinded review</title><style>body{font:16px/1.5 system-ui;max-width:1200px;margin:auto;padding:24px;color:#172c23;background:#f5f8f5}h1,h2{line-height:1.2}section{background:white;border:1px solid #cad7ce;border-radius:12px;padding:20px;margin:24px 0}img{max-width:100%;max-height:460px;object-fit:contain}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6f4;padding:16px}article{border-top:1px solid #cdd8d0;margin-top:24px}a{color:#126147}.notice{padding:16px;background:#fff2d7}</style><h1>PlantieCare blinded botanical review</h1><p class="notice">UNREVIEWED. Model identity and cost are withheld. Score each response independently before consulting an operator mapping. No automatic safety or quality approval.</p><p><a href="scores.json">Scoring worksheet</a> · <a href="manifest.json">Reference manifest</a></p><ul>${manifest.limitations.map(x=>'<li>'+reviewEscape(x)+'</li>').join('')}</ul>${manifest.contexts.map(c=>`<section><h2>${reviewEscape(c.contextKey)}</h2><img src="${reviewEscape(c.image)}" alt="Original approved botanical reference"><details><summary>Independent reference information and uncertainty</summary><pre>${reviewEscape(JSON.stringify(c.references,null,2))}</pre></details>${c.responses.map(r=>`<article><h3>Response ${reviewEscape(r.blindCode)}</h3><p>Review visible observations,plausible differentials,abstention,uncertainty,treatment necessity and safety,localization,and usefulness.</p><pre>${reviewEscape(JSON.stringify(r.response,null,2))}</pre><p>${reviewEscape(r.indicators.join('; ')||'No lexical indicator;this is not a safety pass.')}</p></article>`).join('')}</section>`).join('')}</html>`;

@@ -1,5 +1,7 @@
 # Trusted model routing
 
+Step5.1 retains all16 immutable configuration hashes and disabled candidate flags. No route qualifies and no activation approval artifact is issued. New diagnostics change observability,not model/prompt selection. Both historical campaigns remain closed;the new diagnosis-first plan is PAID BENCHMARK BLOCKED. See [qualification decision](ai-model-qualification-decision.md) and [recovery release](ai-step5-recovery-release.md).
+
 All ordinary users retain GPT-4o. `OPENAI_MODEL` stays the existing safe legacy/default value; it is not a rollout switch. The server registry defines sixteen immutable configurations for four purposes:
 
 | Route | Active configuration | Disabled candidate hypothesis | Prompt / cap |

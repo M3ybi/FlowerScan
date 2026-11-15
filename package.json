@@ -83,6 +83,8 @@
     "test:prompt-postgres": "node scripts/test-prompt-postgres.mjs",
     "test:ai-models": "node --test tests/ai-models.test.mjs tests/model-corpus.test.mjs",
     "test:model-postgres": "node scripts/test-model-postgres.mjs",
+    "test:provider-diagnostics": "node --test tests/ai-provider-diagnostics.test.mjs tests/model-review-package.test.mjs tests/model-recovery-campaign.test.mjs",
+    "test:provider-postgres": "node scripts/test-provider-diagnostics-postgres.mjs",
     "check:client-secrets": "node scripts/check-client-secrets.mjs",
     "test:application-browser": "node scripts/test-application-browser.mjs",
     "test:application-webkit": "node scripts/test-application-browser.mjs --webkit",

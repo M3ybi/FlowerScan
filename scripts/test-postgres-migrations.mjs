@@ -63,14 +63,14 @@ try {
       await admin.query(`create role ${role}`); createdRoles.push(role);
     }
   }
-  for (const kind of ["clean", "upgrade", "step2-upgrade", "step3-upgrade", "step4-upgrade", "step5-upgrade"]) {
+  for (const kind of ["clean", "upgrade", "step2-upgrade", "step3-upgrade", "step4-upgrade", "step5-upgrade", "step51-upgrade"]) {
     const name = `plantie_v4_${randomUUID().replaceAll("-", "")}`;
     await admin.query(`create database ${name} encoding 'UTF8' template template0 lc_collate 'C' lc_ctype 'C'`); names.push(name);
     url.pathname = `/${name}`;
     const client = new pg.Client({ connectionString: url.toString() });
     await client.connect(); clients.push(client);
     await client.query(platform);
-    const baseline = migrations.filter(name => name < (kind === "step5-upgrade" ? "20261115174859" : kind === "step4-upgrade" ? "20261115163555" : kind === "step3-upgrade" ? "20261115151650" : kind === "step2-upgrade" ? "20261115140000" : "20261018190000"));
+    const baseline = migrations.filter(name => name < (kind === "step51-upgrade" ? "20261115195536" : kind === "step5-upgrade" ? "20261115174859" : kind === "step4-upgrade" ? "20261115163555" : kind === "step3-upgrade" ? "20261115151650" : kind === "step2-upgrade" ? "20261115140000" : "20261018190000"));
     await apply(client, kind === "clean" ? migrations : baseline);
     if (kind !== "clean") {
       await client.query(`insert into auth.users(id,email) values ('${owner}','synthetic@example.invalid');

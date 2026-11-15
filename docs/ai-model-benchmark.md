@@ -1,5 +1,7 @@
 # Step 5 model benchmark
 
+Step5.1 recovery: [root-cause evidence,paid-campaign preflight and release](ai-step5-recovery-release.md). No new inference is authorized by that preflight;historical measurements below remain unchanged.
+
 Starting revision: `7c7a474eeab3a5da028cce4da38b4540c3832131`, matching clean remote main. Existing ordinary GPT-4o/v1/1600px-high behavior is the reference. The exact requested candidates are `gpt-6-luna` and `gpt-6.1-terra`; no substitute model is selected.
 
 Official capability documentation and configured-project model metadata were checked before implementation. All three metadata GETs returned200 with matching IDs and made no inference calls. These checks do not prove image, strict-schema, reasoning, service-tier or timeout compatibility; that requires protected metered Responses execution.

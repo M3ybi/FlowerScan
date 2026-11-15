@@ -3,9 +3,11 @@ import { ImageUploadError, imageErrorResponse, imageNetworkError, imageProviderF
 import { aiOperationMessage, type AiOperationCode } from "../../../src/lib/imageUploadErrors.ts";
 import { json } from "./cors.ts";
 import { getModelConfiguration, modelConfigurationHash, applyModelConfiguration, routeForKind } from "./aiModelRegistry.ts";
+import { providerDiagnostics, providerHttpCategory, providerRequestId, type ProviderParseStatus, type ProviderFailureCategory } from "./aiProviderDiagnostics.ts";
 
 type Kind = "initial_care" | "care_refresh" | "diagnosis" | "image_validation" | "upload_validation";
 type JsonObject = Record<string, unknown>;
+const tokenCount = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 type RpcResult = { data: unknown; error: { message?: string } | null };
 type RpcCall = PromiseLike<RpcResult> & { abortSignal?: (signal: AbortSignal) => PromiseLike<RpcResult> };
 type Rpc = { rpc: (name: string, args: JsonObject) => RpcCall };
@@ -167,14 +169,20 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
   let failure: unknown;
   let outcome = "UNKNOWN";
   const facts: JsonObject = {};
+  let providerBody: JsonObject | undefined;
+  let responseAt: string | null = null;
+  let parseStatus: ProviderParseStatus = "NOT_RECEIVED";
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Client-Request-Id": attemptId },
       body: JSON.stringify(payload), signal: controller.signal,
     });
     facts.httpStatus = response.status;
-    facts.requestId = response.headers.get("x-request-id");
+    facts.requestId = providerRequestId(response.headers.get("x-request-id"));
+    responseAt = new Date().toISOString();
+    if (!response.ok) { outcome = "FAILED"; facts.failureCategory = providerHttpCategory(response.status, null); }
     const body = await readProviderJson(response);
+    providerBody = body; parseStatus = "PARSED";
     facts.model = typeof body.model === "string" ? body.model : null;
     facts.serviceTier = typeof body.service_tier === "string" ? body.service_tier : null;
     facts.responseId = typeof body.id === "string" ? body.id : null;
@@ -182,18 +190,28 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     // Whitelist token counts, never provider errors/input/output into cost facts.
     const usage = body.usage as { input_tokens?: unknown; output_tokens?: unknown; total_tokens?: unknown; input_tokens_details?: { cached_tokens?: unknown; cache_write_tokens?: unknown; cache_write_tokens_details?: { ttl_30m_tokens?: unknown; ttl_12h_tokens?: unknown } }; output_tokens_details?: { reasoning_tokens?: unknown } } | undefined;
     if (usage && typeof usage === "object") facts.usage = {
-      input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, total_tokens: usage.total_tokens,
-      input_tokens_details: { cached_tokens: usage.input_tokens_details?.cached_tokens, cache_write_tokens: usage.input_tokens_details?.cache_write_tokens,
+      input_tokens: tokenCount(usage.input_tokens), output_tokens: tokenCount(usage.output_tokens), total_tokens: tokenCount(usage.total_tokens),
+      input_tokens_details: { cached_tokens: tokenCount(usage.input_tokens_details?.cached_tokens), cache_write_tokens: tokenCount(usage.input_tokens_details?.cache_write_tokens),
         ...(usage.input_tokens_details?.cache_write_tokens_details ? { cache_write_tokens_details: {
-          ttl_30m_tokens: usage.input_tokens_details.cache_write_tokens_details.ttl_30m_tokens,
-          ttl_12h_tokens: usage.input_tokens_details.cache_write_tokens_details.ttl_12h_tokens,
+          ttl_30m_tokens: tokenCount(usage.input_tokens_details.cache_write_tokens_details.ttl_30m_tokens),
+          ttl_12h_tokens: tokenCount(usage.input_tokens_details.cache_write_tokens_details.ttl_12h_tokens),
         } } : {}) },
-      output_tokens_details: { reasoning_tokens: usage.output_tokens_details?.reasoning_tokens },
+      output_tokens_details: { reasoning_tokens: tokenCount(usage.output_tokens_details?.reasoning_tokens) },
     };
     const reasoning = body.reasoning as { effort?: unknown } | undefined;
-    if (typeof reasoning?.effort === "string") facts.reasoningEffort = reasoning.effort;
+    if (typeof reasoning?.effort === "string" && ["none", "low", "medium", "high", "xhigh", "max"].includes(reasoning.effort)) facts.reasoningEffort = reasoning.effort;
     outcome = "FAILED";
-    if (!response.ok) throw await imageProviderFailure(Response.json(body, { status: response.status }));
+    if (!response.ok) {
+      facts.failureCategory = providerHttpCategory(response.status, (body.error as { code?: unknown } | null)?.code);
+      facts.providerDiagnostics = providerDiagnostics(body, facts.failureCategory as ProviderFailureCategory, responseAt, parseStatus);
+      // Error bodies may contain arbitrary echoed text, including these fields.
+      facts.model = typeof body.model === "string" && /^gpt-(?:4o|6-luna|6\.1-terra)(?:-\d{4}-\d{2}-\d{2})?$/.test(body.model) ? body.model : null;
+      facts.serviceTier = typeof body.service_tier === "string" && ["default", "flex", "priority", "scale"].includes(body.service_tier) ? body.service_tier : null;
+      facts.responseId = typeof body.id === "string" && /^resp_[A-Za-z0-9_-]{1,180}$/.test(body.id) ? body.id : null;
+      facts.providerStatus = typeof body.status === "string" && ["completed", "failed", "incomplete", "cancelled", "queued", "in_progress"].includes(body.status) ? body.status : null;
+      const code = (facts.providerDiagnostics as { code: string | null }).code;
+      throw await imageProviderFailure(Response.json({ error: { code } }, { status: response.status }));
+    }
     if (body.status === "incomplete" || body.status === "failed" || body.status === "cancelled") {
       facts.failureCategory = body.status === "incomplete" ? "PROVIDER_INCOMPLETE" : body.status === "cancelled" ? "PROVIDER_CANCELLED" : "PROVIDER_FAILED";
       throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
@@ -207,9 +225,15 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     outcome = "COMPLETED";
   } catch (error) {
     failure = error instanceof ImageUploadError || error instanceof AiOperationError ? error : imageNetworkError(error);
-    facts.failureCategory ??= controller.signal.aborted || error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
-      ? "PROVIDER_TIMEOUT" : outcome === "UNKNOWN" ? "PROVIDER_TRANSPORT" : "PROVIDER_RESULT_INVALID";
+    if (controller.signal.aborted || error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) facts.failureCategory = "PROVIDER_TIMEOUT";
+    facts.failureCategory ??= responseAt && parseStatus !== "PARSED" ? "PROVIDER_RESULT_INVALID" : outcome === "UNKNOWN" ? "PROVIDER_TRANSPORT" : "PROVIDER_RESULT_INVALID";
+    if (parseStatus !== "PARSED" && responseAt) parseStatus = error instanceof Error && error.message === "PROVIDER_RESPONSE_TOO_LARGE" ? "OVERSIZED"
+      : controller.signal.aborted ? "INTERRUPTED" : "MALFORMED";
   } finally { clearTimeout(timer); }
+  if (failure || !facts.usage) {
+    facts.providerDiagnostics ??= providerDiagnostics(providerBody, (facts.failureCategory ?? "PROVIDER_MISSING_USAGE") as ProviderFailureCategory, responseAt, parseStatus);
+    console.warn("plantie.ai_provider_failure", { attemptId, httpStatus: facts.httpStatus ?? null, requestId: facts.requestId ?? null, ...facts.providerDiagnostics as JsonObject });
+  }
   facts.latencyMs = Math.max(0, Date.now() - started);
   // Repeating settlement is safe; repeating inference after uncertain transport is not.
   let settlement: { state?: string } | null = null;

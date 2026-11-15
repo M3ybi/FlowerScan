@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';import test from 'node:test';import {readFileSync} from 'node:fs';
+import {makeBlindedReview,renderBlindedReview,reviewSha} from '../scripts/lib/modelReviewPackage.mjs';
+const corpus=JSON.parse(readFileSync('tests/fixtures/botanical-model-corpus.json','utf8')),c=corpus[0],seed=Buffer.alloc(32,42);
+const e={key:'sample',caseId:c.id,route:'diagnosis',language:'de',imageSha256:c.imageSha256,config:{id:'diagnosis:gpt-6-luna:none:v1'},responseStatus:200,response:{evaluation:{result:{diagnosis:{diagnosis_title:'<script>unsafe()</script> OpenAI gpt-6-luna',recommended_steps:['Do not use bleach.']}}}}};
+test('review payload omits model/price identifiers,keeps original facts and never invents review approval',()=>{
+ const r=makeBlindedReview({corpus,experiments:[e],seed,sourceSha256:'a'.repeat(64)}),publicText=JSON.stringify(r.manifest);assert.ok(!publicText.includes('gpt-6-luna'));assert.ok(!publicText.includes('configurationId'));assert.equal(r.operatorMapping.mapping[0].configurationId,e.config.id);assert.equal(r.manifest.independentApproval,false);assert.equal(r.scores[0].reviewStatus,'unreviewed');assert.ok(Object.values(r.scores[0].scores).every(x=>x===null));assert.equal(r.manifest.contexts[0].imageSha256,c.imageSha256);assert.equal(r.manifest.contexts[0].responses[0].indicators.length,1);assert.ok(!renderBlindedReview(r.manifest).includes('<script>'));assert.ok(renderBlindedReview(r.manifest).includes('&lt;script&gt;'));assert.equal(r.operatorMapping.reviewManifestSha256,reviewSha(JSON.stringify(r.manifest)));
+});
+test('blinding is reproducible for an operator seed and rejects unregistered,duplicate or mismatched responses',()=>{
+ const input={corpus,experiments:[e],seed,sourceSha256:'a'.repeat(64)};assert.deepEqual(makeBlindedReview(input),makeBlindedReview(input));for(const experiments of [[e,e],[{...e,imageSha256:'0'.repeat(64)}],[{...e,caseId:'not_registered'}]])assert.throws(()=>makeBlindedReview({...input,experiments}));
+});

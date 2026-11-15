@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import vm from "node:vm";
 
 const bundles = new Map();
-export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true, sourceOverrides = {}, now }) => {
+export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true, sourceOverrides = {}, now, logs }) => {
   const key = name + createHash("sha256").update(JSON.stringify(sourceOverrides)).digest("hex");
   if (!bundles.has(key)) {
     const bundle = await build({ entryPoints: [`supabase/functions/${name}/index.ts`], bundle: true, write: false, format: "iife", logLevel: "silent",
@@ -27,7 +27,7 @@ export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true
     fixture: { auth: signedIn ? { user: { id: actorId }, client } : null, client },
     crypto: webcrypto, structuredClone, btoa, atob, TextEncoder, TextDecoder, Request, Response, Headers, AbortSignal, AbortController,
     Uint8Array, Error, TypeError, SyntaxError, DOMException, setTimeout, clearTimeout, fetch, Date: FixtureDate,
-    console: { error() {}, warn() {}, info() {} },
+    console: { error() {}, warn: (...args) => logs?.push(args), info() {} },
   });
   return body => handler(new Request("https://synthetic.invalid", { method: "POST", headers: { authorization: "Bearer synthetic", "content-type": "application/json" }, body: JSON.stringify(body) }));
 };

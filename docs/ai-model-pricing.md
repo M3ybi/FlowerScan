@@ -1,5 +1,7 @@
 # Versioned multi-model pricing
 
+Step5.1 preserves all pricing rows and reservations. The old Luna cost remains null with$0.26355 exposure;organization usage access returned403 and no authoritative correction is available. A proposed$2 campaign cannot admit Terra's$2.6355/$2.643 full-context requests. No count-backed smaller bound,price change or new paid request is introduced. See [recovery evidence](ai-step5-recovery-release.md).
+
 Step 5 retains the three historical `openai-standard-2026-11-15` GPT-4o price rows. The additive registry version `openai-multimodel-2026-11-15` records the requested Luna and Terra aliases. An unknown returned snapshot or service tier remains UNKNOWN_PRICING with null cost and retained exposure; it is not silently assigned its parent's price.
 
 | Standard global API, USD per million tokens | Ordinary input | Cached read | 30m write | 12h write | Output |
