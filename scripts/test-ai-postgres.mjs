@@ -154,7 +154,19 @@ try {
   await owner.query("delete from ai_private.prices where version='synthetic-next-price'");
   const sum = await owner.query("select sum(cost_usd)::text total from ai_private.attempts where operation_id in ($1,$2)", [oldPrice.op.operationId, newPrice.op.operationId]);
   equal(sum.rows[0].total, "0.009750000000", "decimal aggregation remains exact");
-  checks.push("zero/small/large/cached/reasoning/missing/invalid usage; unknown pricing; version changes; exact precision and concurrent settlement");
+  // Exercise the one-to-many ledger independently of the live one-attempt
+  // policy. Only this disposable administrator fixture rearms the operation;
+  // no production RPC or client can enable inference retries this way.
+  const multi = await fixture(true);
+  const firstAttempt = await start(claimArgs(multi.actor,multi.home,"diagnosis"));
+  await finish(firstAttempt,syntheticFacts(),"FAILED");
+  const rearmed = (await owner.query("update ai_private.operations set state='RESERVED',max_attempts=2,lease_id=gen_random_uuid(),lease_expires_at=now()+interval '90 seconds',expires_at=now()+interval '15 minutes' where id=$1 returning lease_id",[firstAttempt.op.operationId])).rows[0];
+  const secondAttempt = {op:{operationId:firstAttempt.op.operationId,leaseId:rearmed.lease_id},attempt:await aiRpc(owner,"ai_start_attempt",{operation:firstAttempt.op.operationId,lease:rearmed.lease_id})};
+  await finish(secondAttempt);
+  equal((await owner.query("select count(*)::int n,sum(cost_usd)::text cost from ai_private.attempts where operation_id=$1",[firstAttempt.op.operationId])).rows[0],{n:2,cost:"0.006500000000"},"each attempted inference contributes once to the same operation's financial total");
+  equal((await finish(secondAttempt)).state,"COMPLETED","repeated final settlement preserves both attempt records");
+  await rejects(aiRpc(owner,"ai_start_attempt",{operation:secondAttempt.op.operationId,lease:secondAttempt.op.leaseId}),/AI_OPERATION_UNAVAILABLE/);
+  checks.push("zero/small/large/cached/reasoning/missing/invalid usage; unknown pricing; version changes; multi-attempt ledger fixture; exact precision and concurrent settlement");
 
   // Existing monthly counters are reserved/released/committed in the same SQL
   // transaction as the operation, including lost workers and revoked access.

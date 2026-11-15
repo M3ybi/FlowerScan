@@ -4861,7 +4861,9 @@ textarea:focus-visible {
   display: grid;
   align-content: center;
   min-height: 28px;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .mobile-bottom-nav .mobile-bottom-nav-action {
