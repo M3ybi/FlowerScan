@@ -37,7 +37,7 @@ Identification, diagnosis, treatment safety, multilingual quality and cost per i
 
 ## Executed output evidence
 
-37 model generations were attempted in 8 case/route/language contexts. 7 contexts completed all five configurations. The paired primary set uses only five images across three routes; five additional diagnosis scenarios add ambiguity/adversarial contexts. Repeated route uses and reused houseplant photographs are not independent cases. Plant names often supplied the reference crop identity, so identity agreement is **not blinded visual identification accuracy**. No claim of60 independent reviewed examples, statistical significance or a winning model follows.
+37 model generations were attempted in 8 case/route/language contexts. 7 contexts completed all five configurations. The planned primary set reuses five images across three routes; five further diagnosis contexts cover ambiguity/adversarial scenarios. Actual execution reached only five initial-care contexts and three refresh contexts, using five distinct photographs. No diagnosis context executed. Repeated route uses and reused houseplant photographs are not independent cases. Plant names often supplied the reference crop identity, so identity agreement is **not blinded visual identification accuracy**. No claim of60 independent reviewed examples, statistical significance or a winning model follows.
 
 The actual responses below are **model claims**, not accepted labels. Full raw synthetic outputs remain in the local evidence report; private server result caches were removed. Scientific name differences and self-reported confidence are displayed without treating either as a quality score.
 
