@@ -37,3 +37,18 @@ No provider request body, output body, image, raw provider error, API credential
 `npm run test:ai-accounting` checks real bundled Edge behavior with external boundaries substituted. `npm run test:ai-postgres` requires a disposable loopback PostgreSQL administrator URL and 150 available server connections; it checks exact pricing, zero/missing usage, cached/reasoning semantics, version changes, concurrent settlement, 100-scan aggregation, roles and actual Edge handlers across 100 independent sessions. Migration tests cover clean replay and upgrades from the earlier V4 and current 34-migration baselines. SQL fixtures also check the actual local Supabase privileges when that stack is available.
 
 Report measured/unknown attempts separately. Aggregate latency from attempt timestamps and whole-operation timestamps separately; exclude cached replay from provider-call counts. USD is the accounting currency. Subscription targets in EUR need an explicit FX and revenue/cost policy before comparisons. Small synthetic smoke samples cannot establish representative subscriber-month margins or diagnose model quality. Actual release evidence is in [the production report](ai-step2-production-release.md).
+
+## Measured production baseline: 2026-11-15
+
+Authorized synthetic smoke tests made **nine actual provider attempts**, all `MEASURED`, requesting `gpt-4o` and receiving `gpt-4o-2024-08-06`, standard tier, registry `openai-standard-2026-11-15`. Total reported input was **13,530 tokens**, including **1,280 cached tokens**; output was **1,637**, reported reasoning **0**, and total **15,167**. Exact recorded cost was **$0.048595000000 USD**, verified from token categories with integer arithmetic independently of the SQL calculation.
+
+| Provider operation | Calls | Input tokens | Cached subset | Output tokens | Total USD | Mean USD/attempt | Provider duration range, ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Image safety | 2 | 3,014 | 0 | 120 | 0.008735 | 0.004367500000 | 1,303–4,166 |
+| Initial identification/care | 2 | 3,072 | 1,280 | 529 | 0.011370 | 0.005685000000 | 3,700–6,569 |
+| Manual care | 2 | 3,072 | 0 | 523 | 0.012910 | 0.006455000000 | 2,388–3,036 |
+| Diagnosis | 3 | 4,372 | 0 | 465 | 0.015580 | 0.005193333333 | 2,158–2,539 |
+
+Across nine attempts, mean provider duration was 3,145 ms, discrete p50 2,539 ms and p95 6,569 ms. Actual output ranges were safety 60 tokens, initial care 237–292, refresh 251–272 and diagnosis 148–161. Existing output caps remain 700/1,400/2,400 respectively.
+
+This is a small synthetic measurement, not a workload forecast. The same normalized 1125×1600 JPEG (131,447 bytes, high detail) was reused across flows; upload reused prior safety results and made no extra inference. A customer scan can require multiple provider attempts across separate safety/care/diagnosis operations. Mean cost per provider attempt is therefore not mean cost per customer scan. The provider did not report a separate image-token breakdown; none is inferred from bytes. Independent invoice reconciliation, infrastructure costs, EUR conversion, representative scan cost and subscriber-month profitability remain unmeasured. The product financial targets are not claimed achieved.

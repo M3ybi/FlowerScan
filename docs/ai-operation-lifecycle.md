@@ -43,3 +43,5 @@ Completed safety results live five minutes, diagnosis results fifteen minutes, a
 Production smoke tests are authorized to create temporary synthetic accounts, including a test-only Premium grant and cleanup. Existing customer entitlements and billing configuration remain outside scope.
 
 The pre-existing care UI's diagnosis-allowance gate is unchanged in Step 2; changing that product behavior requires a separate decision. No Luna/Terra routing is enabled.
+
+Production verification on 2026-11-15 confirmed the compatible Free/Premium identification, care, diagnosis and image persistence paths, completed-result replay, pending-plant persistence linkage, once-only discarded-preview consumption, Free limits, collaborating Premium Viewer access and subsequent revocation denial. Anonymous and ordinary authenticated direct accounting RPCs were denied. The authorized synthetic accounts, sessions, households, photos and generated result caches were cleaned up; their measured financial facts remain. See the [release evidence](ai-step2-production-release.md) for versions, test boundaries and monitoring.
