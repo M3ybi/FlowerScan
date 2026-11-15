@@ -22,4 +22,55 @@ Centralizing an identical payload cannot save provider tokens. Strict invalid-ou
 
 Keep €0.20 average subscriber-month,€0.50 heavy-user planning reserve and<€0.002/completed-scan targets visible. Complete add/unwell requires safety plus generation; save/replay can add zero. No per-attempt mean is called cost per scan. Financial forecasts need actual journey mix,cache/expiry/retry/failure rates,FX,backend/payment/store/tax costs and representativeness. Step3 measurements alone already do not prove the targets; Step4 may not claim them from a disabled candidate or a small favorable output sample.
 
-Actual hosted measurements are recorded only after release/evaluation executes. At implementation preparation,no Step4 paid call has been made; candidate cost/language/quality results are NOT EXECUTED rather than inferred from mocks.
+## Executed production evaluation — 2026-11-15
+
+Run window: 17:13:16.826–17:14:50.849 UTC, using runtime revision `18986e1fc2c557f50e0b515b789d158fd187dc5f`. One expiring run included every associated safety, ordinary generation and candidate attempt. All requests selected `gpt-4o`; all returned `gpt-4o-2024-08-06`, service tier `default`, `store:false`. The approved public Ficus image was unchanged normalized JPEG,1125×1600,131447 bytes,high detail. The baseline/candidate English comparisons shared image,name,notes,language,schema and original output ceiling. Candidate definition and context hashes were registered before inference. No ordinary customer photo or output was used.
+
+Every row below is one actual **MEASURED** ledger attempt,with provider request/response IDs retained privately. All completed with validated structured output; reasoning tokens were0. Cached tokens are a subset of input tokens. Total is input+output. A/B/C/D designate baseline/concise/quality/balanced; the full immutable versions are in the architecture inventory. Caller latency for candidate rows includes a post-call ledger read; ordinary caller timings measure the HTTP request. These small samples are not production latency percentiles.
+
+| Attempt / prompt | Ceiling | Input | Cached | Output | Total | Actual USD | Provider ms | Caller ms |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+|1 safety v1,Free add |700|1507|0|59|1566|0.0043575|2931|3590|
+|2 care A,en,initial |1400|1536|0|271|1807|0.0065500|3938|4411|
+|3 safety v1,Premium unwell |700|1507|1280|60|1567|0.0027675|1237|1496|
+|4 diagnosis A,en |2400|1461|0|152|1613|0.0051725|3809|4193|
+|5 care A,en,manual refresh |1400|1536|0|247|1783|0.0063100|2860|3264|
+|6 diagnosis B,en |2400|1372|0|132|1504|0.0047500|2341|3251|
+|7 diagnosis C,en |2400|1562|0|165|1727|0.0055550|3902|4610|
+|8 diagnosis D,en |2400|1555|0|133|1688|0.0052175|3367|4057|
+|9 care B,en |1400|1423|0|223|1646|0.0057875|2718|3488|
+|10 care C,en |1400|1600|0|239|1839|0.0063900|2477|3090|
+|11 care D,en |1400|1593|0|225|1818|0.0062325|2813|3430|
+|12 care D,sk |512|1594|0|366|1960|0.0076450|3170|3780|
+|13 care D,de |512|1593|0|300|1893|0.0069825|3917|4960|
+|14 care D,fr |512|1593|0|283|1876|0.0068125|2784|3406|
+
+Totals: **21432 input,1280 cached,2855 output,24287 total tokens;$0.0805300**. All14 attempts had known usage,exact decimal cost reconciliation and completed status;0 refused,0 incomplete,0 invalid,0 unknown. The price version remained `openai-standard-2026-11-15`. Provider p50/p95 were2860/3938ms (nearest-rank,14 attempts); candidate caller p50/p95 were3488/4960ms (nine attempts). Input p95 was1600 and output p95 was366. Zero observed failures in this sample is not a future error-rate guarantee.
+
+### Measured comparison and attribution
+
+Against initial care A,concise B removed113 input tokens (7.36%) and produced48 fewer output tokens; observed cost fell$0.0007625 (11.64%). Diagnosis B removed89 input tokens (6.09%) and produced20 fewer output tokens; observed cost fell$0.0004225 (8.17%). These are **measured candidate differences**,not production savings or evidence of equivalent botanical quality.
+
+Care C/D added64/57 input tokens; their observed costs were$0.0001600/$0.0003175 lower than initial A because that particular output was shorter. Diagnosis C/D added101/94 input tokens and cost$0.0003825/$0.0000450 more than A. D therefore was not uniformly cheapest. One output per candidate cannot separate prompt effect from sampling variance: the two identical v1 care payloads themselves produced271 versus247 output tokens. No candidate is selected for activation.
+
+The512-token Slovak,German and French care responses completed,but language and ceiling changed together. They do not establish savings from reducing the ceiling. Spanish512 was denied before inference. English512,adversarial Slovak diagnosis700 and truncation256 were **NOT EXECUTED** after the first admission stop. Refusal/incomplete/truncation handling passed deterministic integration tests; no real refusal or incomplete response was observed. No automatic larger-limit retry was made.
+
+### Cache observation
+
+One of14 attempts reported cached input (7.14% attempt hit rate);1280/21432 input tokens were cached (5.97%). This was the second safety call,not a new botanical prompt optimization. Its recorded discount was$0.0016000;the total at uncached-input rates would have been$0.0821300. Botanical generations had0 cache hits across12 attempts,including the repeated ordinary care payload. Application replay separately added0 provider attempts. No causal latency improvement is inferred from one cached safety response.
+
+### Full journeys and financial stop
+
+| Actual synthetic journey | Paid attempts | Cost USD | Instrumented end-to-end ms |
+|---|---:|---:|---:|
+| Add New Plant + private image readback + persistence |2|0.0109075|12073|
+| Unwell + saved diagnosis + safety reuse |2|0.0079400|9130|
+| Premium manual care refresh |1|0.0063100|4184|
+| Eligible completed care/safety replay |0|0|2938|
+| Free-limit/nonmember/revoked-viewer denials |0|0|9570|
+
+End-to-end timings include test instrumentation,ledger reads,persistence and grouped assertions;they are not browser UX measurements. The ordinary journeys used five attempts/$0.0251575 and the nine isolated candidates used$0.0553725. Differences from Step3 are influenced by cache/output variability and do not prove a release saving.
+
+The next care512 admission required$0.3251200 (unchanged128000-token context reservation plus output allowance). $0.0805300+$0.3251200=$0.4056500 exceeds$0.40,so the server returned429 with **zero** new provider attempts. The entire paid evaluation stopped at that first denial;no reset,budget extension,alternate run or reduced reservation was used. The run is now disabled with0 actors,0 registered inputs,0 active operations and0 unknown exposure. Unspent measured budget did not authorize bypassing conservative reservations.
+
+**Prompt token reduction: MEASURED in isolated concise candidates. Actual production cost reduction: NOT VERIFIED.** Activated v1 payloads remain identical. These USD journey samples do not establish the<€0.002 planning target;no FX conversion was performed. The €0.20/€0.50 subscriber-month objectives remain unverified without representative journey volumes,FX and all operating costs. No attempt average is presented as cost per completed scan.

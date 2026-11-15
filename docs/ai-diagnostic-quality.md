@@ -24,7 +24,27 @@ Tests cover valid contracts and malformed/missing/truncated/refused output; exac
 
 The existing frontend language/diagnosis/care presentation tests remain mandatory. An English model mock under a Slovak instruction is a plumbing fixture,not proof of Slovak generation. Real generations may demonstrate limited language adherence but cannot verify all tasks in all five languages or botanical safety within this small budget.
 
-## Activation decision
+## Executed hosted observations
+
+The approved production evaluation completed nine isolated candidate generations: English care/diagnosis B/C/D,and balanced care in Slovak,German and French at512 tokens. All had valid required keys/types/enums/cardinalities,unchanged scientific-name strings and0 deterministic consistency signals. The selected-language strings were returned in those limited care cases. These are structural and plumbing observations,not independent linguistic or botanical validation. Only one public Ficus image was actually sent;the additional corpus assets remain framework fixtures.
+
+The candidates still suggested fertilizer for ambiguous pale leaves and differed on watering reminders (7–14 days). Some care outputs did not explicitly mention every requested environmental adjustment. These are review concerns,not a proven critical treatment-safety regression or an expert quality score. Absence of a regex signal did not establish coherence or safety. No candidate earned an activation pass.
+
+| Verification | Status | Evidence / limit |
+|---|---|---|
+| Five-language prompt/version/key/enum plumbing | PASS |20 before/after case/language pairs,immutable manifest and adversarial unit/integration tests |
+| English ordinary add,diagnosis and refresh | PASS |Real synthetic production flows,valid responses and persistence |
+| Candidate English care/diagnosis structured responses | PASS |Six real same-input B/C/D outputs |
+| Candidate sk/de/fr care512 structural smoke | PASS |Three completed outputs;no expert translation or safety review |
+| Real Spanish candidate generation | NOT EXECUTED |First financial admission stop;no provider call |
+| Real mixed-language/injection diagnosis700 | NOT EXECUTED |Remaining matrix stopped at the same budget boundary |
+| Real English512/256 ceiling comparison/truncation | NOT EXECUTED |No retry or budget reset after stop |
+| Complete five-language identification,care,diagnosis,refresh and terminology matrix | NOT EXECUTED |Deterministic wiring does not establish empirical all-task generation quality |
+| Independent identification/diagnostic/treatment comparison | NOT EXECUTED |No reviewed labels,reviewer scores or approved thresholds |
+
+Plant identification quality,diagnostic quality,treatment safety and overall multilingual behavior remain **NOT VERIFIED**. The hosted structured-output path is VERIFIED for the exercised contracts;this does not certify model semantics. See [all token/status measurements](ai-prompt-token-benchmark.md).
+
+## Activation decision after evaluation
 
 Category A can ship: byte-equivalent v1 definition/schema centralization,strict rejection of schema-invalid types,distinct failure telemetry,immutable version controls and default-off evaluation instrumentation,after compatibility/security/financial tests and production smoke.
 

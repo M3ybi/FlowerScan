@@ -37,7 +37,7 @@ New migration `20261115163555_ai_prompt_evaluation.sql` adds one private RLS tab
 
 Initial failures were in test wiring: elapsed latency was incorrectly included in an exact snapshot,and onboarding source checks expected inline definitions. Timing is now checked as a metric but excluded from deterministic equality; wiring assertions follow the centralized factories/contracts. Actual all-language payload/parsed-output/fingerprint comparisons preserve the original safety requirement. A parser regression test reproduces old numeric-string acceptance and verifies rejection with financial usage retained. No security or financial assertion was disabled.
 
-Browser/current-revision CI,deployment and paid smoke outcomes are added only after execution. No pending gate is represented as a production pass. Prior CI's separate unused GitHub Pages build fails its missing configuration guard; active production is Netlify. That guard and its configuration are outside this change.
+The current-revision hosted gates and production results are recorded below. GitHub Pages is a separate unused deployment target; active production is Netlify. Its configuration guard was preserved.
 
 ## Recovery and rollback
 
@@ -48,3 +48,66 @@ On a serious quality/access/accounting regression,disable the private evaluation
 ## Step 5 readiness
 
 **NO-GO for behavior-changing prompt activation or Luna/Terra routing** without the reviewed comparative botanical/multilingual safety gates in [the quality report](ai-diagnostic-quality.md). The authorized scope permits independently verified non-behavioral improvements to ship while candidates remain disabled. Measured token differences from isolated candidates are not production savings. Actual final implementation/deployment/accounting statuses follow below after release verification.
+
+## Executed deployment and production verification
+
+Implementation commit `f650cd1ff28bebc81e52bfd72c94b17c988fe2c2` plus EOF whitespace cleanup produced final **runtime source revision `18986e1fc2c557f50e0b515b789d158fd187dc5f`**. Both were pushed to main without force. Later release-record commits change documentation only;the final evidence revision is the commit containing this record (`git log -1 --format=%H -- docs/ai-step4-production-release.md`),also reported explicitly in the delivery response. No separate branch or backend was created.
+
+[Runtime-revision CI run43737887025](https://github.com/M3ybi/FlowerScan/actions/runs/43737887025) completed its required jobs successfully before deployment:
+
+| Verification | Status | Evidence |
+|---|---|---|
+| verify / verify | PASS |Job132886302045;Deno,full check,secret/source scans,Chromium/WebKit image/application/navigation/menu/QR/auth suites and runtime dependency audit |
+| verify / postgres | PASS |Job132886303664;real PostgreSQL,migration replay,accounting,image and prompt suites |
+| verify / supabase | PASS |Job132886336762;full disposable Supabase stack,37 migrations and nine fixtures |
+| Initial verify attempt | FAIL |Unchanged mobile safe-area navigation case read12px instead of46px;23/24 passed. Exact local suite24/24 passed;unchanged CI retry passed both browser engines. Root cause was not established. No UI/assertion change was made |
+| Separate GitHub Pages build | FAIL |Job132889799386;`RELEASE_DATABASE_CONFIGURATION_REQUIRED`;Pages deploy skipped. This is not described as an entirely green workflow |
+| Active Netlify web manifest/assets | PASS |plantiecare.com ready at18986e1;clean manifest,public billing mode and every entry asset hash matched local production-configured build at17:16:02 UTC |
+| Production migration | PASS |Only reviewed `20261115163555_ai_prompt_evaluation.sql` in fresh dry-run;applied37th migration;private RLS and service-only fixed-search-path RPC checks passed |
+| Affected Edge deployment | PASS |care20,diagnosis22,evaluator1,allACTIVE/JWT true;source readback matched every module,13/13/15 respectively |
+| Unrelated Edge/configuration preservation | PASS |Validation14,upload16,vision-token-benchmark1 and all remaining function versions/JWT flags retained;model/server secret metadata and bucket configuration unchanged |
+| Controls/pricing/historical ledger preservation | PASS |Exact captured control,price and pre-existing financial function hashes;all43 preflight historical attempt rows retained unchanged |
+| Ordinary records/entitlements | PASS |Before/after household,membership,plant,Auth stable fields,Storage,billing/subscription/entitlement hashes;additional nine-table plant/diagnostic graph matched |
+| Existing security advisories | FAIL |Existing mutable-path4,anonymous definer8,authenticated definer41,leaked-password protection disabled1 remain. They were not introduced or fixed by this release |
+| New evaluation privileges | PASS |No client execute access to new accounting RPCs;new private RLS table has no client policies/grants. RLS/no-policy INFO count14→15 is expected deny-by-default private bookkeeping |
+
+The migration and three deployments completed at17:12:49.244 UTC. No model,image,RevenueCat,billing,price,subscription or ordinary entitlement setting changed. The authorized Premium grant was temporary and applied only to a newly created synthetic household,then removed with cleanup.
+
+### Bounded production smoke and accounting
+
+Actual smoke window17:13:16.826–17:14:50.849 UTC. **40 recorded assertions passed**,five ordinary grouped journeys passed,and nine of13 planned candidate generations executed. Full measurements,per-attempt statuses and caller/provider timings are in [the benchmark](ai-prompt-token-benchmark.md).
+
+| Verification | Status | Evidence / limitation |
+|---|---|---|
+| Anonymous endpoint/direct client RPC denial | PASS |Five endpoints401;anonymous/authenticated evaluator SQL access42501;no provider attempts |
+| Add New Plant + identification/care + persistence | PASS |Free synthetic actor,safety+v1 care,two attempts/$0.0109075;exact uploaded JPEG read back privately |
+| Plant Looks Unwell + saved diagnosis | PASS |Synthetic Premium actor,safety+v1 diagnosis,two attempts/$0.0079400;diagnosis persisted,save reused safety |
+| Manual care refresh | PASS |Premium actor,one v1 attempt/$0.0063100;existing output ceiling and envelope |
+| Completed ordinary/candidate replay | PASS |Same result;zero extra provider attempts. Image safety/upload reuse also added zero |
+| Free/Premium regression | PASS |Free monthly diagnosis,daily refresh and plant limits enforced403;Premium remained unlimited despite synthetic500-used fixture;nonmember and revoked viewer denied with no new paid calls |
+| Server model/schema/cap control | PASS |Forged ordinary request fields could not replace trusted configuration;strict evaluator override tests passed locally/CI |
+| Prompt-version isolation | PASS |Registered immutable versions/namespaced fingerprints;completed candidate replay;changed-version cache miss verified in deterministic/real-PG suites |
+| Real candidate structured output | PASS |Six English same-input B/C/D responses plus sk/de/fr care512;all completed/valid,zero consistency signals. This does not verify semantics |
+| Remaining real candidate cells | NOT EXECUTED |Spanish512 denied before provider;English512,adversarial Slovak diagnosis700 and256 truncation were stopped with the whole evaluation |
+| Real refusal/incomplete/fault injection | NOT EXECUTED |No such provider response observed;deterministic handler/settlement tests passed |
+| Provider usage/cost reconciliation | PASS |14/14 attempts MEASURED;21432 input,1280 cached,2855 output,0 reasoning,24287 total;exact$0.0805300;all IDs/model/tier/price versions recorded |
+| Financial run limit | PASS |First429 at$0.0805300 measured+$0.3251200 next reservation>$0.40;zero new attempt. No reset,alternate budget,reduced reservation or retry |
+| Financial circuit/concurrency/unknown exposure | PASS |Production controls unchanged;disposable100-session suites exercised circuit,exact admission,unknown usage/reconciliation and concurrency. No production emergency-control mutation |
+| Cleanup | PASS |Three synthetic users and two households removed;objects removed;private results cleared;run disabled,0 actors,0 registrations,0 active operations,0 unknown exposure. Financial history retained |
+| Botanical/multilingual safety gates | NOT EXECUTED |No reviewed corpus/thresholds;overall identification/diagnosis/treatment/multilingual quality NOT VERIFIED;new behavior stays disabled |
+
+Experiment outputs never entered ordinary customer records. A nonzero remaining measured budget was not treated as permission to bypass conservative admission. Provider-token reconciliation verifies ledger calculations,not a provider invoice or representative subscriber profitability.
+
+### Post-cleanup monitoring
+
+**PASS**, observed through17:20:18 UTC: the17:12:49.244–17:20:18 UTC log window includes more than five minutes after cleanup. Aggregate Edge logs showed31 relevant requests:19 success,5 expected401,6 expected403 and1 evaluation-budget429;0 endpoint5xx. Runtime error/fatal/boot-failure aggregate was empty. Care20/diagnosis22/evaluator1 and unchanged validation14/upload16 appeared in the execution logs. These are bounded observations,not long-term reliability or language-quality guarantees.
+
+Ledger readback at17:20:23 retained exactly14 measured attempts/$0.0805300,0 refused/incomplete/invalid results,0 unknown exposure and0 active work. Final configuration/data checks at17:20:27 passed again;the evaluation stayed disabled with0 actors/registrations/results. No new paid call was made after the admission stop. Monitoring queried aggregate fields only,without customer payloads or personal data.
+
+### Recovery after release
+
+Fresh post-cleanup archive captured17:15:28.420 UTC: SHA-256 `6e00ce6019792ce5f0730bc419278e8f39a78226bebb66b7f8878cbbd906cca7`,794353 plaintext bytes. It includes eight private tables with the retained Step4 ledger. DPAPI encryption,restricted ACL,disk readback,decryption,hash and full archive parse passed. Evidence is `%LOCALAPPDATA%/Plantie/production-recovery/ai-step4-final-evidence.json`. No production restore was executed;Storage object bytes and managed platform configuration remain outside the logical archive.
+
+### Final disposition
+
+Category A implementation and exercised production contracts: PASS. Category B activation: **NO-GO**. Category C evaluation: closed and disabled. Structured output,accounting and financial safeguards are verified within the executed automated/synthetic scope. Botanical identification,diagnosis,treatment safety and complete multilingual behavior are **NOT VERIFIED**. Prompt token reduction and caching were measured;actual production cost reduction is **NOT VERIFIED**. Final release classification: **PARTIAL RELEASE**,with **NO-GO for Step5 Luna/Terra routing** until the independent quality gates pass.
