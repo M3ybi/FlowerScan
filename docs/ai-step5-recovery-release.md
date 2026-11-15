@@ -49,6 +49,7 @@ Expected diagnosis cost is NOT MEASURED. For planning only, 1500–5000 input an
 | New paid compatibility/diagnosis matrix | NOT EXECUTED |No budget authorization; current Terra bound exceeds$2 |
 | Independent botanical/treatment/localization review | NOT EXECUTED |No independent reviewer/approved thresholds |
 | Production migration/deploy/smoke | PASS |Executed evidence and unpaid-only scope below |
+| Post-release documentation CI (`26403e7`) | FAIL |Application verification failed the unchanged Chromium safe-area assertion on both initial execution and one retry; PostgreSQL and full disposable Supabase passed |
 
 Initial review QA could not launch an absent Playwright headless shell/Chrome. The installed Edge browser then passed the actual package inspection. Those failed launch attempts are not counted as passing tests. No assertions were weakened.
 
@@ -63,6 +64,8 @@ The model migration is not complete. See [diagnostics](ai-provider-error-diagnos
 ## Executed production release
 
 Runtime revision: `f87fa8f92eebe7efbfc6ac7112b34ca05c3a0251`. Migration39 was applied at the verified existing project; seven adapter consumers were deployed at 2026-11-15T20:41:40.617Z. The final evidence revision is the main commit containing this section; subsequent changes are documentation only. [Required runtime CI](https://github.com/M3ybi/FlowerScan/actions/runs/43758214296) passed all three jobs: application verification, PostgreSQL and full disposable Supabase. The separate GitHub Pages build failed `RELEASE_DATABASE_CONFIGURATION_REQUIRED`, with its deploy skipped. The active Netlify production manifest/downloaded asset hashes passed independently, with unchanged web_sandbox billing mode. Do not describe the whole Pages workflow as green.
+
+The [post-release documentation CI for `26403e7`](https://github.com/M3ybi/FlowerScan/actions/runs/43759930870) failed application verification at `safe-areas-and-direct-link`: Chromium reported bottom `12px`, expected `46px`, with23/24 checks passing. The single retry failed identically. PostgreSQL and full disposable Supabase passed both times; the dependent Pages build/deploy were skipped. A focused local installed-Edge run passed the original safe-area assertions, but does not establish the hosted failure's cause. No frontend, CSS, browser assertions or timeouts were changed. This is an unresolved final-verification limitation, not a passing CI result. Any subsequent current-head result must be read from its exact GitHub run and the local `final-verification-receipt.json`; earlier failures remain part of this evidence.
 
 | Function | Deployed version | JWT/source parity |
 |---|---:|---|
@@ -85,6 +88,8 @@ Execution 2026-11-15T20:42:52.890Z–2026-11-15T20:43:05.228Z: seven anonymous e
 The old124 attempt facts, all five price rows, financial controls and unaffected financial functions matched their baseline projections. The new nullable diagnostic column was excluded only from the historical-column comparison; all existing values were still compared. One initial read-only operator checker rejected digit-bearing cache-column names; its identifier grammar was corrected and the complete preservation assertion passed. No runtime assertion or financial fact was changed to obtain that result.
 
 The historical Luna failure remains UNKNOWN_USAGE, cost null, exposure$0.26355 and diagnostics null. Historical diagnostics are not invented/backfilled. Authoritative provider evidence remains unavailable (organization usage403, no existing configured admin credential). Root cause **UNKNOWN**; trusted correction/reconciliation **NOT EXECUTED**. New provider-error logging/settlement is verified through deployed source/schema parity and deterministic/real-PostgreSQL faults; new actual paid API compatibility is **NOT EXECUTED**.
+
+The post-cleanup observation at2026-11-15T20:50:47.164Z covered461936ms after smoke cleanup. The registered test actor had zero provider attempts; old financial facts, disabled routes and closed campaigns remained unchanged. Aggregate function logs for20:41:40–20:50:41 UTC contained the13 expected400/401/403 requests, no5xx and no error-level runtime events. The final encrypted recovery archive at2026-11-15T20:50:58.751Z has SHA-256 `0d3b1fca0bf2580ac93fc737b65426ac2e053306d3fae9908c63a5805142ce84` (888772 bytes before encryption); restricted ACL, disk roundtrip and full archive parsing passed. No restore was performed.
 
 ### Review/preflight evidence
 
@@ -141,7 +146,7 @@ Credentials, correlation IDs, photos, operator maps, backups and raw outputs rem
 | Field | Result |
 |---|---|
 | Implementation | PASS |
-| Automated tests | PASS |
+| Automated tests | FAIL at documentation revision `26403e7`; deployed runtime CI and targeted AI/database suites PASS; see exact final-head CI receipt for subsequent results |
 | Luna HTTP400 root cause | UNKNOWN |
 | Unknown financial exposure | UNRESOLVED |
 | Luna care compatibility | NOT VERIFIED —historical successes, unresolved400, incomplete matrix |
