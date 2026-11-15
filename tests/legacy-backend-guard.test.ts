@@ -104,7 +104,10 @@ test("explicit internal rollback preserves existing token validation and public-
     }
     assert.equal((await invoke(pushSubscription, "POST", {})).statusCode, 401);
     assert.equal((await invoke(householdAccess, "POST", { householdId: "invalid" })).statusCode, 400);
-    for (const handler of [plantCareAi, plantDiagnosisAi]) assert.equal((await invoke(handler, "GET")).statusCode, 405);
+    for (const handler of [plantCareAi, plantDiagnosisAi]) {
+      assert.equal((await invoke(handler, "GET")).statusCode, 410);
+      assert.equal((await invoke(handler, "POST", { plantName: "Synthetic" })).statusCode, 410);
+    }
     const previous = process.env.VAPID_PUBLIC_KEY;
     process.env.VAPID_PUBLIC_KEY = "test-public-key";
     try {

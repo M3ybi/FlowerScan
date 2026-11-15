@@ -2,6 +2,8 @@
 
 This records the original size-contract repair. Current HEIC/provider handling is documented in [mobile image compatibility](image-compatibility-ios-android-2026-10-16.md); request admission, signed safety receipts and cancellation changes are documented in the [2026-10-18 implementation audit](codebase-audit-2026-10-18.md).
 
+The Step 2 [AI lifecycle](ai-operation-lifecycle.md) adds trusted safety-result reuse and cost accounting for both selection and upload fallback. Upload capacity is admitted before fallback inference. Existing image sizes, normalization, private storage and signed receipt compatibility remain. Historical deployment/test results below describe their original revisions; current release evidence is in [the Step 2 report](ai-step2-production-release.md).
+
 ## Root cause
 
 The client accepted 8 MiB originals, while upload, safety validation, care generation and diagnosis rejected data URLs longer than 1,600,000 characters. Base64 adds approximately one third to the binary size, so that transport restriction admitted only about 1.14 MiB of decoded image data. The Storage buckets independently allowed 8 MiB. JPEG preprocessing also returned the original file if resizing failed, bypassing normalization and metadata removal.

@@ -20,6 +20,7 @@ const testScripts = [
   "test:audit-reliability",
   "test:add-plant-image",
   "test:edge-images",
+  "test:ai-accounting",
   "test:release-readiness",
   "test:onboarding",
   "test:auth-ux",

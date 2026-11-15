@@ -157,11 +157,14 @@ test("database migration enforces plant limits and atomic AI reservations server
 test("Supabase AI functions count only successful plant-unwell analyzes and keep care generation separate", () => {
   const diagnosisEdge = readFileSync("supabase/functions/plant-diagnosis-ai/index.ts", "utf8");
   const careEdge = readFileSync("supabase/functions/plant-care-ai/index.ts", "utf8");
+  const operationMigration = readFileSync("supabase/migrations/20261115140000_ai_operation_accounting.sql", "utf8");
 
-  assert.match(diagnosisEdge, /reserve_ai_analyze_usage/);
-  assert.match(diagnosisEdge, /plant_unwell_ai_analyze/);
-  assert.match(diagnosisEdge, /commit_ai_analyze_usage/);
-  assert.match(diagnosisEdge, /release_ai_analyze_reservation/);
+  assert.match(diagnosisEdge, /kind: "diagnosis"/);
+  assert.match(diagnosisEdge, /runAiOperation/);
+  assert.match(operationMigration, /plant_unwell_ai_analyze/);
+  assert.match(operationMigration, /commit_ai_analyze_usage/);
+  assert.match(operationMigration, /release_ai_analyze_reservation/);
   assert.doesNotMatch(careEdge, /record_ai_analyze_usage|reserve_ai_analyze_usage|increment_usage_counter/);
-  assert.match(careEdge, /assert_can_generate_care_tip/);
+  assert.match(careEdge, /"care_refresh" : "initial_care"/);
+  assert.match(operationMigration, /ai_free_care_slot/);
 });

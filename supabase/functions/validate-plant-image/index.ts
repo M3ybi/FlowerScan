@@ -1,6 +1,6 @@
 import { observeOperation } from "../_shared/observability.ts";
-import { requireImageAdmission } from "../_shared/imageAdmission.ts";
-import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
+import { aiErrorResponse } from "../_shared/aiOperation.ts";
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError } from "../_shared/imageUpload.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { validateImageSafety } from "../_shared/plantImageValidation.ts";
@@ -28,11 +28,10 @@ Deno.serve(observeOperation("image_validation", async (request) => {
   try { parsedImage = requireProcessedImage(imageDataUrl); }
   catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
-  try { await requireImageAdmission(() => auth.client.rpc("admit_image_operation", { requested_operation: "validation" })); }
-  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
-
-  const validation = await validateImageSafety(apiKey, imageDataUrl, body.language);
-  if (validation instanceof ImageUploadError) return imageErrorResponse(validation, body.language);
+  let validation;
+  try { validation = await validateImageSafety(apiKey, imageDataUrl, body.language, {
+    actorId: auth.user.id, kind: "image_validation", image: parsedImage, retryKey: body.operationKey,
+  }); } catch (error) { return aiErrorResponse(error, body.language); }
   if (!validation) return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
   const receipt = await issueImageValidationReceipt(parsedImage.bytes, auth.user.id, Deno.env.get("IMAGE_VALIDATION_SIGNING_SECRET"));
   return json(200, { validation, ...(receipt ? { receipt } : {}) });

@@ -54,6 +54,7 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_INITDB_ARGS: -c max_connections=150
         ports: [5432:5432]
         options: >-
           --health-cmd pg_isready
@@ -71,6 +72,9 @@ jobs:
         env:
           PLANTIE_TEST_POSTGRES_URL: postgresql://postgres:local-ci-only@127.0.0.1:5432/postgres
       - run: npm run test:postgres-migrations
+        env:
+          PLANTIE_TEST_POSTGRES_URL: postgresql://postgres:local-ci-only@127.0.0.1:5432/postgres
+      - run: npm run test:ai-postgres
         env:
           PLANTIE_TEST_POSTGRES_URL: postgresql://postgres:local-ci-only@127.0.0.1:5432/postgres
 

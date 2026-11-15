@@ -75,6 +75,8 @@
     "test:auth-flow-browser": "node scripts/test-auth-flow-browser.mjs",
     "test:audit-reliability": "tsc --noEmit --module ESNext --moduleResolution Bundler --target ES2022 --skipLibCheck --jsx react-jsx --types node src/vite-env.d.ts tests/audit-reliability.test.ts && esbuild tests/audit-reliability.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.tmp-tests/audit-reliability.mjs && node --test .tmp-tests/audit-reliability.mjs tests/image-validation-receipt.test.mjs tests/image-admission-database.test.mjs tests/operational-email.test.mjs tests/account-deletion.test.mjs tests/invite-delivery.test.mjs tests/client-secrets.test.mjs tests/backend-timeout.test.mjs",
     "test:postgres": "node scripts/test-postgres-concurrency.mjs",
+    "test:ai-postgres": "node scripts/test-ai-postgres.mjs",
+    "test:ai-accounting": "node --test tests/ai-operation.test.mjs",
     "check:client-secrets": "node scripts/check-client-secrets.mjs",
     "test:application-browser": "node scripts/test-application-browser.mjs",
     "test:application-webkit": "node scripts/test-application-browser.mjs --webkit",

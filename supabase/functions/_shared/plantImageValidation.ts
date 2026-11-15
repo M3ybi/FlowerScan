@@ -1,5 +1,6 @@
+import { runAiOperation, type SafetyOperationContext } from "./aiOperation.ts";
 import { isImageUploadValidationPayload, isImageUploadAllowed } from "../../../src/lib/imageUploadValidationRules.ts";
-import { ImageUploadError, imageNetworkError, imageProviderFailure } from "./imageUpload.ts";
+import { ImageUploadError } from "./imageUpload.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
 const validationSchema = {
   additionalProperties: false,
@@ -42,13 +43,10 @@ const extractOutputText = (response: unknown) => {
   return "";
 };
 
-export const validateImageSafety = async (apiKey: string, imageDataUrl: string, language: unknown) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15_000);
-
-  try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      body: JSON.stringify({
+export const validateImageSafety = async (apiKey: string, imageDataUrl: string, language: unknown, context: SafetyOperationContext) => {
+  const result = await runAiOperation(apiKey, {
+    ...context, promptVersion: "plant-image-safety-v1", timeoutMs: 15_000,
+    payload: {
         instructions: buildAiLanguageInstruction(language),
         input: [
           {
@@ -64,28 +62,13 @@ export const validateImageSafety = async (apiKey: string, imageDataUrl: string, 
           },
         ],
         max_output_tokens: 700,
-        model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
         text: { format: { name: "plant_image_upload_validation", schema: validationSchema, strict: true, type: "json_schema" } },
-      }),
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      method: "POST",
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.error("Validated image upload AI request failed", { status: response.status });
-      return await imageProviderFailure(response);
-    }
-
-    const parsed = JSON.parse(extractOutputText(await response.json())) as unknown;
-    if (!isImageUploadValidationPayload(parsed)) return new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
-    return isImageUploadAllowed(parsed) ? parsed : null;
-  } catch (error) {
-    console.error("Validated image upload failed closed", {
-      name: error instanceof Error ? error.name : "unknown",
-    });
-    return error instanceof SyntaxError ? new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503) : imageNetworkError(error);
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    },
+    parse: payload => {
+      const parsed: unknown = JSON.parse(extractOutputText(payload));
+      if (!isImageUploadValidationPayload(parsed)) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+      return { validation: isImageUploadAllowed(parsed) ? parsed : null };
+    },
+  });
+  return result.validation;
 };

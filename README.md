@@ -43,6 +43,8 @@ npm audit
 
 Tests run sequentially because several suites share `.tmp-tests` and clear generated fixtures. `npm test` covers the explicitly listed offline suites; it does not run every `test:*` command. No separate ESLint/formatter configuration is imposed; strict TypeScript checks include unused locals and parameters.
 
+AI provider work uses [server-authorized operations](docs/ai-operation-lifecycle.md), [versioned cost accounting](docs/ai-cost-accounting.md) and [financial safeguards](docs/ai-financial-safeguards.md). `test:ai-accounting` is part of the offline runner. `test:ai-postgres` requires a disposable loopback PostgreSQL administrator URL and capacity for 150 server connections; it executes actual Edge handlers across 100 independent sessions. Deployment results and limitations are recorded in [the Step 2 release report](docs/ai-step2-production-release.md).
+
 Controlled browser workflows include `test:application-browser`, `test:application-webkit`, `test:image-browser`, `test:image-webkit`, `test:auth-flow-browser`, and `test:qr-header-browser`. Install the pinned Playwright browsers when needed. They test synthetic accounts/providers and do not prove a live purchase, delivered email or physical camera operation.
 
 Mobile navigation and pagination checks run with `test:mobile-navigation-browser` and `test:mobile-navigation-webkit`; see [mobile navigation architecture and verification](docs/mobile-navigation.md).

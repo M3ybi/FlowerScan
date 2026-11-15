@@ -145,8 +145,6 @@ test("each AI request instruction prioritizes the current language over input an
 
 test("all AI provider endpoints use the shared selected-language instruction", () => {
   const endpoints = [
-    "netlify/functions/plant-care-ai.ts",
-    "netlify/functions/plant-diagnosis-ai.ts",
     "supabase/functions/plant-care-ai/index.ts",
     "supabase/functions/plant-diagnosis-ai/index.ts",
     "supabase/functions/_shared/plantImageValidation.ts",
@@ -165,6 +163,6 @@ test("all AI provider endpoints use the shared selected-language instruction", (
   assert.match(readSource("src/utils/imageUploadValidation.ts"), /body: \{ imageDataUrl, language \}/);
   assert.match(readSource("src/lib/plantieRepository.ts"), /language: readStoredLanguage\(browserStorage\)/);
   for (const endpoint of ["validate-plant-image", "upload-validated-image"]) {
-    assert.match(readSource(`supabase/functions/${endpoint}/index.ts`), /validateImageSafety\(apiKey, imageDataUrl, body\.language\)/);
+    assert.match(readSource(`supabase/functions/${endpoint}/index.ts`), /validateImageSafety\(apiKey, imageDataUrl, body\.language,/);
   }
 });

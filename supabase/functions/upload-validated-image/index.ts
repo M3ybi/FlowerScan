@@ -1,6 +1,7 @@
 import { observeOperation } from "../_shared/observability.ts";
+import { aiErrorResponse, imageHash } from "../_shared/aiOperation.ts";
 import { requireImageAdmission } from "../_shared/imageAdmission.ts";
-import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError } from "../_shared/imageUpload.ts";
 import { createServiceClient, requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { validateImageSafety } from "../_shared/plantImageValidation.ts";
@@ -51,14 +52,15 @@ Deno.serve(observeOperation("image_upload", async (request) => {
   if (receipt !== undefined && !await verifyImageValidationReceipt(receipt, parsedImage.bytes, auth.user.id, signingSecret)) {
     return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_REQUIRED", 422), body.language);
   }
-  const validation = receipt === undefined ? await validateImageSafety(apiKey, imageDataUrl, body.language) : true;
-  if (validation instanceof ImageUploadError) return imageErrorResponse(validation, body.language);
-  if (!validation) {
-    return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
-  }
-
   try { await requireImageAdmission(() => auth.client.rpc("reserve_image_upload", { target_household_id: householdId, image_kind: kind, image_id: imageId })); }
   catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
+
+  try {
+    const validation = receipt === undefined ? await validateImageSafety(apiKey, imageDataUrl, body.language, {
+      actorId: auth.user.id, householdId, kind: "upload_validation", image: parsedImage, retryKey: body.operationKey,
+    }) : true;
+    if (!validation) return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
+  } catch (error) { return aiErrorResponse(error, body.language); }
 
   const bucket = kind === "plant" ? "plant-images" : "diagnostic-images";
   const path = kind === "plant" ? `${householdId}/plants/${imageId}/original.jpg` : `${householdId}/diagnostics/${imageId}/image.jpg`;
@@ -78,5 +80,13 @@ Deno.serve(observeOperation("image_upload", async (request) => {
     return imageErrorResponse(imageNetworkError(error), body.language);
   }
 
+  if (kind === "plant") {
+    try {
+      const { error } = await createServiceClient().rpc("ai_bind_uploaded_image", {
+        actor: auth.user.id, household: householdId, object_path: path, image_sha256: await imageHash(parsedImage.bytes),
+      });
+      if (error) return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503), body.language);
+    } catch { return imageErrorResponse(new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503), body.language); }
+  }
   return json(200, { path });
 }));

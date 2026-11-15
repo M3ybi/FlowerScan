@@ -1,9 +1,12 @@
-export type ImageErrorCode = "ORIGINAL_IMAGE_TOO_LARGE" | "IMAGE_TOO_LARGE" | "UNSUPPORTED_IMAGE_FORMAT" |
+export type AiOperationCode = "AI_ALLOWANCE_UNAVAILABLE" | "AI_PENDING_PLANTS" | "AI_INVALID_OPERATION" | "AI_BUSY" | "AI_TEMPORARILY_UNAVAILABLE" | "AI_IN_PROGRESS" | "AI_RESULT_UNCERTAIN" | "AI_INVALID_RESULT";
+export type ImageErrorCode = PhotoErrorCode | AiOperationCode;
+
+type PhotoErrorCode = "ORIGINAL_IMAGE_TOO_LARGE" | "IMAGE_TOO_LARGE" | "UNSUPPORTED_IMAGE_FORMAT" |
   "IMAGE_RATE_LIMITED" | "IMAGE_UPLOAD_CAPACITY" | "IMAGE_VALIDATION_REQUIRED" | "INVALID_IMAGE" | "IMAGE_COMPRESSION_FAILED" | "IMAGE_VALIDATION_FAILED" | "IMAGE_UPLOAD_FAILED" |
   "AUTHENTICATION_REQUIRED" | "HOUSEHOLD_ACCESS_DENIED" | "IMAGE_NETWORK_TIMEOUT" | "IMAGE_NETWORK_FAILED" | "IMAGE_SERVICE_UNAVAILABLE" |
   "IMAGE_SELECTION_FAILED" | "IMAGE_READ_FAILED" | "IMAGE_DECODE_FAILED" | "IMAGE_DECODE_LIMIT" | "CAMERA_PERMISSION_DENIED";
 
-const english: Record<ImageErrorCode, string> = {
+const english: Record<PhotoErrorCode, string> = {
   IMAGE_VALIDATION_REQUIRED: "This photo needs a new safety check. Choose it again and retry.",
   IMAGE_RATE_LIMITED: "Too many photo requests. Wait an hour and try again. Your form is preserved.",
   IMAGE_UPLOAD_CAPACITY: "Too many unfinished photo uploads in this household. Retry your previous upload or contact support.",
@@ -25,7 +28,7 @@ const english: Record<ImageErrorCode, string> = {
   IMAGE_NETWORK_FAILED: "The image service could not be reached. Check your connection and try again.",
   IMAGE_SERVICE_UNAVAILABLE: "Image processing is temporarily unavailable. Please try again.",
 };
-const slovak: Record<ImageErrorCode, string> = {
+const slovak: Record<PhotoErrorCode, string> = {
   IMAGE_VALIDATION_REQUIRED: "Táto fotka potrebuje novú kontrolu bezpečnosti. Vyber ju znova a zopakuj nahranie.",
   IMAGE_RATE_LIMITED: "Priveľa požiadaviek na fotky. Počkaj hodinu a skús to znova. Formulár zostal vyplnený.",
   IMAGE_UPLOAD_CAPACITY: "V domácnosti je priveľa nedokončených nahrávaní fotiek. Zopakuj predchádzajúce nahranie alebo kontaktuj podporu.",
@@ -52,7 +55,7 @@ export class ImageUploadError extends Error {
   stage?: string;
   detectedMime?: string;
   constructor(public readonly code: ImageErrorCode, public readonly status = 400, public override readonly cause?: unknown) {
-    super(english[code]);
+    super(isAiOperationCode(code) ? aiOperationMessage(code, "en") : english[code]);
     this.name = "ImageUploadError";
   }
 }
@@ -93,7 +96,7 @@ export const logImageProcessingFailure = (stage: string, error: unknown, context
     originalBytes: typeof size === "number" && Number.isSafeInteger(size) && size >= 0 ? size : undefined,
     code: error instanceof ImageUploadError ? error.code : undefined });
 };
-const localized: Record<string, Record<ImageErrorCode, string>> = {
+const localized: Record<string, Record<PhotoErrorCode, string>> = {
   en: english, sk: slovak,
   de: {
     IMAGE_VALIDATION_REQUIRED: "Dieses Foto muss erneut geprüft werden. Wähle es noch einmal aus und versuche es erneut.",
@@ -164,7 +167,8 @@ const localized: Record<string, Record<ImageErrorCode, string>> = {
 };
 export const imageErrorMessage = (error: unknown, language: unknown): string | null => {
   const copy = typeof language === "string" && Object.prototype.hasOwnProperty.call(localized, language) ? localized[language] : english;
-  return error instanceof ImageUploadError ? copy[error.code] : null;
+  if (!(error instanceof ImageUploadError)) return null;
+  return isAiOperationCode(error.code) ? aiOperationMessage(error.code, language) : copy[error.code];
 };
 
 export const imageErrorFromResponse = async (error: unknown): Promise<ImageUploadError | null> => {
@@ -173,7 +177,7 @@ export const imageErrorFromResponse = async (error: unknown): Promise<ImageUploa
   if (context instanceof Response) {
     try {
       const payload = await context.clone().json() as { code?: unknown };
-      if (typeof payload.code === "string" && Object.prototype.hasOwnProperty.call(english, payload.code)) {
+      if (typeof payload.code === "string" && (Object.prototype.hasOwnProperty.call(english, payload.code) || isAiOperationCode(payload.code))) {
         return new ImageUploadError(payload.code as ImageErrorCode, context.status);
       }
     } catch { /* Use only public error codes, never provider diagnostics. */ }
@@ -184,4 +188,66 @@ export const imageErrorFromResponse = async (error: unknown): Promise<ImageUploa
   }
   if (error instanceof Error && ["TypeError", "FunctionsFetchError"].includes(error.name)) return new ImageUploadError("IMAGE_NETWORK_FAILED", 502);
   return null;
+};
+
+const aiMessages: Record<string, Record<AiOperationCode, string>> = {
+  en: {
+    AI_ALLOWANCE_UNAVAILABLE: "The household's current AI allowance is unavailable.",
+    AI_PENDING_PLANTS: "Save an unfinished plant or wait for pending drafts to expire (within 24 hours). Your current form is preserved.",
+    AI_INVALID_OPERATION: "This AI request is invalid. Please start it again.",
+    AI_BUSY: "AI is busy. Please retry shortly; your form is preserved.",
+    AI_TEMPORARILY_UNAVAILABLE: "AI is temporarily paused. Please retry later; your household plan is unchanged.",
+    AI_IN_PROGRESS: "This AI request is still processing. Retry shortly to retrieve its result.",
+    AI_RESULT_UNCERTAIN: "The previous AI attempt has no recoverable result. Please retry later; your form is preserved.",
+    AI_INVALID_RESULT: "AI returned incomplete data. Please retry later.",
+  },
+  sk: {
+    AI_ALLOWANCE_UNAVAILABLE: "Aktuálny limit AI tejto domácnosti nie je dostupný.",
+    AI_PENDING_PLANTS: "Ulož rozpracovanú rastlinu alebo počkaj na vypršanie návrhov (do 24 hodín). Aktuálny formulár zostáva vyplnený.",
+    AI_INVALID_OPERATION: "Táto AI požiadavka je neplatná. Začni ju znova.",
+    AI_BUSY: "AI je zaneprázdnená. Skús to o chvíľu; formulár zostáva vyplnený.",
+    AI_TEMPORARILY_UNAVAILABLE: "AI je dočasne pozastavená. Skús to neskôr; plán domácnosti sa nemení.",
+    AI_IN_PROGRESS: "Táto AI požiadavka sa ešte spracúva. O chvíľu ju zopakuj a načítaj výsledok.",
+    AI_RESULT_UNCERTAIN: "Výsledok predchádzajúceho AI pokusu sa nepodarilo obnoviť. Skús to neskôr; formulár zostáva vyplnený.",
+    AI_INVALID_RESULT: "AI vrátila neúplné údaje. Skús to neskôr.",
+  },
+  de: {
+    AI_ALLOWANCE_UNAVAILABLE: "Das aktuelle KI-Kontingent dieses Haushalts ist nicht verfügbar.",
+    AI_PENDING_PLANTS: "Speichere eine angefangene Pflanze oder warte, bis Entwürfe ablaufen (innerhalb von 24 Stunden). Das Formular bleibt erhalten.",
+    AI_INVALID_OPERATION: "Diese KI-Anfrage ist ungültig. Starte sie erneut.",
+    AI_BUSY: "Die KI ist beschäftigt. Versuche es gleich erneut; das Formular bleibt erhalten.",
+    AI_TEMPORARILY_UNAVAILABLE: "Die KI ist vorübergehend pausiert. Versuche es später erneut; der Haushaltstarif bleibt unverändert.",
+    AI_IN_PROGRESS: "Diese KI-Anfrage wird noch verarbeitet. Versuche es gleich erneut, um das Ergebnis abzurufen.",
+    AI_RESULT_UNCERTAIN: "Das Ergebnis des vorherigen KI-Versuchs konnte nicht wiederhergestellt werden. Versuche es später erneut; das Formular bleibt erhalten.",
+    AI_INVALID_RESULT: "Die KI hat unvollständige Daten geliefert. Versuche es später erneut.",
+  },
+  fr: {
+    AI_ALLOWANCE_UNAVAILABLE: "Le quota IA actuel de ce foyer est indisponible.",
+    AI_PENDING_PLANTS: "Enregistrez une plante en cours ou attendez l’expiration des brouillons (sous 24 heures). Le formulaire est conservé.",
+    AI_INVALID_OPERATION: "Cette demande IA est invalide. Recommencez-la.",
+    AI_BUSY: "L’IA est occupée. Réessayez dans un instant ; le formulaire est conservé.",
+    AI_TEMPORARILY_UNAVAILABLE: "L’IA est temporairement suspendue. Réessayez plus tard ; l’abonnement du foyer reste inchangé.",
+    AI_IN_PROGRESS: "Cette demande IA est toujours en cours. Réessayez dans un instant pour récupérer le résultat.",
+    AI_RESULT_UNCERTAIN: "Le résultat de la tentative IA précédente n’a pas pu être récupéré. Réessayez plus tard ; le formulaire est conservé.",
+    AI_INVALID_RESULT: "L’IA a renvoyé des données incomplètes. Réessayez plus tard.",
+  },
+  es: {
+    AI_ALLOWANCE_UNAVAILABLE: "La cuota de IA actual de este hogar no está disponible.",
+    AI_PENDING_PLANTS: "Guarda una planta pendiente o espera a que caduquen los borradores (en 24 horas). El formulario se conserva.",
+    AI_INVALID_OPERATION: "Esta solicitud de IA no es válida. Iníciala de nuevo.",
+    AI_BUSY: "La IA está ocupada. Inténtalo de nuevo en un momento; el formulario se conserva.",
+    AI_TEMPORARILY_UNAVAILABLE: "La IA está pausada temporalmente. Inténtalo más tarde; el plan del hogar no cambia.",
+    AI_IN_PROGRESS: "Esta solicitud de IA sigue procesándose. Inténtalo de nuevo en un momento para recuperar el resultado.",
+    AI_RESULT_UNCERTAIN: "No se ha podido recuperar el resultado del intento de IA anterior. Inténtalo más tarde; el formulario se conserva.",
+    AI_INVALID_RESULT: "La IA ha devuelto datos incompletos. Inténtalo más tarde.",
+  },
+};
+
+
+export const isAiOperationCode = (value: unknown): value is AiOperationCode =>
+  typeof value === "string" && Object.prototype.hasOwnProperty.call(aiMessages.en, value);
+
+export const aiOperationMessage = (code: AiOperationCode, language: unknown) => {
+  const locale = typeof language === "string" ? language.trim().replace(/_/g, "-").split("-")[0].toLowerCase() : "en";
+  return (aiMessages[locale] ?? aiMessages.en)[code];
 };

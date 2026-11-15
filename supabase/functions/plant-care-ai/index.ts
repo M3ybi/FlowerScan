@@ -1,6 +1,6 @@
+import { runAiOperation, AiOperationError, aiErrorResponse } from "../_shared/aiOperation.ts";
 import { observeOperation } from "../_shared/observability.ts";
-import { requireImageAdmission } from "../_shared/imageAdmission.ts";
-import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError, imageProviderFailure } from "../_shared/imageUpload.ts";
+import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError } from "../_shared/imageUpload.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
@@ -129,33 +129,23 @@ Deno.serve(observeOperation("plant_care", async (request) => {
 
   const householdId = typeof body.householdId === "string" ? body.householdId : "";
   const plantId = typeof body.plantId === "string" ? body.plantId : "";
-  const generationSource = body.generationSource === "manual_refresh" ? "manual_refresh" : "initial_plant_add";
+  const generationSource = body.generationSource === undefined ? "initial_plant_add" : body.generationSource;
+  if (generationSource !== "initial_plant_add" && generationSource !== "manual_refresh") return json(400, { error: "Invalid generation source." });
   const plantName = sanitizeText(body.plantName, 90);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
   if (!uuidLike.test(householdId) || !plantName) return json(400, { error: "Plant name and household are required." });
-  try { requireProcessedImage(imageDataUrl); }
+  let image: ReturnType<typeof requireProcessedImage>;
+  try { image = requireProcessedImage(imageDataUrl); }
   catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
 
-  if (generationSource === "initial_plant_add") {
-    const { error } = await auth.client.rpc("assert_can_add_plant", { target_household_id: householdId });
-    if (error) return json(403, { error: error.message || "Plant limit reached." });
-  } else {
-    if (!uuidLike.test(plantId)) return json(400, { error: "Plant ID is required for care tip refresh." });
-    const { error } = await auth.client.rpc("assert_can_generate_care_tip", {
-      generation_source: generationSource,
-      target_household_id: householdId,
-      target_plant_id: plantId,
-    });
-    if (error) return json(403, { error: error.message || "AI care tip limit reached." });
-  }
+  if (generationSource === "manual_refresh" && !uuidLike.test(plantId)) return json(400, { error: "Plant ID is required for care tip refresh." });
 
-  try { await requireImageAdmission(() => auth.client.rpc("admit_image_operation", { requested_operation: "care" })); }
-  catch (error) { return imageErrorResponse(error as ImageUploadError, body.language); }
-
-  let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/responses", {
-      body: JSON.stringify({
+    const result = await runAiOperation(apiKey, {
+      actorId: auth.user.id, householdId, plantId: generationSource === "manual_refresh" ? plantId : undefined,
+      kind: generationSource === "manual_refresh" ? "care_refresh" : "initial_care", retryKey: body.operationKey,
+      image, promptVersion: "plant-care-v1", timeoutMs: 30_000,
+      payload: {
         instructions: buildAiLanguageInstruction(body.language),
         input: [{
           content: [
@@ -166,35 +156,14 @@ Deno.serve(observeOperation("plant_care", async (request) => {
           role: "user",
         }],
         max_output_tokens: 1400,
-        model: Deno.env.get("OPENAI_MODEL") || "gpt-4o",
         text: { format: { name: "plant_care_profile", schema: careSchema, strict: true, type: "json_schema" } },
-      }),
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      method: "POST",
-      signal: AbortSignal.timeout(30_000),
+      },
+      parse: (payload) => {
+        const care = parseCare(extractOutputText(payload));
+        if (!care) throw new AiOperationError(502, "AI_INVALID_RESULT", "AI returned incomplete or invalid care data.");
+        return { care };
+      },
     });
-  } catch (error) {
-    return imageErrorResponse(imageNetworkError(error), body.language);
-  }
-
-  if (!response.ok) {
-    console.error("Supabase care AI request failed", { status: response.status, userIdPrefix: `${auth.user.id.slice(0, 8)}...` });
-    return imageErrorResponse(await imageProviderFailure(response), body.language);
-  }
-
-  try {
-    const care = parseCare(extractOutputText(await response.json()));
-    if (!care) return json(502, { error: "AI returned incomplete or invalid care data." });
-    if (generationSource === "manual_refresh") {
-      const { error } = await auth.client.rpc("record_care_tip_generation", {
-        generation_source: generationSource,
-        target_household_id: householdId,
-        target_plant_id: plantId,
-      });
-      if (error) return json(409, { error: "AI care tip usage could not be recorded." });
-    }
-    return json(200, { care });
-  } catch {
-    return json(502, { error: "AI returned invalid JSON." });
-  }
+    return json(200, result);
+  } catch (error) { return aiErrorResponse(error, body.language); }
 }));
