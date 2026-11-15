@@ -4872,6 +4872,8 @@ textarea:focus-visible {
 
 .mobile-bottom-nav-action .mobile-nav-label {
   white-space: normal;
+  /* Keep translations inside two lines with wider system-font metrics. */
+  word-break: break-all;
   text-wrap: balance;
 }
 

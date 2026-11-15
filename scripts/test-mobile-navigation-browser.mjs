@@ -293,6 +293,16 @@ try {
       }), `Translated label fits its touch target: ${await item.textContent()}`);
     }
     await page.screenshot({ path: path.join(artifacts, `localized-${language}-320.png`) });
+    if (language === 'fr') {
+      // Reproduce wider system-font metrics without depending on a host font.
+      await page.addStyleTag({ content: '.mobile-nav-label { font-family: Arial, sans-serif; letter-spacing: 0.6px; }' });
+      for (const item of await page.locator('.mobile-bottom-nav > *').all()) {
+        assert.ok(await item.evaluate(node => {
+          const box = node.getBoundingClientRect(), label = node.querySelector('.mobile-nav-label').getBoundingClientRect();
+          return node.scrollHeight <= node.clientHeight && label.left >= box.left - 1 && label.right <= box.right + 1;
+        }), `Wider translated label fits its touch target: ${await item.textContent()}`);
+      }
+    }
     if (language === 'sk') {
       await page.getByRole('button', { name: 'Posledná stránka', exact: true }).click();
       assert.equal(await page.locator('.plant-pagination [role="status"]').textContent(), '3 z 3');

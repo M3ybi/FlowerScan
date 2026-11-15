@@ -37,6 +37,8 @@ The first candidate, `775f444257ee59cb5df2d4577d24439069210323`, was pushed with
 
 The user explicitly authorized the minimal label-fit correction and continuing the release. It constrains navigation label width and permits wrapping within existing buttons, without changing text, button dimensions or billing behavior. Both preview engines passed all 24 navigation scenarios; the applied source is revalidated before the next push.
 
+The second candidate `46c81939013ade81505de6b770891c280b5566eb` passed both database CI jobs and the AI/application checks, but Linux exposed a second fit failure for the French add-plant label. Wider-font spacing reproduced that failure locally before the correction. Allowing balanced character wrapping for that action label passed the reproduction in both engines; the navigation suite now retains a wider-font regression assertion. The original assertions remain intact.
+
 Temporary synthetic Free/Premium accounts, a test-only Premium grant and cleanup were explicitly authorized by the user for smoke tests. Ordinary customer entitlements remain excluded. Bound real provider calls, verify token/model/cost records, replay, denied access and current quotas, clean only the named fixtures and compare existing data/configuration fingerprints. The monitoring window and actual results must be recorded before production can be labelled verified.
 
 Rollback keeps the new schema/accounting facts and guarded adapter, pauses new AI through `ai_private.control.paused`, and uses a reviewed forward fix or an already-verified guarded bundle. Restoring the old unguarded functions or legacy Netlify inference is not an approved rollback. The first guarded release has no older guarded production version.
