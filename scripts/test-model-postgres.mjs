@@ -39,7 +39,8 @@ try{
  const cohort=(await owner.query("select ai_private.model_cohort($1,'care_refresh') n",[home])).rows[0].n;equal(cohort<500,true);
  await owner.query("update ai_private.model_routes set enabled=true,rollout_percent=5,quality_approval_sha256=$1,bounded_input_approval_sha256=$2 where route='care_refresh'",['a'.repeat(64),'b'.repeat(64)]);
  equal((await ordinary()).decision,'WAIT','route changes cannot move reserved work to another model');
- await finish(first,await start(first));equal((await ordinary()).decision,'REPLAY');
+ const firstAttempt=await start(first);await finish(first,firstAttempt);equal((await ordinary()).decision,'REPLAY');
+ equal((await owner.query('select cache_write_tokens from ai_private.attempts where id=$1',[firstAttempt])).rows[0].cache_write_tokens,'0','new reference-model attempts retain explicitly reported write counts');
  const candidate=await ordinary({retry_key:'candidate',request_fingerprint:sha('candidate')});equal(candidate.effectiveConfiguration,'care_refresh:gpt-6-luna:none:v1');
  const attempt=await start(candidate);await owner.query("update ai_private.model_routes set enabled=false,rollout_percent=0 where route='care_refresh'");
  const usage={input_tokens:12000,input_tokens_details:{cached_tokens:4000,cache_write_tokens:7000,cache_write_tokens_details:{ttl_30m_tokens:3000,ttl_12h_tokens:4000}},output_tokens:100,output_tokens_details:{reasoning_tokens:80},total_tokens:12100};

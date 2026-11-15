@@ -30,7 +30,7 @@ On a regression,disable the affected private candidate route,close the campaign 
 | Existing AI PostgreSQL |PASS|100 sessions,96 assertions|
 | Existing vision PostgreSQL |PASS|100 sessions,44 assertions|
 | Existing prompt PostgreSQL |PASS|100 sessions,47 assertions|
-| New model PostgreSQL |PASS|100 sessions,103 assertions;actual Edge worker concurrency,route switches,campaign stop,pricing/unknown/reconciliation and client denials|
+| New model PostgreSQL |PASS|100 sessions,104 assertions;actual Edge worker concurrency,route switches,campaign stop,pricing/unknown/reconciliation and client denials|
 | Migration replay |PASS|38 migrations,10 fixtures,clean plus five upgrade paths,schema/grant parity and26 release checks|
 | Deno actual Edge graph |PASS|12 real entrypoints including model evaluator|
 | Full local Supabase |NOT EXECUTED|Docker unavailable;full hosted CI required|
@@ -38,6 +38,8 @@ On a regression,disable the affected private candidate route,close the campaign 
 | Production migration/deploy/paid benchmark |NOT EXECUTED|Pending applicable technical/current-revision gates|
 
 Subsequent checks,exact modified files,runtime/final revisions,deployed versions,paid facts,cleanup,monitoring and final disposition are recorded only after execution. Earlier local failures included a CASE-expression SQL syntax error and new test expectations that did not match existing timeout/provider error mappings. These were corrected without changing existing error contracts;the listed suites were rerun successfully. No production inference or customer data was used for those destructive tests.
+
+A strict aggregate preflight comparison detected one concurrently added Storage object before Step5 database deployment or inference. A timestamp-filtered checksum proved that all29 original object rows were unchanged. A fresh16-table per-row hash checkpoint includes the additional object and permits subsequent legitimate additions while requiring every checkpointed row to remain exact. No customer object was fetched,deleted or rolled back to satisfy a checksum. This live-production preservation check is separate from owned synthetic cleanup.
 
 ## Activation decision
 

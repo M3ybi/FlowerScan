@@ -419,8 +419,19 @@ begin
  if not found or lease is null or op.lease_id<>lease then raise exception 'AI_INVALID_OPERATION';end if;
  select * into a from ai_private.attempts where id=attempt and operation_id=op.id;
  if not found then raise exception 'AI_INVALID_OPERATION';end if;
- if op.pricing_version<>'openai-multimodel-2026-11-15' or a.accounting_status='MEASURED' then
+ if a.accounting_status='MEASURED' then
   return public.ai_finish_attempt_legacy(operation,lease,attempt,outcome,final_result,facts);
+ end if;
+ if op.pricing_version<>'openai-multimodel-2026-11-15' then
+  settled:=public.ai_finish_attempt_legacy(operation,lease,attempt,outcome,final_result,facts);
+  if op.model_configuration_id is not null then
+   update ai_private.attempts set
+    cache_write_tokens=case when jsonb_typeof(facts#>'{usage,input_tokens_details,cache_write_tokens}')='number' and facts#>>'{usage,input_tokens_details,cache_write_tokens}' ~ '^\d{1,15}$' then (facts#>>'{usage,input_tokens_details,cache_write_tokens}')::bigint end,
+    cache_write_30m_tokens=case when jsonb_typeof(facts#>'{usage,input_tokens_details,cache_write_tokens_details,ttl_30m_tokens}')='number' and facts#>>'{usage,input_tokens_details,cache_write_tokens_details,ttl_30m_tokens}' ~ '^\d{1,15}$' then (facts#>>'{usage,input_tokens_details,cache_write_tokens_details,ttl_30m_tokens}')::bigint end,
+    cache_write_12h_tokens=case when jsonb_typeof(facts#>'{usage,input_tokens_details,cache_write_tokens_details,ttl_12h_tokens}')='number' and facts#>>'{usage,input_tokens_details,cache_write_tokens_details,ttl_12h_tokens}' ~ '^\d{1,15}$' then (facts#>>'{usage,input_tokens_details,cache_write_tokens_details,ttl_12h_tokens}')::bigint end
+    where id=a.id;
+  end if;
+  return settled;
  end if;
  -- The original lifecycle/quota/authorization/lease/retention settlement is
  -- unchanged. Price all v2 facts atomically before this transaction returns.
