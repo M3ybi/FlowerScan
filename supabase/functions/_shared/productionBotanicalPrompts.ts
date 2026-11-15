@@ -39,4 +39,3 @@ export const buildProductionDiagnosisPayload = (plantName: string, imageDataUrl:
         text: { format: { name: "plant_problem_diagnosis", schema: diagnosisSchema, strict: true, type: "json_schema" } },
       };
 };
-

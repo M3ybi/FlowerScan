@@ -86,4 +86,3 @@ export const parseCare = (outputText: string) => {
 
   return care;
 };
-

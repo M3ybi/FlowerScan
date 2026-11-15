@@ -52,4 +52,3 @@ export const parseDiagnosis = (outputText: string) => {
 
   return diagnosis.diagnosis_title && diagnosis.reasoning_summary && diagnosis.disclaimer ? diagnosis : null;
 };
-

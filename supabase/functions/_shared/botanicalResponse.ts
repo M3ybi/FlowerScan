@@ -16,4 +16,3 @@ export const extractOutputText = (response: unknown) => {
   }
   return "";
 };
-
