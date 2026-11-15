@@ -22,6 +22,7 @@ type Options<T extends JsonObject> = {
   imageDetail?: "high" | "low";
   preprocessingProfile?: string;
   evaluationInputKey?: string;
+  promptEvaluation?: { runId: string; inputKey: string; definitionHash: string; contextHash: string };
   payload: JsonObject;
   timeoutMs: number;
   parse: (payload: JsonObject) => T;
@@ -118,13 +119,17 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     throw publicFailure("AI_INVALID_OPERATION");
   }
   const retryKey = typeof options.retryKey === "string" ? `${options.retryKey}${day ? `:${day}` : ""}` : `legacy:${fingerprint}`;
-  const claim = await rpc(client, "ai_claim_image_operation", {
+  const claim = await rpc(client, options.promptEvaluation ? "ai_claim_prompt_operation" : "ai_claim_image_operation", {
     actor: options.actorId, household: options.householdId || null, plant: options.plantId || null, kind: options.kind,
     retry_key: retryKey, request_fingerprint: fingerprint, image_sha256: hash,
     model_name: model, prompt_schema_version: options.promptVersion, output_limit: payload.max_output_tokens,
     image_width: options.image.width, image_height: options.image.height,
     image_detail: detail, preprocessing_profile: options.preprocessingProfile ?? "normalized-jpeg-v1",
-    encoded_image_bytes: options.image.bytes.byteLength, evaluation_input_key: options.evaluationInputKey ?? null,
+    encoded_image_bytes: options.image.bytes.byteLength,
+    ...(options.promptEvaluation ? {
+      evaluation_run: options.promptEvaluation.runId, evaluation_input_key: options.promptEvaluation.inputKey,
+      definition_hash: options.promptEvaluation.definitionHash, context_hash: options.promptEvaluation.contextHash,
+    } : { evaluation_input_key: options.evaluationInputKey ?? null }),
   }) as { decision?: string; operationId?: string; leaseId?: string; result?: T; warning?: boolean; state?: string } | null;
   if (claim?.decision === "REPLAY" && claim.result) return claim.result;
   if (claim?.decision === "WAIT") throw new AiOperationError(409, "AI_IN_PROGRESS", "This AI request is still processing. Retry shortly to retrieve its result.");
@@ -161,12 +166,20 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     };
     outcome = "FAILED";
     if (!response.ok) throw await imageProviderFailure(Response.json(body, { status: response.status }));
-    if (body.status === "incomplete" || body.status === "failed" || body.status === "cancelled") throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+    if (body.status === "incomplete" || body.status === "failed" || body.status === "cancelled") {
+      facts.failureCategory = body.status === "incomplete" ? "PROVIDER_INCOMPLETE" : body.status === "cancelled" ? "PROVIDER_CANCELLED" : "PROVIDER_FAILED";
+      throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+    }
+    if (Array.isArray(body.output) && body.output.some(item => item && typeof item === "object" && Array.isArray(item.content)
+      && item.content.some((part: Record<string, unknown> | null) => part?.type === "refusal"))) {
+      facts.failureCategory = "PROVIDER_REFUSED";
+      throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+    }
     result = options.parse(body);
     outcome = "COMPLETED";
   } catch (error) {
     failure = error instanceof ImageUploadError || error instanceof AiOperationError ? error : imageNetworkError(error);
-    facts.failureCategory = controller.signal.aborted || error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
+    facts.failureCategory ??= controller.signal.aborted || error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
       ? "PROVIDER_TIMEOUT" : outcome === "UNKNOWN" ? "PROVIDER_TRANSPORT" : "PROVIDER_RESULT_INVALID";
   } finally { clearTimeout(timer); }
   facts.latencyMs = Math.max(0, Date.now() - started);

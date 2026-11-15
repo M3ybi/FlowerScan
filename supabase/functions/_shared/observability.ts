@@ -1,6 +1,6 @@
 import { corsHeaders } from "./cors.ts";
 
-type Operation = "auth_email" | "image_validation" | "image_upload" | "plant_care" | "plant_diagnosis" | "vision_token_benchmark" | "invitation_email" | "operator_email" | "deletion_review" | "subscription_webhook";
+type Operation = "auth_email" | "image_validation" | "image_upload" | "plant_care" | "plant_diagnosis" | "vision_token_benchmark" | "prompt_evaluation" | "invitation_email" | "operator_email" | "deletion_review" | "subscription_webhook";
 type Event = { event: "plantie.operation"; operation: Operation; requestId: string; status: number; durationMs: number; outcome: "success" | "denied" | "throttled" | "failed" };
 
 // Correlation is per invocation. URLs, headers, accounts, bodies and exception

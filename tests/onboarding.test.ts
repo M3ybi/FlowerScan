@@ -145,8 +145,7 @@ test("each AI request instruction prioritizes the current language over input an
 
 test("all AI provider endpoints use the shared selected-language instruction", () => {
   const endpoints = [
-    "supabase/functions/plant-care-ai/index.ts",
-    "supabase/functions/plant-diagnosis-ai/index.ts",
+    "supabase/functions/_shared/productionBotanicalPrompts.ts",
     "supabase/functions/_shared/plantImageValidation.ts",
   ];
 
@@ -156,8 +155,10 @@ test("all AI provider endpoints use the shared selected-language instruction", (
 
   const careEndpoint = readSource("supabase/functions/plant-care-ai/index.ts");
   const diagnosisEndpoint = readSource("supabase/functions/plant-diagnosis-ai/index.ts");
-  assert.match(careEndpoint, /label: \{ type: "string" \}/);
-  assert.match(diagnosisEndpoint, /confidence_label: \{ enum: \["low", "medium", "high"\]/);
+  assert.match(careEndpoint, /buildProductionCarePayload\(plantName, imageDataUrl, body\.language\)/);
+  assert.match(diagnosisEndpoint, /buildProductionDiagnosisPayload\(plantName, imageDataUrl, body\.language,/);
+  assert.match(readSource("supabase/functions/_shared/plantCareContract.ts"), /label: \{ type: "string" \}/);
+  assert.match(readSource("supabase/functions/_shared/plantDiagnosisContract.ts"), /confidence_label: \{ enum: \["low", "medium", "high"\]/);
   assert.match(readSource("src/utils/customFlower.ts"), /language: options\.language/);
   assert.match(readSource("src/utils/diagnostics.ts"), /body: \{ householdId, imageDataUrl, language,/);
   assert.match(readSource("src/utils/imageUploadValidation.ts"), /body: \{ imageDataUrl, language \}/);
