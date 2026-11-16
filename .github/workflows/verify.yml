@@ -65,6 +65,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Immutable historical accounting/evaluator adapter fixtures.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
