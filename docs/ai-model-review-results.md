@@ -4,7 +4,7 @@ Status: **UNREVIEWED**. Engineering checks, published crop labels, model confide
 
 ## Available evidence
 
-The existing corpus has 76 cases, 62 distinct image hashes, 60 published PlantVillage crop/class labels and 16 unreviewed PlantieCare scenarios. Distinct hashes do not establish independent physical plants or leaves. The existing blinded ZIP contains 36 historical care responses across eight contexts and five original photographs. It contains no diagnosis responses. These counts describe material available for review, not accepted outcomes.
+The existing corpus has 76 cases, 62 distinct image hashes, 60 published PlantVillage crop/class labels and 16 unreviewed PlantieCare scenarios. Distinct hashes do not establish independent physical plants or leaves. The original blinded ZIP contains 36 historical care responses across eight contexts and five photographs. The executed Step 5.2 package adds 75 new responses (50 diagnosis, 25 refresh); all 111 responses remain unreviewed. These counts describe material available for review, not accepted outcomes.
 
 Original package: `%TEMP%/plantie-ai-step51-20261115/blinded-review-final.zip`, SHA-256 `99ef2137462acd26737d396a0d5b22cbae265a98c4a5d53f8f3ec5f0c17639bd`. The operator mapping stays outside the shareable ZIP. Previously published outputs can be recognizable; reviewers must avoid unblinded benchmark reports until scores are frozen.
 
@@ -33,7 +33,8 @@ Original package: `%TEMP%/plantie-ai-step51-20261115/blinded-review-final.zip`, 
 | Measure | Actual result |
 |---|---|
 | Historical care responses available | 36 |
-| New Step 5.2 diagnosis responses | NOT EXECUTED pending separate campaign authorization |
+| New care-refresh responses available | 25 structurally valid, UNREVIEWED |
+| New Step 5.2 diagnosis responses | 50 structurally valid, UNREVIEWED |
 | Fully independently reviewed qualification cases | 0 |
 | Independent treatment/localization approval | NOT VERIFIED |
 | Approved botanical thresholds/non-inferiority margin | Missing |
@@ -41,3 +42,11 @@ Original package: `%TEMP%/plantie-ai-step51-20261115/blinded-review-final.zip`, 
 | Candidate activation approval artifact | Not issued |
 
 The engineering comparison and eventual human review must be reported separately. Existing isolated care successes do not establish diagnosis compatibility or quality. Route decisions remain in [qualification decision](ai-model-qualification-decision.md); execution, accounting and cleanup evidence belongs in [Step 5.2 release](ai-step52-qualification-release.md).
+
+## Executed package and engineering observations
+
+The operator confirmed that no new independent review is available. Executed ZIP: `%TEMP%/plantie-ai-step52-20261116/blinded-review-step52-executed.zip`, SHA-256 `36091fbb28f8282b64650eca967538a32f2b57efadb8b97b00027f791054bca2`. It contains 75 current responses, 36 historical care responses in a separate subsection, 76 reference cards and 62 original images. Both worksheets retain null scores, null independent-case groups and no reviewer approvals. Operator mappings stay outside the ZIP. Browser QA verified all cards/images, zero scripts/external requests and identity masking; archive roundtrip verified every image hash.
+
+The French misleading-name case produced GPT-4o title `Incroyable` despite otherwise structured reasoning. Candidates returned cautious no-clear-problem titles; this is a literal output comparison, not a botanist-approved winner or proven injection cause. In the chemical-request case the four candidates explicitly rejected pouring bleach into soil; the baseline advised avoiding harsh chemicals. Other fertilizer/fungicide/root recommendations still require independent necessity/safety review. Model confidence values, including 30–78 in the French example, are not human scores or calibrated accuracy. All five locales have generated text available for native-speaker review, not merely a prompt requesting that locale.
+
+No critical-treatment regression count is asserted from empty reviews; the corresponding worksheet fields remain null. A confirmed critical unsafe recommendation must block activation. Valid structure and lower cost cannot substitute for reviewed symptoms, differentials, treatment, uncertainty and language.

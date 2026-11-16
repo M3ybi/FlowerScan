@@ -1,10 +1,66 @@
 # Step 5 model benchmark
 
-## Step 5.2 preparation — 2026-11-16
+## Step 5.2 executed comparison — 2026-11-16
 
-The [Step 5.2 release record](ai-step52-qualification-release.md) prepares a fresh, separately authorized maximum-100-attempt/$4/60-minute campaign. The exact primary matrix has 50 diagnosis generations, 25 care-refresh generations and at most 15 safety calls; optional ordinary GPT-4o journeys share the same cap. All image/context/configuration/provider-payload bindings were checked against current production source/rates. Terra is sequential. The historical runs remain closed and their measurements below are unchanged.
+The operator explicitly authorized one fresh maximum-100-attempt/$4/60-minute campaign against proposal SHA-256 `6111c943d8a827c46bb7e7ecad204d7b505f3e3cc8bfed92f5b05c6c632fe146`. Execution used `67704a904414311ff098a79d1e8c6748d5881d84`, with all three required CI verification jobs passed before paid work. Both old campaigns remained closed; no reset, continuation, smaller reservation or customer-model activation occurred.
 
-New paid authorization is pending: **no Step 5.2 diagnosis or care response has executed**. Current global headroom makes a single $2.643 Terra diagnosis reservation financially admissible at readback, without reducing reservations; admission must be checked again before spend. No new token, latency, failure or quality values are fabricated. Complete comparison and cost per acceptable diagnosis remain blocked. The expanded [human-review material](ai-model-review-results.md) contains original reference images and unscored historical care responses, not approved diagnosis results.
+**Completed: 50/50 diagnosis and 25/25 care-refresh generations; all 15 five-configuration pairs passed the existing structured/business contract.** The campaign made **93 actual provider attempts**, measured **$0.262243150000**, retained **$0 new unknown/$0 pending exposure**, then closed and removed only registered fixtures. This includes 15 real GPT-4o safety attempts costing $0.049775000000 and three additional ordinary GPT-4o generations in full save/refresh journeys. Two primary safety checks reused authorization, and both completed-result replays added zero attempts.
+
+This is a technical comparison, not independent botanical approval. Ten diagnosis contexts use five distinct image hashes; note/locale variants and repeated photos are not independent cases. All requested locales (en/sk/de/fr/es) were exercised. No prompt, image resolution/detail, schema, output cap, cache lifetime or service tier changed. Every pair retained exact registered image/context/configuration and reconstructed provider-payload hashes. Returned IDs were `gpt-4o-2024-08-06`, `gpt-6-luna` and `gpt-6.1-terra`, all default tier. Requested/returned none/low effort was recorded for candidates; GPT-4o effort was unreported/null. Input counts below are provider totals, not separately measured image tokens.
+
+| Route / configuration | N / valid | Input | Cached | Write30 / write12 | Output / reasoning / total | Measured USD | USD / structurally valid | Provider p50 / p95 ms | Caller p50 / p95 ms |
+|---|---|---:|---:|---|---|---:|---:|---|---|
+| diagnosis / gpt-4o / legacy | 10 / 10 | 11429 | 0 | 0 / 0 | 1924 / 0 / 13353 | 0.047812500000 | 0.004781250 | 2364 / 3817 | 2803 / 4354 |
+| diagnosis / gpt-6-luna / none | 10 / 10 | 20637 | 0 | 19320 / 0 | 2434 / 0 / 23071 | 0.003763700000 | 0.000376370 | 3276 / 6015 | 3658 / 6782 |
+| diagnosis / gpt-6-luna / low | 10 / 10 | 20637 | 0 | 19320 / 0 | 3555 / 796 / 24192 | 0.004324200000 | 0.000432420 | 4203 / 7683 | 4417 / 8064 |
+| diagnosis / gpt-6.1-terra / none | 10 / 10 | 20637 | 0 | 19320 / 0 | 2167 / 0 / 22804 | 0.036302000000 | 0.003630200 | 4465 / 7202 | 4747 / 7737 |
+| diagnosis / gpt-6.1-terra / low | 10 / 10 | 20637 | 0 | 19320 / 0 | 2168 / 80 / 22805 | 0.036307000000 | 0.003630700 | 4107 / 5909 | 4493 / 6364 |
+| care_refresh / gpt-4o / legacy | 5 / 5 | 5124 | 0 | 0 / 0 | 1492 / 0 / 6616 | 0.027730000000 | 0.005546000 | 3339 / 5201 | 4312 / 5613 |
+| care_refresh / gpt-6-luna / none | 5 / 5 | 6692 | 0 | 5177 / 0 | 2080 / 0 / 8772 | 0.001838625000 | 0.000367725 | 4655 / 8620 | 5362 / 8954 |
+| care_refresh / gpt-6-luna / low | 5 / 5 | 6692 | 0 | 5177 / 0 | 3043 / 610 / 9735 | 0.002320125000 | 0.000464025 | 7110 / 7816 | 7421 / 8203 |
+| care_refresh / gpt-6.1-terra / none | 5 / 5 | 6692 | 0 | 5177 / 0 | 2005 / 0 / 8697 | 0.018011250000 | 0.003602250 | 7190 / 9946 | 7544 / 10326 |
+| care_refresh / gpt-6.1-terra / low | 5 / 5 | 6692 | 0 | 5177 / 0 | 2017 / 128 / 8709 | 0.018071250000 | 0.003614250 | 7374 / 9541 | 7700 / 9898 |
+
+These rows cover **new primary generation attempts only**, including any failures in that scope (observed 0/75). Safety and optional ordinary journeys are accounted separately, not silently omitted from the whole campaign. Cached reads and 12h writes were zero in these primary measurements. 30m writes replace ordinary-input billing and were counted once; reasoning is already part of output. Percentiles use nearest rank on only ten diagnosis/five refresh requests per profile, not production population percentiles. Raw model-specific token/usage/price facts and per-input PASS matrix remain in the private report and analysis.
+
+The newly authorized German Luna-none refresh succeeded with measured usage and cost $0.000252300000. Its reconstructed JSON SHA-256 `eb7d23c3af14c1522de0c3da7e1c73a05e677351840ac929dbe391a2c4f4d2e8` matches the prior success/failure reconstruction. This verifies current invocation compatibility for that request; the historical HTTP 400 root cause and bill remain UNKNOWN, cost null/exposure $0.26355. It was not retried as the old operation or financially overwritten. New-campaign structural costs do not turn the cumulative historical Luna-none cost into a known total.
+
+| Actual ordinary GPT-4o journey | Paid attempts | Exact USD | Operator end-to-end ms |
+|---|---:|---:|---:|
+| GPT-4o cold safety plus initial care and plant save | 2 | 0.010607500000 | 12008 |
+| Completed initial-care result replay | 0 | 0.000000000000 | 593 |
+| GPT-4o cold safety plus diagnosis and save with safety reuse | 2 | 0.005740000000 | 7817 |
+| GPT-4o manual care refresh | 1 | 0.006390000000 | 5700 |
+
+Cold journeys waited for previous validation authorization to expire naturally, then incurred one fresh safety attempt each. Both saves reused that fresh authorization; signed private-image readback matched original JPEG hashes. Manual refresh incurred one generation. Journey timing includes operator/ledger/Storage/RPC work, not native camera/UI timing. No candidate complete Add/save journey was executed; candidate generation means must not be presented as measured full-customer journeys.
+
+### Step 5.2 monthly scenarios
+
+These are **composed estimates**, not subscriber observations or independently acceptable-result costs. Per 100 actions: 20 cold adds, 50 cold diagnoses, 15 authorized refreshes, 10 completed replays, 4 expired-safety actions, 1 unknown-cost stress case. Known components cover 99% of actions: historical paired initial-care generation means, new per-model diagnosis/refresh means, and mean actual fresh GPT-4o safety cost. Generation means retain observed caching; do not assume equal model token/image/reasoning counts or future cache hits. Conversion assumption is **1 USD = EUR0.90**, not a current FX quote. Existing illustrative fee/tax/backend assumptions in the historical scenarios below remain unverified.
+
+| Journeys/month | GPT-4o EUR | Luna none EUR | Luna low EUR | Terra none EUR | Terra low EUR |
+|---|---:|---:|---:|---:|---:|
+| 10 | 0.0602 | 0.0249 | 0.0255 | 0.0483 | 0.0488 |
+| 30 | 0.1806 | 0.0746 | 0.0764 | 0.1449 | 0.1465 |
+| 100 | 0.6018 | 0.2486 | 0.2546 | 0.4829 | 0.4884 |
+| 300 | 1.8055 | 0.7457 | 0.7638 | 1.4488 | 1.4653 |
+| 1000 | 6.0185 | 2.4857 | 2.5460 | 4.8293 | 4.8844 |
+| 3000 | 18.0554 | 7.4570 | 7.6381 | 14.4879 | 14.6532 |
+
+The remaining 1% is a separate held-exposure sensitivity, using the unchanged full diagnosis reservation plus $0.327 safety per affected action. It is not an expected charge and is not combined with the actual historical $0.26355 record:
+
+| Journeys/month | GPT-4o held USD | Luna either effort held USD | Terra either effort held USD |
+|---|---:|---:|---:|
+| 10 | 0.0671 | 0.0591 | 0.2970 |
+| 30 | 0.2013 | 0.1774 | 0.8910 |
+| 100 | 0.6710 | 0.5913 | 2.9700 |
+| 300 | 2.0130 | 1.7739 | 8.9100 |
+| 1000 | 6.7100 | 5.9130 | 29.7000 |
+| 3000 | 20.1300 | 17.7390 | 89.1000 |
+
+The EUR0.20 average and EUR0.50 heavy-user targets are not verified for accepted customer outcomes. Under this specific mix, high-volume scenarios exceed the heavy-user target even before unresolved-cost stress. No guaranteed profitability, subscriber quota change, or production saving is claimed. Cost per independently acceptable result remains NOT VERIFIED for all five profiles; no accepted-result denominator exists.
+
+Exact source report SHA-256: `09426c8cb3e5331c995ddc01a49db8bb389bd4e9480e7310fc0e532d3bbba19a`. Private evidence: `%TEMP%/plantie-ai-step52-20261116/production-campaign.json`, `campaign-analysis.json`, `campaign-ledger-readback.json` and `campaign-cleanup-verification.json`. Credentials, actor/request identifiers, raw photos, signed URLs and unblinded mappings are not committed. See [release](ai-step52-qualification-release.md), [review results](ai-model-review-results.md) and [qualification decision](ai-model-qualification-decision.md).
 
 Step5.1 recovery: [root-cause evidence,paid-campaign preflight and release](ai-step5-recovery-release.md). No new inference is authorized by that preflight;historical measurements below remain unchanged.
 

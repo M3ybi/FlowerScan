@@ -2,16 +2,18 @@
 
 ## Step 5.2 decision — 2026-11-16
 
-**NO-GO remains in force.** The $4 sequential diagnosis-first proposal is financially feasible at initial readback but has no new operator spend approval. Both old campaigns stay closed. Ordinary GPT-4o and all four disabled candidate flags are unchanged; no route-activation artifact is issued.
+**NO-GO for ordinary candidate traffic.** The new campaign was explicitly authorized and completed: 50 diagnosis plus 25 refresh generations, 93 total provider attempts/$0.262243150000, all new usage measured. It is closed with an empty actor allowlist and registrations. Both old campaigns and their historical facts remain unchanged. GPT-4o stays active; candidate flags remain disabled at 0%.
 
-| Route | Technical compatibility evidence | Botanical / safety / language / acceptable cost | Decision |
+| Route | Technical evidence | Quality / acceptable cost | Decision |
 |---|---|---|---|
-| Image safety | Existing guarded GPT-4o path retained | Replacement qualification not attempted | Retain GPT-4o |
-| Initial identification/care | Historical v1 paired care successes; no new Step 5.2 paid response | NOT VERIFIED; supplied names cue identity and no independent approved review | NOT QUALIFIED |
-| Manual refresh | Historical partial matrix and unresolved Luna HTTP 400; new German/Spanish/mixed-input plan unexecuted | NOT VERIFIED; full compatibility, failure/cost and independent review incomplete | NOT QUALIFIED |
-| Diagnosis | No new five-configuration diagnosis comparison executed | NOT VERIFIED for every candidate; no measured diagnosis latency or acceptable-result denominator | NOT QUALIFIED |
+| Image safety | Existing GPT-4o path retained; fresh/reused validation and save replay verified | Replacement not evaluated | Retain GPT-4o |
+| Initial identification/care | Historical five-language v1 payload successes; new matching care contracts; candidate Add/save journey not executed | Identity names can cue answers; no independent qualification or acceptable-result cost | NOT QUALIFIED |
+| Manual refresh | All five configurations passed five locales, including separately authorized German Luna none/low | Historical Luna400 still unresolved; botanical/treatment/language review absent | NOT QUALIFIED |
+| Diagnosis | All five configurations passed ten paired contexts/all five locales, exact model/tier/usage/pricing and schema | Ten contexts/five images are not 60 independent reviewed cases; safety and acceptable-result cost NOT VERIFIED | NOT QUALIFIED |
 
-Deterministic provider faults, real PostgreSQL accounting/concurrency, source/JWT readback and unpaid production authorization smoke pass as documented in [the Step 5.2 release](ai-step52-qualification-release.md). They do not prove actual candidate Responses compatibility or botanical quality. Historical care failure rates, latency and exact measured costs stay scoped to the old [benchmark](ai-model-benchmark.md); none are transferred to diagnosis. The [expanded human-review workflow](ai-model-review-results.md) preserves source/rights information and empty score fields. All candidate route qualifications remain blocked until actual authorized engineering evidence and independent approved quality evidence exist.
+Luna/Terra Responses compatibility is **VERIFIED for the tested immutable v1 none/low care/diagnosis configurations**, high-detail images, original ceilings, default tier and store:false. This is not a guarantee for all possible inputs or future provider behavior. Current observed primary failure rate is 0/75; historical failures are retained. Actual per-route latency/cost/usage and complete accounting are in [the benchmark](ai-model-benchmark.md).
+
+Botanical review is UNREVIEWED; treatment safety, multilingual quality and cost per independently acceptable result remain NOT VERIFIED. A valid JSON response, model confidence, lower generation cost or unsigned hash cannot approve quality. The [blocked decision artifact](ai-step52-qualification-release.md) binds report, registry, unapproved policy and blinded-material hashes, has no reviewer approvals and an initial cohort of 0%. No positive route-activation approval artifact is issued. An eventual approved artifact must identify the exact immutable configuration, independently approved evidence/thresholds, approver, at-most-5% initial cohort and numerical rollback criteria. Existing circuit breakers and guarded rollback remain intact.
 
 ## Retained Step 5.1 decision
 

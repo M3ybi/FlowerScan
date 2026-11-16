@@ -1,116 +1,115 @@
-# Step 5.2 qualification preparation and verification
+# Step 5.2 qualification engineering release
 
-Starting local and remote main: `825a3a15497b02cc58a52d17d99ca127867f5128`, clean before work. Production readback on 2026-11-16 found the expected 39 migrations and unchanged guarded AI bundles. No runtime defect requiring a model, prompt, schema, reservation, entitlement or routing change was established. This release changes documentation and prepares restricted local evaluation/reviewer artifacts; no database migration or Edge deployment is required.
+The missing technical comparison is complete: **50/50 diagnosis and 25/25 care-refresh generations passed**, covering GPT-4o, Luna none/low and Terra none/low, all five locales, v1 strict contracts, 1600px/high, original caps, store:false and the existing default service tier. **No candidate is qualified for ordinary traffic:** independent botanical/treatment/language review and approved thresholds remain absent. Ordinary GPT-4o routing stays active; candidate rollout remains disabled.
 
-**PAID BENCHMARK BLOCKED pending separate operator authorization.** Section 5 of the Step 5.2 request explicitly states that the proposed $4 limit is not permission to spend. A concrete authorization question has been submitted; no approval is inferred from elapsed time or the earlier closed campaign's unused capacity. No new model campaign or paid attempt has been created.
+Starting clean local/remote main: `825a3a15497b02cc58a52d17d99ca127867f5128`. Preparation/execution revision: `67704a904414311ff098a79d1e8c6748d5881d84`. [Its required CI](https://github.com/M3ybi/FlowerScan/actions/runs/43820173488) passed application, PostgreSQL and full disposable Supabase verification before paid work. The final evidence revision containing this document changes only the six requested documentation files. No application/Edge/schema/pricing/prompt/image/entitlement change or runtime redeployment was required. Final-head CI/Netlify results are bound to the exact final revision in the private final verification receipt after this evidence commit.
 
-## Production baseline and historical uncertainty
+## Authorization, actual execution and accounting
 
-| Function | Current version | JWT/source verification |
+The operator explicitly authorized **one fresh 100-attempt/$4/60-minute maximum** and confirmed no new independent review is available. Approval binds proposal SHA-256 `6111c943d8a827c46bb7e7ecad204d7b505f3e3cc8bfed92f5b05c6c632fe146`; a separate authorization record retains the reply. It did not reopen either old run, authorize a continuation or approve model activation. All 75 primary inputs and optional ordinary journey contexts were registered/hash-bound before execution. Database limits, original reservations and global controls remained unchanged; every provider-capable request ran sequentially.
+
+Execution: 2026-11-16T07:10:25.466Z–2026-11-16T07:28:02.197Z. Actual run expiry was 2026-11-16T08:10:27.000Z; it closed early after completing the approved work. Total: **93 attempts/$0.262243150000 measured, $0 new unknown/$0 pending exposure**. All 93 measured charges matched independent integer/rational token-rate arithmetic and final authoritative readback. Input/cache-read/cache-write/output/reasoning/total counts were captured per model. Reasoning was not added again to output; writes were billed once. Provider/caller timings, actual returned model/tier, prompt/configuration version and output validity are retained. No paid provider fault, inference retry, budget reset, extra run or cohort activation occurred.
+
+The primary matrix has 15 complete five-profile pairs: ten diagnosis contexts and five care-refresh locale contexts. Ten diagnosis contexts reuse five original images; context/locale variants are not independent botanical cases. The German Luna-none care request succeeded with measured usage using reconstructed provider JSON `eb7d23c3af14c1522de0c3da7e1c73a05e677351840ac929dbe391a2c4f4d2e8`, matching the old success/failure reconstruction. That new explicitly admitted request does not reveal the old HTTP400 cause or bill. The historical record still has null cost, UNKNOWN_USAGE and **$0.26355 held exposure**, with diagnostics null and no backfill/correction.
+
+Initial application headroom was $4.73645 in flight, $24.73645 daily and $99.34273191 monthly after historical uncertainty. The unchanged $2.643 Terra diagnosis reservation was admitted sequentially. At 2026-11-16T07:32:09.266Z, the full ledger contained 217 attempts/216 measured, $0.655961240000 measured, $0.263550000000 held unknown and zero pending reservations. Global figures include earlier steps; the new campaign total is the separate $0.262243150000. These are usage/registered-price accounting facts, not provider-invoice reconciliation.
+
+| Actual ordinary GPT-4o journey | Paid attempts | Exact USD | Operator end-to-end ms |
+|---|---:|---:|---:|
+| GPT-4o cold safety plus initial care and plant save | 2 | 0.010607500000 | 12008 |
+| Completed initial-care result replay | 0 | 0.000000000000 | 593 |
+| GPT-4o cold safety plus diagnosis and save with safety reuse | 2 | 0.005740000000 | 7817 |
+| GPT-4o manual care refresh | 1 | 0.006390000000 | 5700 |
+
+Both save paths reused fresh safety authorization and downloaded private images matched their exact original JPEG hashes. The protected model-evaluation replay also returned the same result with zero new attempts. No candidate full Add/save flow was claimed from isolated generation probes. Complete token/cost/latency tables and all six monthly scenarios are in [the benchmark](ai-model-benchmark.md). Monthly costs are composed estimates with explicit workload/cache/safety/failure/FX assumptions. EUR0.20/EUR0.50 targets and acceptable-result profitability remain NOT VERIFIED.
+
+## Actual production verification and cleanup
+
+| Function | Unchanged version | JWT/source parity |
 |---|---:|---|
-| plant-care-ai | 22 | PASS |
 | plant-diagnosis-ai | 24 | PASS |
+| plant-care-ai | 22 | PASS |
 | validate-plant-image | 16 | PASS |
 | upload-validated-image | 18 | PASS |
 | vision-token-benchmark | 3 | PASS |
 | prompt-evaluation | 3 | PASS |
 | model-evaluation | 2 | PASS |
 
-Current bundle hashes for all seven match their complete previously downloaded source, and every normalized source file matches the workspace. The model evaluator was downloaded again and matched the current bundle hash. The bundles contain the Step 5.1 allowlisted diagnostics module. All 16 model configuration identities, model/billing/server-secret fingerprints, non-AI function definitions and Storage configuration remain unchanged. GPT-4o remains active for ordinary requests; all four candidate flags remain disabled at 0%. v1 prompts, 1600px/high and the existing output ceilings are preserved.
+Current seven bundle hashes matched complete downloaded source and every normalized workspace module; the model evaluator was fetched again. All 16 configuration hashes, model/billing/server-secret fingerprints, public non-AI function definitions, private financial implementations, five price rows/two price rules, Storage configuration and global controls remained unchanged. No migration was applied; migration count remains39. RevenueCat and all pre-existing entitlements are preserved. One temporary Premium grant applied only to the new synthetic household and was removed with that household.
 
-The historical Luna HTTP 400 remains UNKNOWN_USAGE: cost null, exposure **$0.263550000000**, diagnostics null. No request-level billing/support evidence has been supplied since the prior organization-usage lookup returned 403. Root cause remains UNKNOWN. No financial correction, invented usage, diagnostic backfill or retry was performed. Both old campaigns remain disabled with empty actor allowlists and their immutable original limits.
+The earlier unpaid protection smoke passed 13 endpoint checks plus client settlement denial, zero attempts and scoped Free fixture cleanup. The paid run used exactly two new synthetic actors, one owned household, two private Storage objects and 75 exact registrations. Final readback found **0 Auth users, 0 households, 0 registrations, 0 Storage objects and 0 active/private result caches** for that scope. Sessions were signed out globally before Auth deletion. The run remains disabled/stopped with an empty actor array and immutable 100/$4/3600-second limits. Ledger records remain. Both old runs remain closed, with unchanged limits and history.
 
-The ledger still contains 124 historical attempts, 123 measured, with $0.393718090000 measured across all prior steps and $0.263550000000 unresolved exposure. There are no pending reservations at initial readback. Step 5 alone retains its separate 65-attempt/$0.172613090 measurement; these scopes must not be conflated. A fresh full-column checksum protects all 124 old attempts. Original-row hashes cover 16 customer/Auth/Storage tables, allowing unrelated additions while detecting changed/deleted checkpointed rows.
+All 124 original attempt rows matched a full-column checksum. Original-row preservation passed across16 customer/Auth/Storage tables; changed/deleted checkpointed facts would fail the check. Original Auth identity checks exclude volatile last-sign-in/updated timestamps, and unrelated additions are allowed. The historical unknown attempt remains exactly unchanged. Private RLS, service-only public AI RPCs, fixed search paths and private-helper denial for anon/authenticated/service_role passed.
 
-## Reviewable new campaign
+Aggregate logs for 2026-11-16T07:10:00Z–07:28:30Z recorded **99 expected HTTP200 requests** at the verified deployed versions (76 evaluator including replay; three care including replay; one diagnosis; two uploads;17 validation calls including reuse). Runtime aggregates had99 info logs,21 boots and19 shutdowns, with no error-level events or5xx. No raw message, prompt, header, address, token or customer payload was selected.
 
-Local artifact: `%TEMP%/plantie-ai-step52-20261116/campaign-proposal/campaign-plan.json`. Canonical proposal manifest SHA-256: `6111c943d8a827c46bb7e7ecad204d7b505f3e3cc8bfed92f5b05c6c632fe146`. This is an authorization/preflight artifact, not an enabled database run or route-activation approval.
+## Review evidence and qualification
 
-| Setting | Proposed value |
+The executed blinded ZIP contains111 unreviewed outputs (75 new plus36 historical care),76 reference cards/62 original images, original provenance/rights and empty current/historical worksheets. SHA-256: `36091fbb28f8282b64650eca967538a32f2b57efadb8b97b00027f791054bca2`. Browser/visual/archive QA passed, all images loaded, scripts/external requests were zero and operator maps were excluded. Original preparation/historical packages remain intact. See [review workflow/results](ai-model-review-results.md).
+
+Engineering inspection records actual content differences, including GPT-4o French title `Incroyable` and explicit candidate bleach warnings in the chemical-request case. These are not independent botanical judgments, calibrated confidence or native-language approval. No numeric review score, critical-treatment pass, independent case grouping or non-inferiority margin was invented. All candidate qualifications remain blocked despite technically valid, cheaper outputs.
+
+The negative qualification artifact binds these exact files by SHA-256:
+
+| Evidence | SHA-256 |
 |---|---|
-| Whole-run maximum provider attempts | 100 |
-| Whole-run measured + reserved + unknown exposure | $4.00 |
-| Maximum expiry | 60 minutes from creation |
-| Concurrent provider requests | One, including sequential Terra requests |
-| Priority A | 10 diagnosis contexts × 5 configurations = 50 generations |
-| Priority B | Five care-refresh locale contexts × 5 configurations = 25 generations |
-| Primary safety allowance | At most 15 GPT-4o safety attempts |
-| Optional cold journeys | At most 10 additional attempts, after primary pairs, within the same cap |
-| Identity scope | Two newly created synthetic actors; temporary Premium owner and active viewer in one owned household |
-| Retry/reset/continuation | Prohibited |
-| Customer candidate activation | Prohibited |
+| Actual campaign report | 09426c8cb3e5331c995ddc01a49db8bb389bd4e9480e7310fc0e532d3bbba19a |
+| Immutable configuration manifest | 3bb2152ac5c3fdc61220fb9670adfe21876de675aa1c997b5055901748b68c6d |
+| Unapproved acceptance policy | 620d2c550264314183ab8d8f4ea29965018012fe98634c87d124d30096cc8150 |
+| Current blinded review manifest | a10f4322ab41629e20c8d278c41f7a13ec2d8ddcb26a2a29ce8fae7c5e2e521b |
+| Executed shareable ZIP | 36091fbb28f8282b64650eca967538a32f2b57efadb8b97b00027f791054bca2 |
+| Explicit budget authorization record | e5b085f226f26e9cba10924fe1b3e7abd60b3f0ed0a94806e398fdf70719d45f |
 
-The 75 inputs bind original image SHA-256/dimensions/bytes, exact normalized notes/name/language and context hash, immutable model configuration/hash and reconstructed provider JSON hash. All were checked against current source and a fresh production reservation oracle. Within each context, all five configurations use identical input. Five-model groups alternate the two actors; diagnosis counts are 25 per actor, preserving the existing 30/hour account ceiling. Group spacing is at least 120 seconds per actor and a group must finish within its four-minute safety authorization allowance. No rate or reasonable-use limit is raised.
+Hashes prove artifact identity, not reviewer approval. The blocked artifact has no reviewer approvals and a0% cohort. No positive route-activation approval is issued. Source/model/cost integrity cannot override the missing independent quality gates; [route decisions](ai-model-qualification-decision.md) remain NOT QUALIFIED.
 
-The diagnosis scenarios cover healthy appearance, yellowing, brown tips, suspected lesions, suspected pest damage, insufficient evidence, contradictory notes, misleading claims, chemical requests and ambiguous causes. Scenario names do not certify that those symptoms are visible. Care refresh includes all five languages and an explicitly separate German/Luna comparison, not a retry of the historical operation. Optional ordinary GPT-4o journey contexts/images are also hash-bound; they cover add/save, diagnosis/save with safety reuse, manual refresh and completed replay. Any actual safety calls share the run budget. Optional work is skipped if the primary comparison, time or financial gates prevent it.
+## Test evidence and limitations
 
-At readback, application in-flight headroom was **$4.736450000000**, daily headroom **$24.736450000000**, and monthly headroom **$99.342731910000**, after including the historical unknown exposure and applicable measured spending. Terra's unchanged $2.643 diagnosis reservation fits a fresh $4 run when sequentially admitted. A fully exposed new run plus the historical unknown would hold $4.26355 against the unchanged $5 in-flight control. These are readback calculations, not guaranteed future admission or provider credit balances. Authoritative SQL rechecks control, campaign and current global headroom on every claim/start. No reservation is reduced, and measured spend can exhaust Terra admission before the nominal $4 ceiling.
-
-Stop on unknown required usage/pricing, a financial/authorization denial, an unpriced returned model/tier, an unexplained provider-parameter incompatibility, an accounting invariant failure, serious production error, circuit breaker or attempt/time/exposure limit. Do not retry, reset, continue through another run, or reopen an old run. Cleanup is restricted to registered synthetic identities/household/photos/registrations/results, with global sign-out before Auth deletion. Keep all ledger records and uncertain exposure.
-
-## Botanical and financial evidence boundary
-
-The expanded offline reviewer package reuses the original 36 blinded care responses and adds all 76 reference cards/62 original images, with provenance, rights information, explicit unknowns and an eight-step human workflow. No model identity mapping is included. Browser QA verified all images, 36 response cards, 76 reference cards, zero scripts/external requests and empty score fields. Visual inspection confirmed readable reference cards. ZIP: `%TEMP%/plantie-ai-step52-20261116/blinded-review-step52.zip`, SHA-256 `2df466800d2c47f0166e47aad1013f6cc84cb8799eed7b453c8e66d119577602`.
-
-No independent botanical/localization review or approved non-inferiority policy has been supplied. Published crop labels remain partial reference evidence; there are zero fully independently reviewed qualification cases. Ten new diagnosis contexts would not alone meet the existing 60-independent-case policy. See [review workflow and results](ai-model-review-results.md). Neither a successful schema check nor an unsigned artifact hash authorizes activation.
-
-No new diagnosis token, price, latency, failure-rate or quality result is reported as measured. Historical per-model care measurements remain in [benchmark](ai-model-benchmark.md). Cost per structurally valid result remains unknown where an unresolved failed attempt belongs in its numerator. Cost per independently acceptable result remains NOT VERIFIED for every candidate because the accepted-result denominator is absent. The six monthly scenarios (10, 30, 100, 300, 1,000, 3,000 journeys) retain their declared care/diagnosis/replay/expired-safety/failure mix and illustrative FX/fees. Candidate diagnosis components remain NOT MEASURED. €0.20 average and €0.50 heavy-user targets remain planning targets; no profitability guarantee or identical-model token assumption is introduced.
-
-## Executed verification
-
-Local execution used the starting revision above with a documentation-only working diff. Exact command times/results and private logs are under `%TEMP%/plantie-ai-step52-20261116`. No persistent production fault or paid provider failure was deliberately induced.
-
-| Verification | Result | Evidence / limitation |
+| Verification | Result | Executed evidence |
 |---|---|---|
-| npm run check | PASS | Type checking, existing offline suites and build |
-| Edge image / accounting / prompt / vision / model units | PASS | All targeted commands executed in addition to check |
-| Provider diagnostics / blinded review / campaign tests | PASS | 14 deterministic tests; sensitive/malicious/oversized errors, missing usage, HTTP classes, timeout, malformed result and settlement failure |
-| PostgreSQL base and migration replay | PASS | 39 migrations, 11 fixtures and existing upgrade/grant checks |
-| AI / vision / prompt / model / provider PostgreSQL | PASS | 100 independent sessions each; 96/44/47/104/16 assertions |
-| Deno actual Edge graph | PASS | All 12 real entrypoints |
-| Auth signature / RevenueCat mode units | PASS | Existing deterministic Deno suites; configuration unchanged |
-| Chromium / WebKit image browser | PASS | 282 image checks each |
-| Chromium / WebKit application browser | PASS | Existing application workflow checks |
-| Client-secret / source-graph checks | PASS | Existing scanners executed |
-| Expanded offline review package | PASS | 76 reference cards, 36 blinded outputs, all original images loaded; scores unset |
-| Current production source/JWT/configuration readback | PASS | Seven matching guarded bundles; unchanged model/secret/configuration fingerprints |
-| Public AI RPC/private helper grants and private RLS | PASS | Client denials/fixed search paths and private helper denial for anon/authenticated/service_role |
-| Historical failure and original-row preservation | PASS | Full-column old attempt checksum and 16-table hashes |
-| Bounded unpaid production smoke and cleanup | PASS | 13 endpoint checks plus direct RPC denial; zero provider attempts; scoped temporary Free fixtures removed |
-| Local full Supabase stack | NOT EXECUTED | Docker CLI unavailable; full disposable Supabase is required in current-revision hosted CI |
-| New paid compatibility/diagnosis/cold journeys | NOT EXECUTED | Separate $4 authorization pending; no new run created |
-| Independent botanical/treatment/localization review | NOT EXECUTED | No completed independent worksheet or approved thresholds supplied |
+| npm run check | PASS | TypeScript, existing offline suites and build |
+| Edge images/accounting/prompts/vision/models/provider units | PASS | Targeted suites also executed;14 provider/review/campaign cases |
+| PostgreSQL base/migrations | PASS |39 migrations,11 fixtures, existing upgrades/grants/release checks |
+| AI/vision/prompt/model/provider PostgreSQL | PASS |100 independent sessions each;96/44/47/104/16 assertions |
+| Actual Deno graph/auth signature/RevenueCat mode | PASS |12 Edge entrypoints and existing deterministic Deno tests |
+| Chromium/WebKit images and application workflows | PASS |282 image checks each and application suites |
+| Client-secret/source graph | PASS |Existing scanners executed |
+| Pre-campaign current-revision CI | PASS |All three required verification jobs at `67704a904414311ff098a79d1e8c6748d5881d84`, including full disposable Supabase |
+| Actual paid paired contracts/accounting/replays | PASS |75/75 generations;93/93 measured; both replays zero additional attempts |
+| Synthetic ordinary save journeys | PASS |Exact private JPEG readback and safety reuse |
+| Source/JWT/security grants/data preservation | PASS |Seven bundles; original124 attempts/16-table checkpoint; targeted denials |
+| Blinded package browser/archive QA | PASS |111 unscored outputs,76 reference cards, image hashes, no scripts/external requests/model map |
+| Local full Supabase | NOT EXECUTED |Docker CLI unavailable; hosted full job actually passed |
+| Independent botanical/treatment/localization approval | NOT EXECUTED |Operator confirmed no new independent review; approved thresholds absent |
+| Native hardware/store purchase acceptance | NOT EXECUTED |No native/billing change; engineering API/browser evidence does not establish hardware acceptance |
 
-The first local 100-session accounting invocation failed because the local server was started with its default 100-connection capacity. It was restarted on loopback with 200 connections; the unchanged 100-session test and all remaining database suites then passed. The initial failure log/result is retained separately. No production limit, test assertion or product rule was changed.
+The first local 100-session test failed at the default100-connection server capacity. After restarting only the loopback test server with200 connections, the unchanged100-session test and remaining suites passed. Its initial failure log remains retained. No production limit or assertion changed. Earlier Chromium navigation failures remain recorded in [Step5.1](ai-step5-recovery-release.md); current preparation/execution CI passed without navigation changes, not proof that the intermittent issue is fixed. The separate Pages build again failed `RELEASE_DATABASE_CONFIGURATION_REQUIRED`, with its deployment skipped. Active Netlify manifest/assets were verified independently; do not call the whole Pages workflow green. Final evidence-head CI and active-host readback are recorded after committing these results in `%TEMP%/plantie-ai-step52-20261116/final-verification-receipt.json`.
 
-Earlier Chromium navigation failures from Step 5.1 remain recorded in [the recovery release](ai-step5-recovery-release.md). No navigation source/assertion/timeout was modified here. Any recurrence in current-revision CI must be reported and investigated separately. Final hosted CI, exact release commit and active Netlify manifest/asset readback are recorded in the local `final-verification-receipt.json` after the documentation commit; do not infer a green whole Pages workflow from green verification jobs. The prior separate Pages build failed `RELEASE_DATABASE_CONFIGURATION_REQUIRED`; Netlify is the active host.
+Existing security advisor counts remain the recorded boundary: private no-policy RLS INFO20; mutable-path WARN4; anon/authenticated SECURITY DEFINER execution WARN8/41; leaked-password protection WARN1. No clean-security claim or unrelated policy fix is made.
 
-Current security advisors retain the existing counts: private RLS/no-policy INFO 20; mutable search path WARN 4; anon/authenticated SECURITY DEFINER execution WARN 8/41; leaked-password protection WARN 1. This is an unchanged-boundary observation, not a clean-security claim. The new/private AI interfaces passed targeted denial checks; unrelated security policy was not changed.
+## Recovery and disposition
 
-## Release and rollback disposition
+Fresh pre-campaign encrypted backup: SHA-256 `f67248359964f6911443c9ae938b749f2aae83c32f948e020f6e48e01df5c25b`. Final post-cleanup backup at 2026-11-16T07:33:19.194Z: SHA-256 `734f6310d0abe6b27657b8e22e0a80042783931c0ca3c8ad708e6c92cea6b6f9`, 918941 bytes before DPAPI encryption. Restricted ACL, disk decryption, catalog and full parse passed; no restore was performed. Storage object bytes/managed platform configuration remain outside the logical archive. Existing guarded bundles and financial rollback controls remain available.
 
-The unpaid smoke executed at 2026-11-16T06:49:29.488Z–06:49:37.616Z. Seven anonymous requests returned 401; closed-run and cross-household calls returned 403; invalid inputs returned 400; direct client settlement returned 42501. The actual test actor had zero attempts. Global sign-out and owned household/Auth deletion passed. No Storage object or Premium grant was created for this smoke. Customer entitlements, RevenueCat and billing remain unchanged.
+No runtime rollback is required. Documentation can be reverted through ordinary review. On a future serious model/security/financial regression, close its evaluation and disable its candidate route while retaining all ledger facts and uncertain exposure. Never restore unmetered Netlify/pre-ledger inference, reset old campaigns or overwrite financial history.
 
-No migration, runtime redeployment, new model configuration, prompt version or route-activation artifact is required/issued. Existing guarded rollback bundles and additive ledger remain available. A future incident closes only the affected campaign and disables its candidate route; never restore unmetered Netlify/pre-ledger inference or overwrite financial history. Documentation rollback is a normal reviewed revert on main.
-
-| Required field | Disposition at preparation |
+| Required field | Result |
 |---|---|
-| Implementation | PASS — preparation and verification; no runtime fix required |
-| Automated tests | PASS — executed local suites; final-head hosted result recorded separately |
-| New paid campaign authorization | NOT APPROVED |
-| Paid diagnosis benchmark | BLOCKED |
-| Luna compatibility | NOT VERIFIED |
-| Terra compatibility | NOT VERIFIED |
+| Implementation | PASS |
+| Automated tests | PASS |
+| New paid campaign authorization | APPROVED |
+| Paid diagnosis benchmark | COMPLETED |
+| Luna compatibility | VERIFIED |
+| Terra compatibility | VERIFIED |
 | Botanical review | UNREVIEWED |
 | Treatment safety | NOT VERIFIED |
 | Multilingual quality | NOT VERIFIED |
 | Luna qualification | BLOCKED |
 | Terra qualification | BLOCKED |
-| Financial accounting | VERIFIED — historical uncertainty retained; not invoice reconciliation |
+| Financial accounting | VERIFIED |
 | Historical unknown exposure | UNRESOLVED |
 | Cost per acceptable result | NOT VERIFIED |
-| Production routing | DISABLED for candidates; ordinary GPT-4o remains active |
-| Production smoke | PASS — unpaid protection paths only |
+| Production routing | DISABLED |
+| Production smoke | PASS |
 | Final release | PARTIAL RELEASE |
 
-**NO-GO for candidate activation.** Paid model comparison requires the explicit new $4 authorization and fresh headroom/admission checks. Qualification additionally requires independent botanical/treatment/language review, approved thresholds and sufficient independent coverage. A route-specific reviewer-approved artifact must bind exact immutable configurations, evidence and numerical rollback gates before any at-most-5% cohort is enabled.
+Compatibility VERIFIED is limited to the tested current immutable care/diagnosis contracts. Financial accounting VERIFIED means measured new facts and retained historical uncertainty, not an invoice reconciliation. Production routing DISABLED refers to candidates; ordinary GPT-4o remains active. Production smoke PASS includes the bounded unpaid denials and authorized ordinary GPT-4o journeys. **PARTIAL RELEASE: NO-GO for candidate activation** until independently approved botanical/treatment/language evidence, sufficient independent cases, quality/non-inferiority thresholds and a route-specific approval with numerical rollback gates support an at-most5% cohort.
