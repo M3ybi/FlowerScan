@@ -79,6 +79,9 @@ export const canCancelSubscription = (subscription: SubscriptionSnapshot) =>
   (subscription.view === "monthly_active" || subscription.view === "yearly_active") &&
   subscription.customerInfo?.willRenew === true;
 
+export const canUseWebCancellationFallback = (subscription: SubscriptionSnapshot) =>
+  canCancelSubscription(subscription) && subscription.customerInfo?.store?.toLowerCase() === "rc_billing";
+
 // Test Store owners can inspect cancellation options even though no portal exists.
 export const canOpenCancellationDialog = (subscription: SubscriptionSnapshot) =>
   canCancelSubscription(subscription) ||
@@ -101,7 +104,10 @@ export const safeBillingManagementUrl = (value: string | null | undefined) => {
   }
 };
 
-export const createCancellationHandoff = (openManagementPage: (url: string) => Promise<void>) => {
+export const createCancellationHandoff = (
+  openManagementPage: (url: string) => Promise<void>,
+  cancelFallback?: (subscription: SubscriptionSnapshot) => Promise<void>,
+) => {
   let dialogFor: { userId: string; householdId: string | null; productId: string | null } | null = null;
   let inFlight = false;
 
@@ -120,7 +126,7 @@ export const createCancellationHandoff = (openManagementPage: (url: string) => P
       dialogFor = null;
       return true;
     },
-    async confirm(subscription: SubscriptionSnapshot): Promise<"opened" | "busy" | "not_open" | "not_applicable" | "unavailable" | "failed"> {
+    async confirm(subscription: SubscriptionSnapshot): Promise<"opened" | "cancelled" | "busy" | "not_open" | "not_applicable" | "unavailable" | "unconfirmed" | "failed"> {
       if (inFlight) return "busy";
       if (!dialogFor) return "not_open";
       if (!canOpenCancellationDialog(subscription) ||
@@ -129,15 +135,23 @@ export const createCancellationHandoff = (openManagementPage: (url: string) => P
         subscription.customerInfo?.productId !== dialogFor.productId) return "not_applicable";
       if (isTestStoreSubscription(subscription)) return "unavailable";
       const managementUrl = safeBillingManagementUrl(subscription.customerInfo?.managementUrl);
-      if (!managementUrl) return "unavailable";
+      const mayFallback = Boolean(cancelFallback && canUseWebCancellationFallback(subscription));
+      if (!managementUrl && !mayFallback) return "unavailable";
 
       inFlight = true;
       try {
-        await openManagementPage(managementUrl);
+        if (managementUrl) {
+          try {
+            await openManagementPage(managementUrl);
+            dialogFor = null;
+            return "opened";
+          } catch { if (!mayFallback) return "failed"; }
+        }
+        await cancelFallback!(subscription);
         dialogFor = null;
-        return "opened";
+        return "cancelled";
       } catch {
-        return "failed";
+        return mayFallback ? "unconfirmed" : "failed";
       } finally {
         inFlight = false;
       }

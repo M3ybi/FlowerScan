@@ -51,6 +51,7 @@ try {
   await copyEdgeSourceGraph(workspace, [
     "supabase/functions/send-auth-email/index.ts",
     "supabase/functions/ai-owner-control/index.ts",
+    "supabase/functions/manage-subscription/index.ts",
   ]);
   const migrations = (await readdir("supabase/migrations")).filter(name => /^\d{14}_.+\.sql$/.test(name)).sort();
   const baseline = migrations.filter(name => name < "20261018190000");

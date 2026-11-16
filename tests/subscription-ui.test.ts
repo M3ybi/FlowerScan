@@ -8,6 +8,7 @@ import type { SubscriptionSnapshot } from "../src/lib/subscriptionState.js";
 import {
   canCancelSubscription,
   canOpenCancellationDialog,
+  canUseWebCancellationFallback,
   canPurchaseHouseholdPlan,
   canSwitchToYearly,
   createCancellationHandoff,
@@ -250,6 +251,55 @@ test("missing provider management URL never pretends cancellation succeeded", as
   assert.equal(await handoff.confirm(subscription), "unavailable");
   assert.equal(subscription.customerInfo?.hasRevenueCatPremium, true);
   assert.equal(handoff.dismiss(), true);
+});
+
+test("RC Billing uses the existing portal first and falls back only for the confirmed Owner", async () => {
+  for (const unavailable of ["missing", "open_failed", "available"] as const) {
+    const subscription = activeSubscription("yearly_active", true);
+    subscription.customerInfo!.store = "RC_BILLING";
+    if (unavailable === "missing") subscription.customerInfo!.managementUrl = null;
+    let cancellations = 0;
+    const handoff = createCancellationHandoff(async () => {
+      if (unavailable === "open_failed") throw new Error("Portal unavailable");
+    }, async current => { assert.equal(current.householdId, subscription.householdId); cancellations++; });
+    assert.equal(canUseWebCancellationFallback(subscription), true);
+    assert.equal(handoff.openDialog(subscription), true);
+    assert.equal(await handoff.confirm(subscription), unavailable === "available" ? "opened" : "cancelled");
+    assert.equal(cancellations, unavailable === "available" ? 0 : 1);
+    assert.equal(subscription.customerInfo!.hasRevenueCatPremium, true);
+    assert.equal(subscription.view, "yearly_active");
+  }
+});
+
+test("fallback never cancels App Store, Play, Test Store, unknown store or another member's purchase", async () => {
+  for (const store of ["APP_STORE", "PLAY_STORE", "TEST_STORE", "STRIPE", undefined]) {
+    const subscription = activeSubscription("monthly_active", true);
+    subscription.customerInfo!.store = store;
+    subscription.customerInfo!.managementUrl = null;
+    let cancellations = 0;
+    const handoff = createCancellationHandoff(async () => {}, async () => { cancellations++; });
+    assert.equal(canUseWebCancellationFallback(subscription), false);
+    assert.equal(handoff.openDialog(subscription), true);
+    assert.equal(await handoff.confirm(subscription), "unavailable");
+    assert.equal(cancellations, 0);
+  }
+  const viewer = activeSubscription("monthly_active", true);
+  viewer.customerInfo!.store = "RC_BILLING";
+  viewer.householdEntitlement!.role = "viewer";
+  assert.equal(canUseWebCancellationFallback(viewer), false);
+});
+
+test("failed fallback stays retryable and does not fabricate cancellation or revoke Premium", async () => {
+  const subscription = activeSubscription("monthly_active", true);
+  subscription.customerInfo!.store = "RC_BILLING";
+  subscription.customerInfo!.managementUrl = null;
+  let fail = true;
+  const handoff = createCancellationHandoff(async () => {}, async () => { if (fail) throw new Error("Provider timeout"); });
+  assert.equal(handoff.openDialog(subscription), true);
+  assert.equal(await handoff.confirm(subscription), "unconfirmed");
+  assert.equal(subscription.customerInfo!.willRenew, true);
+  fail = false;
+  assert.equal(await handoff.confirm(subscription), "cancelled");
 });
 
 test("an open confirmation cannot be reused after an account, household, or plan switch", async () => {

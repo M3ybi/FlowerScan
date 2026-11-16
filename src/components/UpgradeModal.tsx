@@ -6,6 +6,7 @@ import { BillingConfirmationPendingError, getBillingService, revenueCatProductId
 import { beginHouseholdPurchase } from "../lib/householdPlanService";
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { createTranslator } from "../lib/i18n";
+import { recoverSubscriptionManagementUrl } from "../lib/subscriptionManagement";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
 import { canPurchaseHouseholdPlan, canSwitchToYearly, isOwnPaidSubscription, safeBillingManagementUrl } from "../lib/subscriptionUiRules";
@@ -82,6 +83,20 @@ export const UpgradeModal = ({ limitReason, onClose, onSubscriptionChanged, subs
     let providerPurchaseCompleted = false;
     try {
       if (!subscription.householdId) throw new Error(t("household.inviteStatusNoHousehold"));
+      if (canUpgradeYearly && billingStatus.runtime === "web") {
+        // Reuse the existing provider portal; a second ordinary checkout can create a duplicate subscription.
+        const popup = window.open("about:blank", "_blank");
+        if (!popup) throw new Error(t("pricing.manageOpenFailed"));
+        try {
+          popup.opener = null;
+          const url = safeBillingManagementUrl(subscription.customerInfo?.managementUrl)
+            ?? await recoverSubscriptionManagementUrl(subscription.householdId);
+          if (!isPurchaseCurrent()) { popup.close(); return; }
+          popup.location.replace(url);
+          setStatusMessage(t("pricing.manageHint"));
+        } catch (error) { popup.close(); throw error; }
+        return;
+      }
       await beginHouseholdPurchase(subscription.householdId);
       if (!isPurchaseCurrent()) return;
       const info = period === "monthly" ? await billing.purchasePremiumMonthly(subscription.householdId)

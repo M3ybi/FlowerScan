@@ -11,10 +11,12 @@ import { resolveHouseholdPermissions } from "../lib/householdPermissions";
 import { beginHouseholdPurchase } from "../lib/householdPlanService";
 import { householdSubscriptionCopy } from "../lib/householdSubscriptionCopy";
 import { createTranslator } from "../lib/i18n";
+import { cancelWebSubscription, recoverSubscriptionManagementUrl } from "../lib/subscriptionManagement";
 import type { PlantieLanguage } from "../lib/onboarding";
 import type { SubscriptionSnapshot } from "../lib/subscriptionState";
 import {
   canOpenCancellationDialog,
+  canUseWebCancellationFallback,
   canPurchaseHouseholdPlan,
   createCancellationHandoff,
   formatSubscriptionDate,
@@ -234,28 +236,38 @@ export const PricingPage = ({
     }
   };
 
-  const cancellationHandoff = useMemo(() => createCancellationHandoff(openManagementPage), [billingStatus.runtime, t]);
+  const cancellationHandoff = useMemo(() => createCancellationHandoff(openManagementPage, async current => {
+    if (!current.householdId) throw new Error(t("pricing.cancelNotAvailable"));
+    await cancelWebSubscription(current.householdId);
+  }), [billingStatus.runtime, t]);
 
   const confirmCancellation = async () => {
     if (actionInProgress.current || isOpeningManagement) return;
+    const isCancellationCurrent = captureOperationScope();
     actionInProgress.current = true;
     setIsOpeningManagement(true);
     setCancelError("");
     try {
       const result = await cancellationHandoff.confirm(subscription);
+      if (!isCancellationCurrent()) return;
       if (result === "opened") {
         setIsCancelModalOpen(false);
         setBillingMessage(t("pricing.cancelHandoff"));
+      } else if (result === "cancelled") {
+        setIsCancelModalOpen(false);
+        setBillingMessage(t("pricing.cancelledNotice"));
+        await onSubscriptionChanged().catch(() => { if (isCancellationCurrent()) setBillingMessage(t("pricing.refreshFailed")); });
       } else if (result === "unavailable") {
         setCancelError(t("pricing.cancelUnavailable"));
+      } else if (result === "unconfirmed") {
+        setCancelError(t("pricing.statusUnavailable"));
       } else if (result === "not_applicable") {
         setCancelError(t("pricing.cancelNotAvailable"));
       } else if (result !== "busy") {
         setCancelError(t("pricing.manageOpenFailed"));
       }
     } finally {
-      actionInProgress.current = false;
-      setIsOpeningManagement(false);
+      if (isCancellationCurrent()) { actionInProgress.current = false; setIsOpeningManagement(false); }
     }
   };
 
@@ -269,8 +281,10 @@ export const PricingPage = ({
     try {
       const changingPlan = isOwnPaidSubscription(subscription) && subscription.customerInfo?.activePlan !== period;
       if (changingPlan && billingStatus.runtime === "web") {
-        if (!managementUrl) throw new Error(t("pricing.manageUnavailable"));
-        await openManagementPage(managementUrl);
+        if (!subscription.householdId) throw new Error(t("pricing.manageUnavailable"));
+        const url = managementUrl ?? await recoverSubscriptionManagementUrl(subscription.householdId);
+        if (!isPurchaseCurrent()) return;
+        await openManagementPage(url);
         setBillingMessage(t("pricing.manageHint"));
         return;
       }
@@ -416,11 +430,11 @@ export const PricingPage = ({
               {formattedDate ? <p>{t("pricing.cancelPaidUntil", { date: formattedDate })}</p> : null}
               <p>{copy.cancelImpact}</p>
             </>}
-            {!testStoreSubscription && !managementUrl ? <p className="report-status" role="alert">{t("pricing.cancelUnavailable")}</p> : null}
+            {!testStoreSubscription && !managementUrl && !canUseWebCancellationFallback(subscription) ? <p className="report-status" role="alert">{t("pricing.cancelUnavailable")}</p> : null}
             {cancelError ? <p className="report-status" role="alert">{cancelError}</p> : null}
             <div className="modal-actions">
               <button ref={keepButtonRef} className="pricing-keep-action" type="button" disabled={isOpeningManagement} onClick={closeCancelModal}>{testStoreSubscription ? t("action.close") : t("pricing.keepSubscription")}</button>
-              {!testStoreSubscription ? <LoadingButton className="danger-action" type="button" disabled={isOpeningManagement || !managementUrl} isLoading={isOpeningManagement} loadingLabel={t("pricing.processing")} onClick={() => void confirmCancellation()}>{t("pricing.cancelSubscription")}</LoadingButton> : null}
+              {!testStoreSubscription ? <LoadingButton className="danger-action" type="button" disabled={isOpeningManagement || !managementUrl && !canUseWebCancellationFallback(subscription)} isLoading={isOpeningManagement} loadingLabel={t("pricing.processing")} onClick={() => void confirmCancellation()}>{t("pricing.cancelSubscription")}</LoadingButton> : null}
             </div>
           </section>
         </div>

@@ -168,6 +168,13 @@ const getCurrentSupabaseUserId = async () => {
   return data.session?.user.id ?? null;
 };
 
+const getVerifiedSupabaseEmail = async (userId: string): Promise<string | undefined> => {
+  if (!supabase) throw new BillingAuthRequiredError();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || data.user?.id !== userId) throw new BillingAuthRequiredError();
+  return data.user.email_confirmed_at && data.user.email ? data.user.email : undefined;
+};
+
 const resolveHouseholdProviderUserId = async (_userId: string, householdId: string | undefined, forPurchase: boolean) => {
   if (!supabase || !householdId) throw new BillingAuthRequiredError();
   const { data, error } = await supabase.rpc(forPurchase ? "begin_household_purchase" : "get_household_billing_customer", {
@@ -565,6 +572,7 @@ type WebBillingDependencies = {
   createPurchases: (apiKey: string, appUserId: string) => Promise<WebPurchasesClient>;
   getApiKey: () => string;
   getCurrentUserId: () => Promise<string | null>;
+  getVerifiedEmail?: (userId: string) => Promise<string | undefined>;
   resolveProviderUserId?: BillingDependencies["resolveProviderUserId"];
   refreshServerEntitlement: (householdId?: string) => Promise<unknown>;
 };
@@ -633,7 +641,9 @@ export const createRevenueCatWebBillingService = (deps: WebBillingDependencies):
         if (mapWebCustomerInfo(previousInfo).hasRevenueCatPremium) {
           throw new BillingUnavailableError("Manage the existing subscription before buying another plan.");
         }
-        await purchases.purchase({ rcPackage });
+        const customerEmail = await deps.getVerifiedEmail?.(userId);
+        await assertCurrentUser(userId);
+        await purchases.purchase({ rcPackage, ...(customerEmail ? { customerEmail } : {}) });
         await assertCurrentUser(userId);
         try {
           const customerInfo = await purchases.getCustomerInfo();
@@ -708,6 +718,7 @@ export const revenueCatWebBillingAdapter = createRevenueCatWebBillingService({
   },
   getApiKey: () => getApiKeyFromEnv("web"),
   getCurrentUserId: getCurrentSupabaseUserId,
+  getVerifiedEmail: getVerifiedSupabaseEmail,
   resolveProviderUserId: resolveHouseholdProviderUserId,
   refreshServerEntitlement: refreshSupabaseEntitlement,
 });

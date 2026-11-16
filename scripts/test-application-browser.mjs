@@ -16,6 +16,8 @@ await build({ entryPoints: ["tests/fixtures/application-browser.tsx"], outdir: a
       builder.onResolve({ filter: /\/billingService(?:\.js)?$/ }, () => ({ path: "billing", namespace: "fixture" }));
       builder.onLoad({ filter: /billing/, namespace: "fixture" }, () => ({ contents: `
         export class BillingConfirmationPendingError extends Error {}
+        export class BillingAuthRequiredError extends Error {}
+        export class BillingUnavailableError extends Error {}
         export const revenueCatProductIds={premiumMonthly:'monthly',premiumYearly:'yearly'};
         const purchase=async()=>{window.__applicationFixture.purchaseCalls++;return {hasRevenueCatPremium:false}};
         export const getBillingService=()=>({getStatus:()=>({configured:true,runtime:'web'}),
