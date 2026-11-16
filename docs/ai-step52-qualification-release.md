@@ -2,7 +2,7 @@
 
 The missing technical comparison is complete: **50/50 diagnosis and 25/25 care-refresh generations passed**, covering GPT-4o, Luna none/low and Terra none/low, all five locales, v1 strict contracts, 1600px/high, original caps, store:false and the existing default service tier. **No candidate is qualified for ordinary traffic:** independent botanical/treatment/language review and approved thresholds remain absent. Ordinary GPT-4o routing stays active; candidate rollout remains disabled.
 
-Starting clean local/remote main: `825a3a15497b02cc58a52d17d99ca127867f5128`. Preparation/execution revision: `67704a904414311ff098a79d1e8c6748d5881d84`. [Its required CI](https://github.com/M3ybi/FlowerScan/actions/runs/43820173488) passed application, PostgreSQL and full disposable Supabase verification before paid work. The final evidence revision containing this document changes only the six requested documentation files. No application/Edge/schema/pricing/prompt/image/entitlement change or runtime redeployment was required. Final-head CI/Netlify results are bound to the exact final revision in the private final verification receipt after this evidence commit.
+Starting clean local/remote main: `825a3a15497b02cc58a52d17d99ca127867f5128`. Preparation/execution revision: `67704a904414311ff098a79d1e8c6748d5881d84`. [Its required CI](https://github.com/M3ybi/FlowerScan/actions/runs/43820173488) passed application, PostgreSQL and full disposable Supabase verification before paid work. Changes comprise the six requested documentation files and failure-only navigation-test diagnostics. No application/Edge/schema/pricing/prompt/image/entitlement change or runtime redeployment was required. Final-head CI/Netlify results are bound to the exact final revision in the private final verification receipt after this evidence commit.
 
 ## Authorization, actual execution and accounting
 
@@ -74,6 +74,7 @@ Hashes prove artifact identity, not reviewer approval. The blocked artifact has 
 | Chromium/WebKit images and application workflows | PASS |282 image checks each and application suites |
 | Client-secret/source graph | PASS |Existing scanners executed |
 | Pre-campaign current-revision CI | PASS |All three required verification jobs at `67704a904414311ff098a79d1e8c6748d5881d84`, including full disposable Supabase |
+| Results-revision CI (`117b6be`) | FAIL |Unchanged Chromium safe-area assertion:12px instead of46px;23/24 navigation checks; PostgreSQL and full Supabase PASS |
 | Actual paid paired contracts/accounting/replays | PASS |75/75 generations;93/93 measured; both replays zero additional attempts |
 | Synthetic ordinary save journeys | PASS |Exact private JPEG readback and safety reuse |
 | Source/JWT/security grants/data preservation | PASS |Seven bundles; original124 attempts/16-table checkpoint; targeted denials |
@@ -82,9 +83,15 @@ Hashes prove artifact identity, not reviewer approval. The blocked artifact has 
 | Independent botanical/treatment/localization approval | NOT EXECUTED |Operator confirmed no new independent review; approved thresholds absent |
 | Native hardware/store purchase acceptance | NOT EXECUTED |No native/billing change; engineering API/browser evidence does not establish hardware acceptance |
 
-The first local 100-session test failed at the default100-connection server capacity. After restarting only the loopback test server with200 connections, the unchanged100-session test and remaining suites passed. Its initial failure log remains retained. No production limit or assertion changed. Earlier Chromium navigation failures remain recorded in [Step5.1](ai-step5-recovery-release.md); current preparation/execution CI passed without navigation changes, not proof that the intermittent issue is fixed. The separate Pages build again failed `RELEASE_DATABASE_CONFIGURATION_REQUIRED`, with its deployment skipped. Active Netlify manifest/assets were verified independently; do not call the whole Pages workflow green. Final evidence-head CI and active-host readback are recorded after committing these results in `%TEMP%/plantie-ai-step52-20261116/final-verification-receipt.json`.
+The first local 100-session test failed at the default100-connection server capacity. After restarting only the loopback test server with200 connections, the unchanged100-session test and remaining suites passed. Its initial failure log remains retained. No production limit or assertion changed. Earlier Chromium navigation failures remain recorded in [Step5.1](ai-step5-recovery-release.md); current preparation/execution CI passed without navigation changes, not proof that the intermittent issue is fixed. The separate preparation-revision Pages build again failed `RELEASE_DATABASE_CONFIGURATION_REQUIRED`, with its deployment skipped. Active Netlify manifest/assets were verified independently; do not call the whole Pages workflow green. Final evidence-head CI and active-host readback are recorded after committing these results in `%TEMP%/plantie-ai-step52-20261116/final-verification-receipt.json`.
 
 Existing security advisor counts remain the recorded boundary: private no-policy RLS INFO20; mutable-path WARN4; anon/authenticated SECURITY DEFINER execution WARN8/41; leaked-password protection WARN1. No clean-security claim or unrelated policy fix is made.
+
+### Separate Chromium investigation
+
+The [results revision's application job](https://github.com/M3ybi/FlowerScan/actions/runs/43825696350/job/133158912855) repeated the existing `safe-areas-and-direct-link` failure. It ran hosted `/usr/bin/google-chrome` on Ubuntu26.04 image20261111.196.1, distinct from the downloaded Playwright browser. Local Windows Chrome for Testing149.0.7827.55 passed30 minimal CSS trials,20 focused application trials and the unchanged full24-check navigation suite. Initial root/derived/bottom values were correct before and after paint. These local results do not reproduce the hosted failure or establish a deterministic cause; root cause remains UNKNOWN and the intermittent issue is not declared resolved.
+
+`scripts/test-mobile-navigation-browser.mjs` now logs browser version and, only on geometry/computed-style mismatch, the initial/bounds-following bottom values, root/inherited variables and test browser user agent. Original viewport/computed-style/bounds measurement order, every assertion line, all expected values and timeout/wait counts are preserved and independently compared against `117b6be`. No CSS or navigation behavior changed. Diagnostics are separate from AI execution/qualification; they cannot turn a wrong12px result into a pass. A subsequent green run does not erase the failed evidence above.
 
 ## Recovery and disposition
 
@@ -95,7 +102,7 @@ No runtime rollback is required. Documentation can be reverted through ordinary 
 | Required field | Result |
 |---|---|
 | Implementation | PASS |
-| Automated tests | PASS |
+| Automated tests | FAIL at `117b6be`; local/paid-execution verification PASS; exact final-head result recorded separately |
 | New paid campaign authorization | APPROVED |
 | Paid diagnosis benchmark | COMPLETED |
 | Luna compatibility | VERIFIED |

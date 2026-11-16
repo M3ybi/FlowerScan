@@ -41,6 +41,7 @@ if (engine === 'chromium')
     catch { }
   }
 const browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
+console.log(`Navigation browser: ${engine} ${await browser.version()}`);
 
 const checks = [], failures = [];
 const scenario = async (name, width, run) => {
@@ -261,11 +262,22 @@ try {
     await page.reload(); await page.locator('.detail-shell').waitFor();
     await page.addStyleTag({ content: ':root { --safe-area-top: 24px; --safe-area-bottom: 34px; --safe-area-left: 8px; --safe-area-right: 8px; }' });
     const back = await page.locator('.floating-back-link').boundingBox();
-    const safeArea = await page.locator('.mobile-bottom-nav').evaluate(node => ({
-      viewportHeight: innerHeight,
-      bottom: getComputedStyle(node).bottom,
-      clearance: innerHeight - node.getBoundingClientRect().bottom,
-    }));
+    const safeArea = await page.locator('.mobile-bottom-nav').evaluate(node => {
+      // Preserve measurement order; retain diagnostics if computed style and layout disagree.
+      const viewportHeight = innerHeight;
+      const bottom = getComputedStyle(node).bottom;
+      const clearance = innerHeight - node.getBoundingClientRect().bottom;
+      return {
+        viewportHeight, bottom, clearance,
+        bottomAfterLayout: getComputedStyle(node).bottom,
+        rootSafeBottom: getComputedStyle(document.documentElement).getPropertyValue('--safe-area-bottom'),
+        rootNavBottom: getComputedStyle(document.documentElement).getPropertyValue('--mobile-nav-bottom'),
+        inheritedSafeBottom: getComputedStyle(node).getPropertyValue('--safe-area-bottom'),
+        inheritedNavBottom: getComputedStyle(node).getPropertyValue('--mobile-nav-bottom'),
+        userAgent: navigator.userAgent,
+      };
+    });
+    if (safeArea.bottom !== '46px' || safeArea.clearance < 46) console.error(`SAFE_AREA_DIAGNOSTICS: ${JSON.stringify(safeArea)}`);
     assert.equal(back.y, 40); assert.equal(back.x, 24);
     assert.equal(safeArea.viewportHeight, 844);
     assert.equal(safeArea.bottom, '46px');
