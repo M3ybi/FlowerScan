@@ -18,4 +18,3 @@ begin
  insert into ai_private.owner_configuration_events(acceptance_id,actor_id,action) values(a.id,a.actor_id,'CUTOVER');
  return stamp;
 end $$;
-

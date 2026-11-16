@@ -1,8 +1,8 @@
 # Luna-only recovery and rollback
 
-## Compatibility phase
+## Historical compatibility phase
 
-Before final cutover the existing GPT-4o service remains active outside explicitly approved Luna cohorts. The new schema/runtime is deployed default-off. If compatibility checks fail, stop and retain the working baseline; do not activate candidates or spend an unapproved campaign.
+During compatibility deployment, GPT-4o served households outside approved Luna cohorts. This phase has ended. The current service is Luna-only; the following backup history does not authorize restoring legacy inference.
 
 Take and decrypt-verify an encrypted production backup before changes. The preparation backup at 2026-11-16T10:34:19Z was DPAPI CurrentUser encrypted with restricted ACL, 918,941 plaintext bytes and 919,158 encrypted bytes. Evidence SHA-256: `e29da5ed75ec641e69dec4bd72282ac19cafe1e77afda95f6692b20ac1607d34`. It is a logical public/Auth/Storage-metadata/Vault/migration/private-AI recovery archive, not Storage object bytes or managed signing-key recovery. No restore was performed. A fresh predeployment archive was then captured at 2026-11-16T11:57:35Z: 920,152 plaintext / 920,374 encrypted bytes, SHA-256 `dbb8606c437e2d49ffc851019833f9741c9a902edade840bf7c115be4cd2e02d`. PostgreSQL TLS used `verify-full` with the vendor CA and original hostname. DPAPI CurrentUser, restricted ACL, in-memory roundtrip/catalog/full parse and independent disk decrypt/full parse passed. No restore was performed.
 
@@ -22,6 +22,14 @@ After that timestamp, database guards reject new non-Luna operations and provide
 
 GPT-4o, GPT-4o-mini and Terra are not post-cutover recovery options. Do not restore old route data, reset a campaign, erase unknown exposure or weaken safety/authorization to restore apparent availability. Destructive restore of customer data is not a normal model rollback.
 
-Local proof: disposable tests exercised all twenty stages, legacy draining, all-Luna cutover, authorized Luna low recovery, denied Terra/GPT-4o new operations, retained unknown financial facts and revocation. Compatibility migrations/functions are deployed. Actual authenticated risk acceptance and all sixteen stages through 50% are verified. Production 100% cutover/recovery remains NOT EXECUTED; the original campaign expired and was closed without resetting its window. A completion exception needs separate spending consent and authenticated owner approval. No legacy-model recovery is authorized after a future cutover.
+## Actual final recovery proof
 
-The strict final runtime source is prepared and locally tested, but must not be deployed against the current 50% legacy cohorts. Current-revision CI and the all-Luna database cutover barrier must pass first. A fresh encrypted pre-cutover backup at 13:29:09Z passed independent disk decrypt/hash/full parse; see the cutover record for its exact hash and scope.
+**Cutover VERIFIED at 2026-11-16T16:50:51.831557Z**, release b6dd4d1addf5d302420bc9f68ec1bf0361418209; all four active defaults are Luna none. Strict Edge runtime and database barrier both reject new non-Luna starts. Both campaigns are closed; no more paid test or continuation is authorized.
+
+The real authenticated owner selected exact accepted **care_refresh:gpt-6-luna:low:v1** through the existing production UI. A new measured operation succeeded at 16:52:43Z, $0.000371925. A retained none operation replayed through HTTP 200 during low with zero new attempt. The owner restored **care_refresh:gpt-6-luna:none:v1**; a fresh operation succeeded at 16:53:55Z, $0.000322425. A rolled-back service claim subsequently returned REPLAY for the retained low binding without inference. Its HTTP replay variant was not executed. All four final defaults are none; no automatic escalation occurred.
+
+Disposable proof additionally covers all 20 stages, legacy draining, supported low recovery, denied GPT-4o/Terra new work, unknown retention and revocation. Failed/uncertain paid operations do not automatically retry. If no eligible accepted Luna alternative exists, pause/controlled failure remains the recovery policy.
+
+The latest pre-completion logical archive was captured 16:04:53.750Z, encrypted SHA **b4eaed8be5a5ef06013e16d1a884301ed625f5978ac688ba6dcd40cb3bef83aa**, 1,046,675 plaintext / 1,046,902 encrypted bytes. TLS verify-full/vendor CA/original hostname, DPAPI CurrentUser / restricted ACL, independent disk decrypt/hash/full parse passed. Scope excludes Storage bytes and managed signing keys; restore NOT EXECUTED.
+
+After cutover, do not deploy a legacy inference bundle expecting GPT-4o admission, restore pre-cutover route data, erase the barrier, reprice history or delete customer data to appear available. Recover with a compatible Luna-only runtime/configuration or controlled failure while retaining evidence and accounting. Additive migrations remain; a destructive database restore is not a model rollback.

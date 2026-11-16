@@ -1,10 +1,18 @@
 # Versioned multi-model pricing
 
-## Luna migration accounting — 2026-11-16
+## Current Luna-only production accounting — 2026-11-16
 
-The [Luna-only migration](ai-luna-financial-accounting.md) preserves original prices and the $0.26355 unknown record. No new Terra inference is permitted. The additional Luna safety output cap is 700, with a conservative $0.263025 reservation; care/refresh remain $0.26355 and diagnosis $0.2643. Do not replace these context-ceiling bounds with observed means. Final Luna safety/journey cost remains unknown until the authenticated bounded campaign actually measures it.
+All four active routes use Luna none after the verified16:50:51.831557Z cutover. Historical GPT-4o/Terra price facts remain immutable; neither model is eligible for new provider work. Safety uses700 output tokens/$0.263025 conservative reservation, care/refresh1400/$0.26355, diagnosis2400/$0.2643. Full-context bounds were not replaced with observed averages.
 
-Correction to prior planning text: the existing SQL campaign schema permits 240 attempts/$4/two hours; 100 was the previous campaign's chosen cap, not a schema-wide limit. The new immutable owner-approved Luna proposal is more restrictive: at most120 attempts/$4/60 minutes, one run and no reset/continuation. Old financial evidence and closed campaigns are unchanged.
+Official standard global Luna rates per million tokens remain input$0.10/cached-read$0.01/30m-write$0.125/12h-write$0.25/output$0.50; >272k input uses input×2/output×1.5, explicit regional×1.10. Default/global is the actual request tier. Input buckets are disjoint and reasoning is already included in output. No model-specific image-token formula or invoice reconciliation is invented.
+
+Measured migration campaigns are closed at **83 attempts/$0.019246015/zero new unknown/zero pending** (original60 / $0.013320275 + explicitly authorized completion 23 / $0.005925740). None safety mean$0.000196584091 and low$0.000218061364 were measured on22 fixed images each. Composed journey projections use different populations and do not certify acceptable-result costs or actual profit. Historical **$0.26355 UNKNOWN_USAGE remains unresolved**.
+
+Exact authorizations, token totals, attempt reconciliation and unchanged original price/control facts are in [financial evidence](ai-luna-financial-accounting.md); [household projections](ai-household-profitability.md) retain explicit VAT/fee/FX/usage assumptions. No further continuation/reset or paid test is authorized.
+
+## Historical pricing and qualification records
+
+The sections below preserve their original measured populations and earlier activation blockers. References to disabled candidates/unmeasured safety describe those historical checkpoints. Current routing and conservative reservations are defined above; historical Terra pricing does not permit new Terra calls.
 
 ## Step 5.2 measured accounting — 2026-11-16
 

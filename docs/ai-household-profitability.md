@@ -16,7 +16,7 @@
 
 These coefficients are explicit scenarios, not observed subscriber behavior or an automatic retry policy. Replays require identical authorized operation identity. Failed/replacement calls require the existing authorization/accounting controls.
 
-The owner view compares historical GPT-4o, Luna none/low generation with historical safety, and all-Luna none/low cost sets using separate measured means. Current-month means include mixed evaluation/product traffic and are not a controlled equal-image benchmark. Costs for a safety effort remain unknown until measured; every final-Luna projection depending on unmeasured safety stays NULL. A cheaper classifier is not automatically eligible for activation.
+The owner view compares historical GPT-4o, Luna none/low generation with historical safety, and all-Luna none/low cost sets using separate measured means. Current-month means include mixed evaluation/product traffic and are not a controlled equal-image benchmark. Both safety efforts are now measured in the fixed 22-image comparison. A projection still remains NULL whenever its required component is unmeasured. A cheaper classifier is not automatically eligible for activation.
 
 ## Assumptions
 
@@ -34,7 +34,7 @@ Average AI target €0.20, heavy-use target €0.50, warning €1 and elevated r
 
 Finite €3.99 revenue cannot guarantee profit for arbitrarily many unique paid inference requests. Heavy scenarios can have negative contribution. Support, tax, infrastructure and Free allocations are explicit assumptions; the result is contribution, not audited net profit. Any stricter product cap would require a separate product-policy approval.
 
-Preparation verification: deterministic tests execute all 56 scenarios, retain unknown safety cost, verify fee/FX/break-even arithmetic, reject malformed financial inputs and demonstrate negative heavy-use contribution. The safety measurement now supplies final-Luna inputs; the executed numerical projections below remain composed estimates.
+Preparation verification: deterministic tests execute all 56 scenarios, retain unknown safety cost, verify fee/FX/break-even arithmetic, reject malformed financial inputs and demonstrate negative heavy-use contribution. The safety measurement supplies final-Luna inputs; the executed numerical projections below remain composed estimates.
 
 ## Executed projections using measured safety inputs
 
@@ -56,3 +56,8 @@ Under the default 30% store assumptions, the cold-diagnosis projection is:
 | 3,000 | 1.718862 | 0.400 |
 
 Projected cold-diagnosis break-even is 3,768 actions/month. The unique heavy-use stress scenario at 3,000 actions costs $3.037278 AI and has contribution −€0.798 / −€0.326 / −€0.164 for 30% store / 15% store / illustrative web respectively; its break-even volumes are 2,132 / 2,645 / 2,821. Actual collected-revenue profitability remains NOT VERIFIED. No quota, entitlement or product promise is changed.
+## Final observed campaign versus household projections
+
+The two migration campaigns actually measured **83 attempts/$0.019246015**, including the completion run23 / $0.005925740. This synthetic stage/recovery/limit-test mix is not a measured monthly subscriber workload or acceptable-result denominator. Historical UNKNOWN_USAGE exposure $0.26355 remains separate.
+
+A representative stated scenario of 100 cold diagnoses/month projects **$0.0572954 AI per household** and approximately **€1.910623 contribution** under the default 30% store assumptions. This is a component projection using different measured populations, not actual collected revenue or verified profit. Real net receipts/VAT/fees/refunds/infrastructure remain unavailable; **€3.99 actual profitability NOT VERIFIED**. Final routing changes do not impose new usage quotas.

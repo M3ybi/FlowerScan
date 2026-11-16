@@ -1,68 +1,71 @@
 # Complete Luna migration — release record
 
-## Current state
+## Final production state — 2026-11-16
 
-2026-11-16: **compatibility release DEPLOYED; all four Luna canaries ACTIVE at 50%; final production cutover NOT VERIFIED**. Starting main was `4b89f42132a5a6e941190af57c4b146e84f1a03a`; the published application revision is `9b1faf846df521c21e621755409a6a92e766948b`. Each route selects Luna none for its approved cohort; the original GPT-4o configuration still serves the remaining cohort. No Terra provider calls were created.
+**100% Luna cutover VERIFIED under authenticated owner-accepted unreviewed quality risk.** The atomic barrier committed at **2026-11-16T16:50:51.831557Z (17:50:51 CET)**. All four routes are unpaused, with Luna as their active binding for every household. Canary flags are disabled, candidate configurations NULL and rollout percentages zero because the canary is finished; AI remains available.
 
-The three additive migrations are applied (42 total). Nine affected Edge Functions, including authenticated owner controls, were deployed and their source/JWT/bundle metadata read back. Four unrelated functions, all seventeen secret digests, both private-bucket configurations, all original customer row hashes across sixteen tables, original prices/controls and all 218 original attempt facts were preserved. A fresh encrypted recovery archive was decrypt/parse verified before deployment; details are in the cutover record.
+| Purpose | Active immutable configuration |
+|---|---|
+| Plant identification / initial care | initial_care:gpt-6-luna:none:v1 |
+| Manual care refresh | care_refresh:gpt-6-luna:none:v1 |
+| Diagnosis | diagnosis:gpt-6-luna:none:v1 |
+| Image safety | image_safety:gpt-6-luna:none:v2 |
 
-The identified owner was enrolled privately and a normal existing signed-in owner session recorded the exact campaign approval through the production UI. Plan SHA-256: `0a956fc2fd4348ba1df36556ea129236834cc96810f3f240f730108b00463bad`; cap 120 attempts/$4 aggregate measured/reserved/unknown exposure/60 minutes/one in flight, no reset/continuation/Terra. Three synthetic identities and two test households were created, with a test-only Premium grant confined to the new household. Customer entitlements were not changed.
+Starting main: `4b89f42132a5a6e941190af57c4b146e84f1a03a`. Implementation/cutover revision: **`b6dd4d1addf5d302420bc9f68ec1bf0361418209`**. The final documentation-head revision, CI jobs and actual published manifest are bound after commit in the private final-verification receipt, avoiding a self-referential hash.
 
-**Executed safety comparison:** 44/44 measured Luna calls, $0.00912220, no new unknown exposure; each effort matched five allowed and seventeen rejected engineering reference labels. None is the selected default; low showed no safety benefit in this set. Exact factual evidence SHA-256: `f4be0ded5a094ce82f203f2efc6942f3404a6c5e39b0d7e781110e5821073f9a`. Independent botanical reviews remain zero. The real owner separately accepted those exact hashes and twenty gated route/stage grants at 13:09:29Z; sixteen grants through 50% have been applied with fresh measured evidence. The four 100% grants remain unapplied.
+Production `OPENAI_MODEL` is now `gpt-6-luna`, verified by digest; the other sixteen secret digests are unchanged. The actual provider selector is the immutable server configuration. Both strict Edge runtime and database admission reject new non-Luna work. Post-barrier readback found **zero GPT-4o / zero Terra provider attempts**. Historical configurations, prices, ledger records and authorized retained results remain intact.
 
-The original campaign expired and was closed with **60 attempts / $0.013320275 / zero new unknown / zero pending**: 44 safety comparisons plus sixteen ordinary stage proofs. Its three synthetic identities, sessions, two households and four private objects were removed; historical financial records remain. It must not be reset or reopened. A separately registered completion exception (24 attempts/$1/30 minutes, proposal SHA-256 `07dbe8ac89339a061375cd00c2d7b9ff6958e5d44961dd3d386ea93e34c3462b`) is **not authorized** at this checkpoint. No completion run or additional identities have been created.
+All twenty authenticated owner grants for four routes × 5/10/25/50/100 stages were applied with their evidence gates. Both campaigns are permanently closed: **60 + 23 = 83 attempts / $0.019246015 measured / zero new unknown / zero pending**. All six synthetic accounts/sessions, four households and eight private objects were removed; financial history remains.
 
-The prepared final runtime rejects new non-Luna bindings and retires the old vision/prompt paid evaluators. Its local checks passed; deployment must wait for all-route 100% cutover and current-revision CI. The source change alone does not describe the deployed Edge runtime. See the cutover record for exact tests and the newly observed reference-label disagreements.
-
-Current-revision application, PostgreSQL and full disposable Supabase CI jobs passed. The separate Pages packaging job failed its existing `RELEASE_DATABASE_CONFIGURATION_REQUIRED` condition; active Netlify revision, clean release manifest and published asset hashes passed independent verification. A deployment and a passing engineering fixture set are not complete migration.
-
-## Architecture
+## Architecture and execution paths
 
 ```mermaid
 flowchart TD
   Client[Existing plant and diagnosis clients] --> Auth[Verified Supabase Auth]
-  Auth --> Safety[Resolve household safety configuration]
-  Safety --> Receipt[Exact JPEG, user, policy and configuration receipt]
-  Receipt --> Upload[Household authorization and private upload]
-  Auth --> Claim[Existing SQL operation claim and stable household cohort]
+  Auth --> Safety[Trusted Luna safety binding]
+  Safety --> Evidence[Exact JPEG, user, policy and configuration evidence]
+  Evidence --> Upload[Household authorization and private upload]
+  Auth --> Claim[Existing SQL operation claim]
   Claim --> Replay[Authorized retained replay / in-flight wait]
-  Claim --> Binding[Immutable registry binding and conservative admission]
+  Claim --> Binding[Immutable Luna binding and conservative reservation]
   Binding --> Adapter[Existing authoritative Responses adapter]
-  Adapter --> Ledger[Usage, price, exposure and lifecycle settlement]
-  Owner[Authenticated allowlisted product owner] --> Controls[Separate spending, risk, stage and revocation controls]
+  Adapter --> Ledger[Usage, exact price, exposure and lifecycle settlement]
+  Owner[Authenticated allowlisted product owner] --> Controls[Separate spending, risk, stage, recovery and revocation controls]
   Controls --> Claim
   Ledger --> FinOps[Owner-only aggregate dashboard]
 ```
 
-Initial identification and care still share `plant-care-ai`; refresh uses its existing `manual_refresh` contract. Diagnosis still uses `plant-diagnosis-ai`. Validation and upload retain their existing endpoints, JPEG parser, authorization, private Storage and upload admission. All provider traffic uses `_shared/aiOperation.ts`; no second provider client/router is introduced.
+Identification and initial care still share `plant-care-ai`; refresh uses its existing `manual_refresh` contract. Diagnosis uses `plant-diagnosis-ai`. Validation/upload retain exact JPEG verification, household authorization and private Storage. Every inference uses `_shared/aiOperation.ts`; there is no second provider client/router. Legacy Netlify handlers cannot generate AI. Authenticated vision/prompt evaluation endpoints return 410 without SQL/provider work; protected model evaluation remains registered and metered.
 
-The original sixteen configurations remain immutable for historical lookup and pricing. Eight configurations are eligible for this migration: Luna none/low for initial care, refresh, diagnosis and safety. Only the two safety definitions are new, with distinct `plant-image-safety-luna-{none,low}-v2` versions, the existing strict eight-field schema and 700-token ceiling. Care/diagnosis v1 prompts, JSON contracts, image profile and caps remain unchanged. New Terra evaluation/binding/operation/attempt paths are denied.
+Logical/historical operation lookup precedes current-route selection. Existing operations stay pinned across configuration changes; completed authorized replay does not infer again. The old GPT-4o fingerprint marker is only identity, never model selection. Client model/reasoning/prompt/schema/cap overrides cannot select a provider. Unsupported/mismatched actual models or effort fail closed while usage settles or exposure remains held. Errors do not trigger an automatic second paid call.
 
-The compatibility deployment supports approved Luna cohorts and the remaining baseline cohort. Its default logical model is Luna; `OPENAI_MODEL` cannot choose a provider. Historical care/diagnosis fingerprint construction retains the old model marker solely as a replay identity. Actual provider payloads use the trusted SQL configuration. An existing operation is found before route selection, preserving old replay and in-flight pinning.
+The original sixteen configurations remain immutable. Eight Luna none/low definitions are eligible; only the two safety definitions are new. Safety v2 uses separate prompt/configuration namespaces, the strict eight-field output and 700-token cap. Care/diagnosis v1 prompts, schemas, five pills/three tips/watering interval, 1400/2400-token caps, normalized 1600px/high JPEG and response envelopes remain unchanged.
 
-## Change boundaries
+## Changed boundaries
 
-Additive migrations:
+- Shared registry/operation/safety/receipt modules, validation/upload/model evaluation, retired evaluators and new JWT-protected owner controls; care/diagnosis entry points were redeployed with their shared dependencies.
+- Frontend optional household prevalidation context, existing invalid-receipt recovery, owner-only Settings controls and explicit profitability calculator.
+- RevenueCat only retains validated environment metadata in new sanitized events. Billing decisions, mapping, secrets, customer binding and entitlements are unchanged; historical environment is not invented.
+- Five additive migrations: owner authority/evidence, routing/safety, FinOps, exact fixture-format compatibility and scoped cutover updates. Production has44 migrations; no seed/role/Vault/customer reset.
+- Tests/source-graph fixtures/full-history PostgreSQL CI. Historical adapter fixtures pin immutable18aa799; current Luna is tested separately.
 
-- `20261116103419_ai_luna_owner_controls.sql`: empty owner allowlist, immutable proposals/evidence/approvals, separate owner-risk state, stage grants, cutover metadata.
-- `20261116104401_ai_luna_routing_and_safety.sql`: two safety configurations; explicit approval modes; Luna-only candidate/evaluation eligibility; safety resolver; campaign image/configuration allowlists; stage, cutover, recovery and provider-start guards. Default candidates remain disabled.
-- `20261116105220_ai_luna_finops.sql`: owner-only state and ledger aggregates. No customer entitlement mutation or historical revenue backfill.
+Exact changed paths: `git diff --name-only 4b89f42132a5a6e941190af57c4b146e84f1a03a b6dd4d1addf5d302420bc9f68ec1bf0361418209`. The final documentation commit updates the twelve migration/routing/readiness records and removes one extra final blank line from the new cutover migration. No dependency/lockfile change, feature branch, staging backend, unrelated CSS or browser-assertion change.
 
-The one RevenueCat change retains the validated webhook environment in **new** sanitized event metadata. Billing decisions, plan mapping, secrets, customer binding and entitlements are unchanged. Historical events without environment remain unverified.
+## Evidence and known limitations
 
-Frontend changes pass an optional household ID during prevalidation, reuse the existing invalid-receipt recovery, and add an owner-only Settings panel and explicit projection calculator. No model, reasoning, prompt or output-cap override is accepted as a provider choice.
+Fixed safety comparison: 44 requests/$0.00912220,22/22 engineering labels per effort, five ALLOW/seventeen REJECT, zero observed false acceptance/rejection. None cost 9.85% less than low with no observed safety improvement. Historical matched diagnosis generation cost fell 92.13% versus GPT-4o; different-population safety and composed journey comparisons remain explicitly labelled.
 
-## Release gates
+The completion run measured 23 successful strict-output responses/$0.005925740. After the barrier, the actual owner selected qualified care-refresh low, a new measured low operation succeeded, none was restored and a new measured none operation succeeded. Retained none replay during low cost zero; retained low replay after restoration was verified by a rolled-back service claim without inference.
 
-1. Local tests, scoped security review and current-main CI, including disposable Supabase.
-2. Fresh encrypted recovery checkpoint and preservation checks; reviewed additive migrations and affected-function source/JWT parity.
-3. Enroll only the explicitly identified confirmed owner; actual owner session approves the exact spending proposal.
-4. Execute the single bounded campaign. Both safety efforts tested; any known-disallowed acceptance makes that configuration ineligible. New unknown exposure stops the run permanently.
-5. Register factual engineering/safety/financial evidence. Authenticated owner separately accepts exact hashes, limitations, initial maximum 5% canary, all explicitly listed stages and rollback conditions.
-6. Apply stages 5/10/25/50/100 separately on each route; each advancement requires a fresh successful measured operation at the previous route version.
-7. Drain legacy reserved/processing operations; commit all four Luna routes atomically. A database guard then rejects every new non-Luna operation/provider attempt, including legacy RPC paths.
-8. Finish the runtime Luna-only restriction/legacy endpoint retirement, supported recovery and production smoke; preserve customer records, historical prices and the old unknown record. Record exact final revisions, CI, Edge versions and cutover timestamp in the release receipt.
+Production Free limits: 10 plants / five monthly diagnoses/one daily refresh; Premium Viewer persistence, saves, private image hashes, outsider denial, valid safety reuse and exact actual model/effort were tested. The required application/PostgreSQL/disposable-Supabase CI jobs passed at the implementation revision. Separate GitHub Pages packaging still fails its existing database-configuration condition; active Netlify remained independently verified.
 
-See [cutover evidence](ai-production-cutover.md), [owner authorization](ai-owner-risk-acceptance.md), [safety](ai-luna-image-safety.md), [accounting](ai-luna-financial-accounting.md), [economics](ai-household-profitability.md) and [recovery](ai-luna-only-recovery.md).
+- Independent botanical/treatment/native-speaker review: **NOT EXECUTED**. Six of eight selected care identifications disagreed with public crop labels; two full-plant Ficus outputs matched. Historical Peperomia/tomato disagreement remains. No botanical non-inferiority or treatment-safety approval.
+- Full-body oversized production HTTP assertion: **FAIL**, unresolved transport timeout; no application response/provider/storage effect. Actual1601px input was rejected with the unchanged 400 INVALID_IMAGE contract. Local/CI bounds and byte-identical deployed guards passed; no demonstrated bypass.
+- Safety replay probe arrived eight seconds after five-minute expiry: zero-cost assertion **FAIL**, fresh metered revalidation **$0.00005005** included in23. Maximum provider attempts per operation: 1.
+- Optional production signed-receipt issuance and physical Android/iOS: **NOT EXECUTED**. Server-cache fallback/reuse and local forged/stale receipt tests passed.
+- Collected-revenue profitability: **NOT VERIFIED**. €3.99 projections use explicit deductions/usage assumptions; arbitrary unlimited unique inference cannot guarantee profit.
+- Historical **$0.26355 UNKNOWN_USAGE** remains unresolved and unchanged. Existing database advisor warnings remain.
 
-GPT-4o retirement is January 14, 2027 according to the [official deprecations page](https://developers.openai.com/api/docs/deprecations). This preparation does not claim that migration has met that deadline or reached 100%.
+See [all verification statuses and deployment evidence](ai-production-cutover.md), [reasoning](ai-luna-reasoning-benchmark.md), [safety](ai-luna-image-safety.md), [accounting](ai-luna-financial-accounting.md), [economics](ai-household-profitability.md), [owner authority](ai-owner-risk-acceptance.md) and [Luna-only recovery](ai-luna-only-recovery.md).
+
+**GO for the verified Luna-only production service under explicit owner-accepted unreviewed risk.** This is not independent botanical approval or a profitability guarantee. GPT-4o retirement was verified as January14,2027 from the [official deprecations page](https://developers.openai.com/api/docs/deprecations); actual cutover predates it.

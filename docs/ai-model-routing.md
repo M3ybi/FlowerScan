@@ -1,10 +1,18 @@
 # Trusted model routing
 
-## Luna migration compatibility release — 2026-11-16
+## Current production routing — 2026-11-16
 
-See [current migration state](ai-luna-complete-migration.md) and [production cutover evidence](ai-production-cutover.md). The prepared additive release preserves sixteen historical definitions and adds two Luna safety definitions. New candidate/evaluation eligibility is Luna none/low only; all four candidates remain disabled on migration. `OPENAI_MODEL` no longer selects a provider in the new runtime. Care/diagnosis retain historical logical fingerprint identity; actual provider choice comes from the immutable SQL binding.
+**100% Luna cutover VERIFIED at 16:50:51.831557Z**, implementation revision b6dd4d1addf5d302420bc9f68ec1bf0361418209. All four active bindings are unpaused Luna none: initial_care/care_refresh/diagnosis v1, image_safety v2. Candidate NULL, enabled=false and rollout_percent=0 mean the canary finished; active Luna serves every household. OPENAI_MODEL is gpt-6-luna; immutable SQL binding selects the actual provider.
 
-The new owner-risk path is separate from independent review. Exact hashes/evidence and authenticated owner grants are required for each stage; full cutover drains legacy work and permanently blocks new non-Luna starts. Post-cutover recovery is explicitly qualified Luna or controlled failure. The baseline/previous-step descriptions below are historical; their GPT-4o/Terra rollout or recovery guidance does not authorize this migration.
+Both strict Edge runtime and the committed database barrier prohibit new GPT-4o/Terra attempts, including legacy helpers. Authenticated vision-token-benchmark/prompt-evaluation return 410 without inference. Historical definitions/prices/ledger/replay identity remain intact. New protected model evaluations require exact Luna-only registration/admission.
+
+All twenty owner-authorized route/stage grants were actually applied. Owner risk state is OWNER_ACCEPTED_UNREVIEWED_MIGRATION, separate from independent review. Qualified care-refresh low recovery and restoration to none were exercised through the real owner UI, with new measured operations and retained binding replay. No automatic second call, escalation or expensive fallback exists. Zero post-barrier GPT-4o/Terra calls observed.
+
+See [current architecture](ai-luna-complete-migration.md), [actual deployment and checks](ai-production-cutover.md), [risk authority](ai-owner-risk-acceptance.md) and [Luna-only recovery](ai-luna-only-recovery.md).
+
+## Historical Step5 routing record — superseded operational guidance
+
+Everything below records the earlier baseline/evaluation release. Its GPT-4o active rows, Terra candidate hypotheses and rollback instructions are **historical, not current eligibility or authorization**. No pre-cutover route/bundle may be restored to bypass the Luna barrier.
 
 Step5.1 retains all16 immutable configuration hashes and disabled candidate flags. No route qualifies and no activation approval artifact is issued. New diagnostics change observability,not model/prompt selection. Both historical campaigns remain closed;the new diagnosis-first plan is PAID BENCHMARK BLOCKED. See [qualification decision](ai-model-qualification-decision.md) and [recovery release](ai-step5-recovery-release.md).
 
