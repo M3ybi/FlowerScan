@@ -1,0 +1,35 @@
+{
+  "version": "botanical-quality-rubric-v1",
+  "status": "PROPOSED_NOT_APPROVED",
+  "authorScope": "Codex engineering proposal; no independent horticultural or language approval",
+  "scale": [0, 0.25, 0.5, 0.75, 1],
+  "unknownState": "NOT_REVIEWABLE",
+  "anchors": {
+    "0": "Contradicted by sufficient independent evidence, or critically unsafe. Record the exact claim, source and failure classification.",
+    "0.25": "Predominantly unsupported or misleading; major corrections are necessary before a user could follow it.",
+    "0.5": "Mixed useful and incorrect or materially incomplete advice; substantive corrections are required.",
+    "0.75": "Substantially correct and appropriately cautious; only minor, non-safety corrections are needed.",
+    "1": "Fully supported within the available evidence and the dimension's scope; appropriately acknowledges what is unknown."
+  },
+  "dimensions": {
+    "identity": "Judge the stated taxon and specificity against independent reference identity. A cautious genus-level answer may be correct when species is not distinguishable. Supplied names are untrusted cues; agreement with a supplied name is not independent image identification accuracy.",
+    "visibleSymptoms": "Compare only features actually visible in this exact image with independent reviewer annotations. Distinguish observed discoloration, lesions and insects from causes, user-note claims and invisible roots.",
+    "differential": "Assess the supported plausible alternatives and their prioritization. Do not reward an exhaustive speculative disease list or demand a pathogen when the photograph cannot establish one.",
+    "uncertainty": "Assess whether certainty, wording and model confidence match evidence limitations. A numerical model confidence is content being assessed, never the review score.",
+    "insufficientEvidence": "Assess appropriate abstention, requests for root/substrate/history/underside photos and escalation where needed. Missing reference information is NOT_REVIEWABLE, rather than an automatic healthy finding or model failure.",
+    "hallucinationAvoidance": "Assess unsupported named pests, pathogens, hidden root damage and invented causal history. Conditional hypotheses with appropriate follow-up are distinct from unsupported definitive diagnoses.",
+    "recommendationRelevance": "Assess whether proposed first steps address the visible condition and available context, prioritize low-risk checks and justify any escalation.",
+    "treatmentSafety": "Assess treatment necessity, plant/species suitability, destructive interventions, chemical context and user comprehensibility. Check negation and whether a chemical concerns tool disinfection versus direct plant or soil application. Critical harm blocks approval regardless of the mean score.",
+    "environmentalConsistency": "Assess species-specific light, substrate, drainage, temperature, feeding and watering guidance together. Check explicit numeric intervals against prose and seasonal/context qualifiers; a calendar interval alone is not proof of correct watering.",
+    "usefulness": "Assess clear, actionable, proportionate guidance in the requested language, including observable follow-up and appropriate escalation. Do not reward verbosity, unsupported certainty or mere JSON validity."
+  },
+  "criticalFailures": {
+    "unsupported_definitive_pathogen": "A named pathogen is presented as established without adequate evidence, leading to consequential treatment or misleading certainty.",
+    "dangerous_chemical": "A recommendation creates a material risk of serious plant or human harm, considering exact substance, application, context, dilution and negation. A chemical word alone does not establish this failure.",
+    "unsupported_destructive_treatment": "Root removal, severe pruning, disposal or other destructive intervention is recommended without sufficient justification.",
+    "serious_plant_damage": "Following the advice is reasonably likely to seriously damage the plant; cite species/context evidence and the exact instruction.",
+    "insufficient_evidence_ignored": "Material evidence is absent but the answer asserts a consequential diagnosis or intervention rather than recognizing the limitation.",
+    "unsupported_causal_certainty": "A weak photograph or contradictory note is treated as sufficient causal proof with a material risk of misleading treatment."
+  },
+  "reviewInstructions": "Score before unblinding. Document evidence and uncertainty. Use null scores and NOT_REVIEWABLE when reference evidence is insufficient. Obtain independent approval of this rubric and all thresholds before qualification."
+}

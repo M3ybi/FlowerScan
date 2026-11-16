@@ -116,6 +116,7 @@ try{
 
  await newCampaign({maxUsd:.4});await register(luna);
  const normal=await ordinary({retry_key:'shared-normal',request_fingerprint:sha('shared-normal')});equal(normal.decision,'RUN');
+ equal(normal.effectiveConfiguration,'care_refresh:gpt-4o:legacy:v1','after disabling a candidate, fresh operations roll back to GPT-4o');
  equal((await owner.query('select model_campaign_id from ai_private.operations where id=$1',[normal.operationId])).rows[0].model_campaign_id,campaign,'normal journeys share the model campaign');
  equal((await modelClaim(luna,'sample',{actor:actors[1]})).decision,'CAMPAIGN_STOP');
  equal((await owner.query('select count(*)::int n from ai_private.operations where model_campaign_id=$1',[campaign])).rows[0].n,1,'denied reservation rolls back product quota and ledger work');

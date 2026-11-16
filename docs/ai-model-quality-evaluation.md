@@ -1,5 +1,9 @@
 # Model quality evidence and activation gates
 
+## Step 5.3 — current assessment
+
+111 stored outputs pass current structural inspection. Exact-input blinded comparisons, a proposed ten-dimension rubric/thresholds and fail-closed signed worksheet import are prepared. Independently reviewed outputs/cases remain0; no treatment, language or non-inferiority pass is inferred. See [assessment](ai-step53-quality-assessment.md), [independent protocol](ai-model-independent-review.md), [comparison](ai-model-quality-comparison.md) and [readiness](ai-model-activation-readiness.md). Historical sections below are retained with their original scope.
+
 ## Step 5.2 actual output evidence
 
 The authorized campaign produced **75 structurally valid new responses: 50 diagnosis and 25 care refresh**, with complete five-profile pairs across all five locales. This closes the requested engineering comparison, not the independent quality gate. Ten diagnosis contexts reuse five photographs; the 76-case/62-hash framework still has zero fully independently reviewed qualification cases. The operator confirmed no new independent review is available.

@@ -1,4 +1,4 @@
-import {validatePromptEvaluationCase,summarizeBotanicalReview} from './promptEvaluation.mjs';
+import {validatePromptEvaluationCase} from './promptEvaluation.mjs';
 
 export const requestedModelCategories=Object.freeze(['healthy_houseplant','similar_looking_species','juvenile_plant','partial_view','yellowing','brown_tips','watering_uncertain','light_damage_uncertain','nutrient_uncertain','fungal_looking_spot_uncertain','visible_pests','early_symptom_uncertain','poor_photo_uncertain','insufficient_evidence','misleading_name','contradictory_notes','unsupported_treatment','nonplant_sensitive_safety']);
 
@@ -29,12 +29,9 @@ export const summarizeModelCorpus=values=>{
 };
 
 export const qualifyModelRoute=(policy,reviews)=>{
- if(policy?.botanicalReview?.status!=='independently_reviewed'||typeof policy.botanicalReview.reviewerReference!=='string'||!policy.botanicalReview.reviewerReference.trim()||!/^[a-f0-9]{64}$/.test(policy.botanicalReview.approvalSha256))
-  return{status:'NOT VERIFIED',activationAllowed:false,reason:'Independent botanical policy approval missing'};
- if(!Array.isArray(reviews)||!Number.isInteger(policy.minimumIndependentCases)||policy.minimumIndependentCases<60||new Set(reviews.map(x=>x.independentCaseGroup)).size<policy.minimumIndependentCases||reviews.some(x=>!x.independentCaseGroup)
-  ||['en','sk','de','fr','es'].some(language=>!reviews.some(x=>x.language===language)))return{status:'NOT VERIFIED',activationAllowed:false,reason:'Independent reviewed case coverage missing'};
- const result=summarizeBotanicalReview(reviews,policy.botanicalMinimums);
- return{...result,activationAllowed:result.status==='REVIEW GATE PASSED'};
+ // Compatibility API for old unsigned reports. Self-declared status strings
+ // and an arbitrary approval hash must never qualify a model for activation.
+ return{status:'NOT VERIFIED',activationAllowed:false,reason:'Unsigned records cannot qualify a route. Import signed evidence with validateSignedReview, then obtain a separate approved route decision.'};
 };
 
 // Scenario arithmetic is planning, never a substitute for per-model measured

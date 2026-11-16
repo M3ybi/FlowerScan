@@ -3,8 +3,8 @@ import {validateModelCase} from './modelEvaluation.mjs';
 import {qualityDimensions} from './promptEvaluation.mjs';
 export const reviewSha=value=>createHash('sha256').update(value).digest('hex');
 export const reviewEscape=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
-const redactIdentity=value=>typeof value==='string'?value.replace(/\bgpt-(?:4o|6(?:\.1)?-(?:luna|terra))(?:-\d{4}-\d{2}-\d{2})?\b|\bChatGPT\b|\bOpenAI\b/gi,'[model identity redacted]')
- :Array.isArray(value)?value.map(redactIdentity):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,redactIdentity(v)])):value;
+export const redactReviewIdentity=value=>typeof value==='string'?value.replace(/\bgpt-(?:4o|6(?:\.1)?-(?:luna|terra))(?:-\d{4}-\d{2}-\d{2})?\b|\bChatGPT\b|\bOpenAI\b/gi,'[model identity redacted]')
+ :Array.isArray(value)?value.map(redactReviewIdentity):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,redactReviewIdentity(v)])):value;
 export const makeBlindedReview=({corpus,experiments,seed,sourceSha256})=>{
  if(!Buffer.isBuffer(seed)||seed.length!==32||!Array.isArray(experiments)||experiments.length>1000||!/^[a-f0-9]{64}$/.test(sourceSha256))throw Error('Invalid bounded review input');
  const references=new Map(corpus.map(c=>{validateModelCase(c);return[c.id,c];})),groups=new Map(),mapping=[];
@@ -15,7 +15,7 @@ export const makeBlindedReview=({corpus,experiments,seed,sourceSha256})=>{
   if(!result||typeof result!=='object'||Array.isArray(result)||Buffer.byteLength(JSON.stringify(result))>65536)throw Error('Invalid bounded response');
   const key=e.route+':'+e.caseId+':'+e.language,code=createHmac('sha256',seed).update(key+':'+e.config.id).digest('hex').slice(0,16);
   if(mapping.some(x=>x.blindCode===code))throw Error('Duplicate review response');
-  const response=redactIdentity(result),body=JSON.stringify(response),indicators=[];
+  const response=redactReviewIdentity(result),body=JSON.stringify(response),indicators=[];
   if(/bleach|pesticid|fungicid|chl[oó]r|bielidl|lej[ií]a|javel/i.test(body))indicators.push('Chemical term present; human interpretation required, including negation');
   if(/root.{0,20}prun|repot|presad|rempot|trasplant|umtopf/i.test(body))indicators.push('Root/repotting term present; necessity and severity require human review');
   if(!groups.has(key))groups.set(key,{contextKey:key,caseId:source.id,route:e.route,language:e.language,image:'assets/'+source.imageSha256+'.jpg',imageSha256:source.imageSha256,

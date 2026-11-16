@@ -1,5 +1,9 @@
 # Model qualification decision
 
+## Step 5.3 — current decision
+
+NO-GO remains for every Luna/Terra initial-care, refresh and diagnosis profile. Signed scores, reviewer identity, approved thresholds, independent case groups, treatment/language approvals and acceptable-result cost remain missing. Image safety and ordinary operations retain GPT-4o. [Activation readiness](ai-model-activation-readiness.md) records each route and missing evidence; [assessment](ai-step53-quality-assessment.md) records actual verification. Historical decisions below remain scoped to their original phases.
+
 ## Step 5.2 decision — 2026-11-16
 
 **NO-GO for ordinary candidate traffic.** The new campaign was explicitly authorized and completed: 50 diagnosis plus 25 refresh generations, 93 total provider attempts/$0.262243150000, all new usage measured. It is closed with an empty actor allowlist and registrations. Both old campaigns and their historical facts remain unchanged. GPT-4o stays active; candidate flags remain disabled at 0%.

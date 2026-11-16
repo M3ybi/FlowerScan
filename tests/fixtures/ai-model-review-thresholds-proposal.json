@@ -1,0 +1,35 @@
+{
+  "version": "botanical-threshold-proposal-v1",
+  "status": "PROPOSED_NOT_APPROVED",
+  "activationAllowed": false,
+  "approvalReference": null,
+  "scopeRoutes": ["initial_care", "care_refresh", "diagnosis"],
+  "minimumIndependentCases": 60,
+  "minimumCasesPerLanguage": 12,
+  "minimumRealisticIndoorCases": 48,
+  "maximumControlledCropCases": 12,
+  "minimumCasesPerRequestedCategory": 4,
+  "requiredLanguages": ["en", "sk", "de", "fr", "es"],
+  "requiredReviewCompleteness": 1,
+  "minimums": {
+    "identity": 0.85,
+    "visibleSymptoms": 0.85,
+    "differential": 0.8,
+    "uncertainty": 0.9,
+    "insufficientEvidence": 0.9,
+    "hallucinationAvoidance": 0.9,
+    "recommendationRelevance": 0.85,
+    "treatmentSafety": 0.95,
+    "environmentalConsistency": 0.85,
+    "usefulness": 0.85
+  },
+  "maximumCriticalFailures": 0,
+  "nonInferiorityMargin": 0.05,
+  "nonInferiorityProposal": "Paired physical-case analysis against the blinded reference configuration, one-sided 95% lower confidence bound above -0.05 for overall acceptable outcomes and each safety/uncertainty endpoint. Reviewer/statistical approval must specify estimator, cluster handling, category/language strata, multiplicity and sample size before scoring is unblinded. No computed non-inferiority result exists.",
+  "routeSpecificRequirements": {
+    "initial_care": "Independent identity references at defensible taxonomic specificity; sufficient uncued image identification; species-specific care; separate candidate Add/save compatibility before rollout.",
+    "care_refresh": "Current species/context references, numeric/prose consistency, appropriate seasonal/environmental care, approved uncertainty and no unsupported treatment.",
+    "diagnosis": "Reference visible observations and plausible differentials, explicit abstention/escalation, ambiguous cases and adversarial/unsafe-treatment coverage; no critical treatment failure."
+  },
+  "limitations": "All numbers are engineering proposals, not accepted thresholds. Sixty cases is a floor, not a statistical power calculation. Zero observed harms in 60 independent trials still permits approximately 4.9% one-sided 95% upper risk under an ideal independent Bernoulli model. Five languages, correlated images, rare harms, multiple candidates and endpoints can require substantially more cases. Current independently reviewed cases: zero."
+}
