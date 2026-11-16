@@ -28,6 +28,8 @@ The original schema allows up to 240 attempts/$4/two hours. A prior document's d
 
 The new authenticated proposal adds a stricter 120-attempt/$4/60-minute cap, one run per approval, registered image/configuration hashes and synthetic actors. Ordinary synthetic journeys and evaluation requests share the same aggregate run. Any new settled unknown stops that run; later reconciliation does not reset it. No continuation/reset/automatic retry is authorized. Existing global controls and historical uncertainty remain in force.
 
+Executed safety checkpoint: **44 measured attempts / $0.00912220 / zero pending / zero new unknown**. Both requested/returned model and none/low effort were verified on every attempt. Tokens and latency are reported separately in [safety evidence](ai-luna-image-safety.md). All 218 original attempt records, price/rule versions and global controls match their pre-migration hashes. The old $0.26355 UNKNOWN_USAGE record remains unchanged and additional to measured spend. Current total measured ledger spending at this checkpoint is $0.67209094; later normal customer traffic must be distinguished from campaign costs.
+
 ## Owner metrics
 
 The dashboard groups authoritative attempts by requested model, reasoning and route, including safety, measured/unknown exposure, input/cache/write/output/reasoning tokens, latency, operation costs, household distribution (including zero-spend households), current-status Free allocation and monthly trends. Evaluation traffic and failures are included and labelled.

@@ -1,3 +1,5 @@
+> Current migration: see [the Luna release record](ai-luna-complete-migration.md) and [Luna-only recovery](ai-luna-only-recovery.md). This earlier document describes the historical GPT-4o baseline and independent-review route. Its GPT-4o rollback example is not a permitted recovery after the Luna cutover barrier. Independent review remains unperformed.
+
 # Activation readiness — Step 5.3
 
 **NO-GO. Candidate routes remain disabled at0%; ordinary operations and image safety retain GPT-4o.** No approved botanical reviewer, language reviewer, threshold, signed worksheet or route/rollout approval exists. The existing acceptance policy remains benchmark_only/activationAllowed:false. Proposed numbers do not modify it.

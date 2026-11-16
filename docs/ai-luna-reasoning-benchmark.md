@@ -9,13 +9,13 @@ Existing Step 5.2 primary campaign: 75/75 structured generations, 50 diagnosis /
 | Initial identification/care | 0.000314635 | 0.000437635 | Previous five-language initial probes, five per effort |
 | Care refresh | 0.000367725 | 0.000464025 | Step 5.2 primary matched refresh set |
 | Diagnosis | 0.000376370 | 0.000432420 | Step 5.2 primary matched diagnosis set |
-| Image safety | UNKNOWN | UNKNOWN | New protected campaign has not executed |
+| Image safety | 0.000196584091 | 0.000218061364 | Executed 22 fixed safety images per effort; $0.00912220 total |
 
 For matched diagnosis, historical GPT-4o mean was $0.004781250; the Luna none generation-only reduction is about 92.13%. This excludes image safety, failures outside that matched set, infrastructure and revenue deductions. It is not a measured final journey saving.
 
 ## Decision and limits
 
-None is the initial candidate for identification/care, refresh and diagnosis. No meaningful botanical improvement from low has been established. Low is an explicitly qualified alternative for **new operations**, never an automatic second inference. Safety effort remains unselected pending its actual false-acceptance and cost results.
+None is the initial candidate for identification/care, refresh and diagnosis. No meaningful botanical improvement from low has been established. Low is an explicitly qualified alternative for **new operations**, never an automatic second inference. Safety none is now proposed: both efforts matched all 22 fixed decisions, with zero observed false acceptances/rejections; none was cheaper with lower median latency. See the measured safety report. Owner risk acceptance and customer activation are still pending.
 
 Archived cases include public PlantVillage labels, app catalog references, partial/damaged leaves, misleading names, uncertain roots, contradictory notes and adversarial chemical instructions. Public class labels do not verify treatment or every visible symptom. A previously flagged Peperomia-versus-tomato label disagreement remains a known engineering concern, not a specialist-adjudicated error. Native-speaker semantic approval is absent.
 

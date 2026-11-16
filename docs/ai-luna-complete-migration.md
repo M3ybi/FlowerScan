@@ -2,9 +2,15 @@
 
 ## Current state
 
-2026-11-16: compatibility implementation prepared; **production cutover NOT VERIFIED**. Starting main: `4b89f42132a5a6e941190af57c4b146e84f1a03a`. No migration-time paid calls or activation have occurred at this preparation checkpoint. Production remains the functioning GPT-4o baseline until the release gates below pass. A deployment alone is not completion.
+2026-11-16: **compatibility release DEPLOYED; final production cutover NOT VERIFIED**. Starting main was `4b89f42132a5a6e941190af57c4b146e84f1a03a`; deployed application revision is `18aa79931f210f63a249988c8c7cc9ecadea8470`. All four customer routes still use their original GPT-4o configurations, with Luna candidates disabled at 0%. No Terra provider calls were created.
 
-The owner identified their existing confirmed account privately. Account identifiers and credentials are deliberately absent from source. The exact single campaign was approved in the user session: 120 attempts / $4 measured + reserved + unknown exposure / 60 minutes / one request in flight. A real product-owner sign-in must still create its database approval. Campaign file SHA-256: `0a956fc2fd4348ba1df36556ea129236834cc96810f3f240f730108b00463bad`. Spending consent is not botanical risk acceptance or a rollout grant.
+The three additive migrations are applied (42 total). Nine affected Edge Functions, including authenticated owner controls, were deployed and their source/JWT/bundle metadata read back. Four unrelated functions, all seventeen secret digests, both private-bucket configurations, all original customer row hashes across sixteen tables, original prices/controls and all 218 original attempt facts were preserved. A fresh encrypted recovery archive was decrypt/parse verified before deployment; details are in the cutover record.
+
+The identified owner was enrolled privately and a normal existing signed-in owner session recorded the exact campaign approval through the production UI. Plan SHA-256: `0a956fc2fd4348ba1df36556ea129236834cc96810f3f240f730108b00463bad`; cap 120 attempts/$4 aggregate measured/reserved/unknown exposure/60 minutes/one in flight, no reset/continuation/Terra. Three synthetic identities and two test households were created, with a test-only Premium grant confined to the new household. Customer entitlements were not changed.
+
+**Executed safety comparison:** 44/44 measured Luna calls, $0.00912220, no new unknown exposure; each effort matched five allowed and seventeen rejected engineering reference labels. None is the proposed default; low showed no safety benefit in this set. Exact factual evidence SHA-256: `f4be0ded5a094ce82f203f2efc6942f3404a6c5e39b0d7e781110e5821073f9a`. Independent botanical reviews remain zero. The separate exact-hash owner risk decision and rollout grants are pending; spending approval does not activate customers. The single campaign must never be reset or reopened.
+
+Current-revision application, PostgreSQL and full disposable Supabase CI jobs passed. The separate Pages packaging job failed its existing `RELEASE_DATABASE_CONFIGURATION_REQUIRED` condition; active Netlify revision, clean release manifest and published asset hashes passed independent verification. A deployment and a passing engineering fixture set are not complete migration.
 
 ## Architecture
 

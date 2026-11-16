@@ -34,4 +34,25 @@ Average AI target €0.20, heavy-use target €0.50, warning €1 and elevated r
 
 Finite €3.99 revenue cannot guarantee profit for arbitrarily many unique paid inference requests. Heavy scenarios can have negative contribution. Support, tax, infrastructure and Free allocations are explicit assumptions; the result is contribution, not audited net profit. Any stricter product cap would require a separate product-policy approval.
 
-Preparation verification: deterministic tests execute all 56 scenarios, retain unknown safety cost, verify fee/FX/break-even arithmetic, reject malformed financial inputs and demonstrate negative heavy-use contribution. Final numerical all-Luna results remain pending actual safety measurements.
+Preparation verification: deterministic tests execute all 56 scenarios, retain unknown safety cost, verify fee/FX/break-even arithmetic, reject malformed financial inputs and demonstrate negative heavy-use contribution. The safety measurement now supplies final-Luna inputs; the executed numerical projections below remain composed estimates.
+
+## Executed projections using measured safety inputs
+
+The retained JSON/CSV contains **840 numerical projections**: five cost series × 56 workload/volume combinations × three fee scenarios (30% store, 15% store, illustrative EEA web). Historical generation populations are retained separately: GPT-4o initial $0.005045500, refresh $0.005546000, diagnosis $0.004781250; Luna values are in the reasoning report. Measured new safety means are none $0.000196584091 and low $0.000218061364. These were different images/populations from historical generation measurements.
+
+A composed cold diagnosis changes from historical $0.008099583 to Luna none $0.000572954 per action (about 92.93% lower); an identification/save changes from $0.008363833 to $0.000511219 (about 93.89% lower). These are component-based projections, not measured complete-journey savings or independently acceptable-result costs.
+
+Under the default 30% store assumptions, the cold-diagnosis projection is:
+
+| Actions/month | AI USD | Projected contribution EUR |
+|---|---:|---:|
+| 10 | 0.005730 | 1.958 |
+| 30 | 0.017189 | 1.947 |
+| 100 | 0.057295 | 1.911 |
+| 300 | 0.171886 | 1.806 |
+| 500 | 0.286477 | 1.702 |
+| 750 | 0.429716 | 1.572 |
+| 1,000 | 0.572954 | 1.442 |
+| 3,000 | 1.718862 | 0.400 |
+
+Projected cold-diagnosis break-even is 3,768 actions/month. The unique heavy-use stress scenario at 3,000 actions costs $3.037278 AI and has contribution −€0.798 / −€0.326 / −€0.164 for 30% store / 15% store / illustrative web respectively; its break-even volumes are 2,132 / 2,645 / 2,821. Actual collected-revenue profitability remains NOT VERIFIED. No quota, entitlement or product promise is changed.

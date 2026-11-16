@@ -4,7 +4,7 @@
 
 Before final cutover the existing GPT-4o service remains active outside explicitly approved Luna cohorts. The new schema/runtime is deployed default-off. If compatibility checks fail, stop and retain the working baseline; do not activate candidates or spend an unapproved campaign.
 
-Take and decrypt-verify an encrypted production backup before changes. The preparation backup at 2026-11-16T10:34:19Z was DPAPI CurrentUser encrypted with restricted ACL, 918,941 plaintext bytes and 919,158 encrypted bytes. Evidence SHA-256: `e29da5ed75ec641e69dec4bd72282ac19cafe1e77afda95f6692b20ac1607d34`. It is a logical public/Auth/Storage-metadata/Vault/migration/private-AI recovery archive, not Storage object bytes or managed signing-key recovery. No restore was performed. Refresh the checkpoint before deployment.
+Take and decrypt-verify an encrypted production backup before changes. The preparation backup at 2026-11-16T10:34:19Z was DPAPI CurrentUser encrypted with restricted ACL, 918,941 plaintext bytes and 919,158 encrypted bytes. Evidence SHA-256: `e29da5ed75ec641e69dec4bd72282ac19cafe1e77afda95f6692b20ac1607d34`. It is a logical public/Auth/Storage-metadata/Vault/migration/private-AI recovery archive, not Storage object bytes or managed signing-key recovery. No restore was performed. A fresh predeployment archive was then captured at 2026-11-16T11:57:35Z: 920,152 plaintext / 920,374 encrypted bytes, SHA-256 `dbb8606c437e2d49ffc851019833f9741c9a902edade840bf7c115be4cd2e02d`. PostgreSQL TLS used `verify-full` with the vendor CA and original hostname. DPAPI CurrentUser, restricted ACL, in-memory roundtrip/catalog/full parse and independent disk decrypt/full parse passed. No restore was performed.
 
 ## Final cutover barrier
 
@@ -22,4 +22,4 @@ After that timestamp, database guards reject new non-Luna operations and provide
 
 GPT-4o, GPT-4o-mini and Terra are not post-cutover recovery options. Do not restore old route data, reset a campaign, erase unknown exposure or weaken safety/authorization to restore apparent availability. Destructive restore of customer data is not a normal model rollback.
 
-Local proof: disposable tests exercised all twenty stages, legacy draining, all-Luna cutover, authorized Luna low recovery, denied Terra/GPT-4o new operations, retained unknown financial facts and revocation. Production cutover/recovery remains NOT EXECUTED at preparation.
+Local proof: disposable tests exercised all twenty stages, legacy draining, all-Luna cutover, authorized Luna low recovery, denied Terra/GPT-4o new operations, retained unknown financial facts and revocation. Compatibility migrations/functions are deployed. Production cutover/recovery remains NOT EXECUTED pending the exact authenticated risk acceptance and staged operating evidence. No legacy-model recovery is authorized after a future cutover.
