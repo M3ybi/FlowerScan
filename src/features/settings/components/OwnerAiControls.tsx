@@ -5,9 +5,9 @@ import { defaultFinancialAssumptions, projectHouseholdEconomics } from "../../..
 type Proposal = { sha256: string; plan: unknown; maxAttempts: number; maxUsd: number; durationSeconds: number; approved: boolean };
 type Evidence = { sha256: string; release_revision: string; configurations: Record<string, string>; safety_configuration_ids: string[];
   limitations: string; engineering_checks_passed: boolean; false_acceptances: number; new_unknown_exposure: number };
-type Acceptance = { id: string; revoked_at: string | null; state: string };
+type Acceptance = { id: string; revoked_at: string | null; state: string; configuration_hashes: Record<string, string> };
 type Stage = { id: string; route: string; stage: number; applied_at: string | null; revoked_at: string | null };
-type State = { proposals: Proposal[]; evidence: Evidence[]; acceptances: Acceptance[]; stages: Stage[]; routes: unknown; cutover: unknown };
+type State = { proposals: Proposal[]; evidence: Evidence[]; acceptances: Acceptance[]; stages: Stage[]; routes: unknown; cutover: { committed_at: string | null; release_revision: string | null } };
 type Finops = { spendingByModelAndRoute: Array<Record<string, string | number | null>>; unknownExposureAllTime: number;
   household: Record<string, unknown>; subscriptions: Record<string, unknown>; contribution: Record<string, unknown>;
   monthlyTrends: unknown; limitations: string[] };
@@ -107,6 +107,13 @@ export const OwnerAiControls = ({ userId }: { userId: string }) => {
           {!stage.applied_at && <button type="button" className="neutral-action" disabled={busy} onClick={() => void run({ action: "applyStage", grantId: stage.id })}>Apply approved stage</button>}</p>)}
         {state.acceptances.filter(acceptance => !acceptance.revoked_at).map(acceptance => <p key={acceptance.id}>{acceptance.state}{" "}<button type="button" className="danger-action" disabled={busy}
           onClick={() => void run({ action: "revoke", acceptanceId: acceptance.id })}>Revoke and stop this rollout</button></p>)}
+        {state.cutover.committed_at && <>
+          <h3>Qualified Luna recovery for new operations</h3>
+          <p>These explicit changes preserve existing operations and do not retry a paid request. Only configurations in an unrevoked acceptance are available.</p>
+          {state.acceptances.filter(acceptance => !acceptance.revoked_at).flatMap(acceptance => Object.keys(acceptance.configuration_hashes).map(configurationId =>
+            <p key={`${acceptance.id}:${configurationId}`}><button type="button" className="neutral-action" disabled={busy}
+              onClick={() => void run({ action: "recover", acceptanceId: acceptance.id, configurationId })}>Use {configurationId} for new operations</button></p>))}
+        </>}
         <details><summary>Current routes and cutover</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{show({ routes: state.routes, cutover: state.cutover })}</pre></details>
       </>}
       {finops && <>
