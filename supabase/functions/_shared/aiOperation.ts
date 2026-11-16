@@ -74,7 +74,7 @@ const rpc = async (client: Rpc, name: string, args: JsonObject) => {
 export const resolveSafetyConfiguration = async (actorId: string, householdId?: string) => {
   const data = await rpc(createServiceClient(), "ai_resolve_safety_configuration", { actor: actorId, household: householdId ?? null }) as { id?: string; hash?: string } | null;
   const config = getModelConfiguration(data?.id);
-  if (!config || config.route !== "image_safety" || await modelConfigurationHash(config) !== data?.hash) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+  if (!config || !isLunaConfiguration(config) || config.route !== "image_safety" || await modelConfigurationHash(config) !== data?.hash) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   return config;
 };
 
@@ -116,15 +116,16 @@ const readProviderJson = async (response: Response): Promise<JsonObject> => {
 };
 
 export const runAiOperation = async <T extends JsonObject>(apiKey: string, options: Options<T>): Promise<T> => {
+  if (options.promptEvaluation || options.evaluationInputKey) throw publicFailure("AI_EVALUATION_FORBIDDEN");
   const client = createServiceClient();
   const evaluationConfiguration = options.modelEvaluation ? getModelConfiguration(options.modelEvaluation.configurationId) : undefined;
   if (options.modelEvaluation && (!evaluationConfiguration || !isLunaConfiguration(evaluationConfiguration) || options.promptEvaluation || options.evaluationInputKey
     || await modelConfigurationHash(evaluationConfiguration) !== options.modelEvaluation.configurationHash)) throw publicFailure("AI_EVALUATION_FORBIDDEN");
   const defaultConfiguration = options.safetyConfiguration ?? getLunaConfiguration(routeForKind(options.kind));
-  // Closed historical evaluators retain their pre-cutover contracts. The SQL
-  // provider-start guard disables every legacy-model path at final cutover.
-  const legacyEvaluation = options.promptEvaluation || options.evaluationInputKey;
-  const model = evaluationConfiguration?.model ?? (legacyEvaluation ? "gpt-4o" : defaultConfiguration.model);
+  if (!isLunaConfiguration(defaultConfiguration)) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+  // Historical provider identities remain available for replay and settlement.
+  // New inference is restricted to a trusted Luna configuration.
+  const model = evaluationConfiguration?.model ?? defaultConfiguration.model;
   // Explicit standard tier makes the versioned standard-price registry applicable.
   let payload: JsonObject = { ...options.payload, model, service_tier: "default", store: false };
   if (evaluationConfiguration) payload = applyModelConfiguration(payload, evaluationConfiguration);
@@ -148,7 +149,7 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
   const clientKey = typeof options.retryKey === "string" && safetyNamespace ? await imageHash(new TextEncoder().encode(options.retryKey)) : options.retryKey;
   const retryKey = typeof clientKey === "string" ? `${clientKey}${day ? `:${day}` : ""}${safetyNamespace}` : `legacy:${fingerprint}`;
   if (retryKey.length > 160) throw publicFailure("AI_INVALID_OPERATION");
-  const claim = await rpc(client, options.modelEvaluation ? "ai_claim_model_operation" : options.promptEvaluation ? "ai_claim_prompt_operation" : "ai_claim_image_operation", {
+  const claim = await rpc(client, options.modelEvaluation ? "ai_claim_model_operation" : "ai_claim_image_operation", {
     actor: options.actorId, household: options.householdId || null, plant: options.plantId || null, kind: options.kind,
     retry_key: retryKey, request_fingerprint: fingerprint, image_sha256: hash,
     model_name: model, prompt_schema_version: options.promptVersion, output_limit: payload.max_output_tokens,
@@ -158,10 +159,7 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     ...(options.modelEvaluation ? {
       model_campaign: options.modelEvaluation.runId, model_input_key: options.modelEvaluation.inputKey,
       configuration_id: options.modelEvaluation.configurationId, configuration_hash: options.modelEvaluation.configurationHash, context_hash: options.modelEvaluation.contextHash,
-    } : options.promptEvaluation ? {
-      evaluation_run: options.promptEvaluation.runId, evaluation_input_key: options.promptEvaluation.inputKey,
-      definition_hash: options.promptEvaluation.definitionHash, context_hash: options.promptEvaluation.contextHash,
-    } : { evaluation_input_key: options.evaluationInputKey ?? null }),
+    } : { evaluation_input_key: null }),
   }) as { decision?: string; operationId?: string; leaseId?: string; result?: T; warning?: boolean; state?: string; effectiveConfiguration?: string; configurationHash?: string; stopCode?: string } | null;
   if (claim?.decision === "CAMPAIGN_STOP") throw publicFailure(claim.stopCode === "AI_CIRCUIT_OPEN" ? "AI_CIRCUIT_OPEN" : "AI_EVALUATION_LIMIT");
   if (claim?.decision === "REPLAY" && claim.result) return claim.result;
@@ -171,13 +169,13 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
   let timeoutMs = options.timeoutMs;
   if (claim.effectiveConfiguration) {
     const selected = getModelConfiguration(claim.effectiveConfiguration);
-    if (!selected || !["gpt-4o", "gpt-6-luna"].includes(selected.model) || await modelConfigurationHash(selected) !== claim.configurationHash || selected.promptVersion !== options.promptVersion
+    if (!selected || selected.model !== "gpt-6-luna" || await modelConfigurationHash(selected) !== claim.configurationHash || selected.promptVersion !== options.promptVersion
       || selected.outputLimit !== payload.max_output_tokens || selected.detail !== detail
       || (options.modelEvaluation ? selected.id !== evaluationConfiguration?.id : selected.route !== routeForKind(options.kind))) {
       throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
     }
     payload = applyModelConfiguration(payload, selected); timeoutMs = selected.timeoutMs;
-  } else if (!legacyEvaluation) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+  } else throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   if (claim.warning) console.warn("plantie.ai_financial_warning", { code: "DAILY_AI_SPEND_WARNING" });
   const attemptId = await rpc(client, "ai_start_image_attempt", { operation: claim.operationId, lease: claim.leaseId });
   if (typeof attemptId !== "string") throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
@@ -233,7 +231,7 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     }
     // A valid schema from an unregistered/wrong model is not an authorized
     // result. Settlement still records its usage or retains unknown exposure.
-    const matchesModel = facts.model === payload.model || (payload.model === "gpt-4o" && facts.model === "gpt-4o-2024-08-06");
+    const matchesModel = facts.model === payload.model;
     if (!matchesModel || (payload.reasoning && typeof payload.reasoning === "object"
       && facts.reasoningEffort !== undefined && facts.reasoningEffort !== (payload.reasoning as JsonObject).effort)) {
       facts.failureCategory = "PROVIDER_RESULT_INVALID";

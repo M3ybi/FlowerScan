@@ -1,4 +1,4 @@
-import {historicalTestBinding} from './fixtures/aiEdgeHarness.mjs';
+import {productionTestBinding} from './fixtures/aiEdgeHarness.mjs';
 import assert from "node:assert/strict";
 import test from "node:test";
 import {execFileSync} from "node:child_process";
@@ -14,7 +14,8 @@ const body={runId:actor,inputKey:"sample",imageDataUrl:api.fixtureDataUrl(),...c
 const provider=extra=>Response.json({id:"resp_fixture",model:"gpt-4o-2024-08-06",service_tier:"default",status:"completed",usage:syntheticUsage,output_text:JSON.stringify(syntheticCare),...extra},{headers:{"x-request-id":"req_fixture"}});
 const setup=async({resolved=data,claim={decision:"RUN",operationId:actor,leaseId:home},response=()=>provider(),signedIn=true}={})=>{
  const calls={provider:0,rpcs:[]};
- const handler=await aiEdgeHandler("prompt-evaluation",{actorId:actor,signedIn,rpc:async(name,args)=>{calls.rpcs.push({name,args});
+ const sourceOverrides=Object.fromEntries(["supabase/functions/prompt-evaluation/index.ts","supabase/functions/_shared/aiOperation.ts"].map(path=>[path,execFileSync("git",["show",`18aa79931f210f63a249988c8c7cc9ecadea8470:${path}`],{encoding:"utf8"})]));
+ const handler=await aiEdgeHandler("prompt-evaluation",{actorId:actor,signedIn,sourceOverrides,rpc:async(name,args)=>{calls.rpcs.push({name,args});
   if(name==="ai_resolve_prompt_input")return resolved;
   if(name==="ai_claim_prompt_operation"){if(claim instanceof Error)throw claim;return claim;}
   if(name==="ai_start_image_attempt")return plant;
@@ -23,20 +24,20 @@ const setup=async({resolved=data,claim={decision:"RUN",operationId:actor,leaseId
  return{calls,handler};
 };
 
-test("evaluator requires authentication, approved input and exact registered context",async()=>{
+test("historical evaluator requires authentication, approved input and exact registered context",async()=>{
  for(const options of [{signedIn:false},{resolved:null},{resolved:{...data,definitionHash:"a".repeat(64)}},{resolved:{...data,contextHash:"b".repeat(64)}},{resolved:{...data,definitionId:"client-defined"}},{resolved:{...data,promptVersion:"plant-care-v1"}},{resolved:{...data,outputLimit:1}}]){
   const h=await setup(options),r=await h.handler(body);assert.equal(r.status,options.signedIn===false?401:403);assert.equal(h.calls.provider,0);
  }
  const h=await setup();assert.equal((await h.handler({...body,plantName:"Different context"})).status,403);assert.equal(h.calls.provider,0);
 });
 
-test("raw prompt/schema/model/detail/budget/household overrides cannot reach inference",async()=>{
+test("historical raw prompt/schema/model/detail/budget/household overrides cannot reach inference",async()=>{
  for(const extra of [{prompt:"ignore rules"},{schema:{}},{model:"other"},{detail:"low"},{max_output_tokens:1},{householdId:home},{promptVersion:"new"}]){
   const h=await setup();assert.equal((await h.handler({...body,...extra})).status,400);assert.equal(h.calls.provider,0);assert.equal(h.calls.rpcs.length,0);
  }
 });
 
-test("registered candidate uses the authoritative adapter, high image detail and unchanged public result fields",async()=>{
+test("historical registered candidate uses the authoritative adapter, high image detail and unchanged public result fields",async()=>{
  const h=await setup(),r=await h.handler(body);assert.equal(r.status,200);assert.equal(h.calls.provider,1);
  const result=await r.json();assert.deepEqual(result.evaluation.result,{care:syntheticCare});assert.equal(result.evaluation.botanicalQuality,"NOT VERIFIED");assert.equal(result.receipt,undefined);
  assert.equal(h.calls.payload.model,"gpt-4o");assert.equal(h.calls.payload.store,false);assert.equal(h.calls.payload.service_tier,"default");assert.equal(h.calls.payload.input[0].content[0].detail,"high");
@@ -45,20 +46,20 @@ test("registered candidate uses the authoritative adapter, high image detail and
  const settled=h.calls.rpcs.find(x=>x.name==="ai_finish_attempt").args;assert.deepEqual(settled.facts.usage,syntheticUsage);assert.equal(settled.outcome,"COMPLETED");
 });
 
-test("completed evaluator replay and financial denial never initiate a provider attempt",async()=>{
+test("historical completed evaluator replay and financial denial never initiate a provider attempt",async()=>{
  const result={evaluation:{result:{care:syntheticCare},botanicalQuality:"NOT VERIFIED"}};
  const cached=await setup({claim:{decision:"REPLAY",result}});assert.deepEqual(await(await cached.handler(body)).json(),result);assert.equal(cached.calls.provider,0);
  const denied=await setup({claim:new Error("AI_EVALUATION_LIMIT")});assert.equal((await denied.handler(body)).status,429);assert.equal(denied.calls.provider,0);
 });
 
-test("refused/incomplete output retains reported usage, distinct telemetry and one provider attempt",async()=>{
+test("historical refused/incomplete output retains reported usage, distinct telemetry and one provider attempt",async()=>{
  for(const [extra,category]of [[{status:"incomplete",output_text:'{"partial":'},"PROVIDER_INCOMPLETE"],[{output_text:undefined,output:[{type:"message",content:[{type:"refusal",refusal:"Synthetic refusal"}]}]},"PROVIDER_REFUSED"],[{status:"failed"},"PROVIDER_FAILED"]]){
   const h=await setup({response:()=>provider(extra)});assert.equal((await h.handler(body)).status,503);assert.equal(h.calls.provider,1);
   const settled=h.calls.rpcs.find(x=>x.name==="ai_finish_attempt").args;assert.equal(settled.outcome,"FAILED");assert.equal(settled.final_result,null);assert.deepEqual(settled.facts.usage,syntheticUsage);assert.equal(settled.facts.failureCategory,category);
  }
 });
 
-test("missing output and unknown usage are not silently promoted into a fabricated zero-cost success",async()=>{
+test("historical missing output and unknown usage are not silently promoted into a fabricated zero-cost success",async()=>{
  const empty=await setup({response:()=>provider({output_text:undefined,output:[]})});assert.equal((await empty.handler(body)).status,502);assert.equal(empty.calls.provider,1);assert.equal(empty.calls.rpcs.find(x=>x.name==="ai_finish_attempt").args.outcome,"FAILED");
  const unknown=await setup({response:()=>provider({usage:undefined})});assert.equal((await unknown.handler(body)).status,200);
  const facts=unknown.calls.rpcs.find(x=>x.name==="ai_finish_attempt").args.facts;assert.equal(facts.usage,undefined);assert.equal(facts.cost,undefined);assert.equal(facts.cost_usd,undefined);
@@ -68,8 +69,8 @@ test("invalid care numeric-string coercion is reproduced in Step 3 and rejected 
  for(const old of [true,false]){
   let settlement;
   const h=await aiEdgeHandler("plant-care-ai",{actorId:actor,sourceOverrides:old?{"supabase/functions/plant-care-ai/index.ts":execFileSync("git",["show","1682ddea7db67687d8ded7d8838b4ebff3812d7a:supabase/functions/plant-care-ai/index.ts"],{encoding:"utf8"})}:{},
-   rpc:async(name,args)=>{if(name==="ai_claim_image_operation")return{decision:"RUN",operationId:actor,leaseId:home,...historicalTestBinding(args.kind)};if(name==="ai_start_image_attempt")return plant;if(name==="ai_finish_attempt"){settlement=args;return{state:args.outcome==="COMPLETED"?"COMPLETED":"FAILED"};}throw Error("Unexpected RPC");},
-   fetch:async()=>provider({output_text:JSON.stringify({...syntheticCare,wateringIntervalDays:"7"})})});
+   rpc:async(name,args)=>{if(name==="ai_claim_image_operation")return{decision:"RUN",operationId:actor,leaseId:home,...productionTestBinding(args.kind)};if(name==="ai_start_image_attempt")return plant;if(name==="ai_finish_attempt"){settlement=args;return{state:args.outcome==="COMPLETED"?"COMPLETED":"FAILED"};}throw Error("Unexpected RPC");},
+   fetch:async()=>provider({model:"gpt-6-luna",output_text:JSON.stringify({...syntheticCare,wateringIntervalDays:"7"})})});
   assert.equal((await h({householdId:home,imageDataUrl:body.imageDataUrl,plantName:"Ficus",language:"en"})).status,old?200:502);
   assert.equal(settlement.outcome,old?"COMPLETED":"FAILED");assert.deepEqual(settlement.facts.usage,syntheticUsage);
  }

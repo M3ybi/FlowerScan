@@ -117,6 +117,6 @@ test('ordinary per-purpose selection applies only a trusted bound configuration 
   const c=api.modelConfigurations.find(c=>c.route==='initial_care'&&c.model===model&&(c.reasoning===null||c.reasoning==='none'));let sent;
   const invoke=await aiEdgeHandler('plant-care-ai',{actorId:actor,rpc:async(name)=>name==='ai_claim_image_operation'?{decision:'RUN',operationId:actor,leaseId:home,effectiveConfiguration:c.id,configurationHash:await api.modelConfigurationHash(c)}:name==='ai_start_image_attempt'?run:{state:'COMPLETED'},fetch:async(_url,init)=>{sent=JSON.parse(init.body);return Response.json({model,service_tier:'default',status:'completed',usage:syntheticUsage,output_text:JSON.stringify(syntheticCare)});}});
   const response=await invoke({householdId:home,plantName:'Ficus',imageDataUrl,language:'en',model:'forged',reasoning:{effort:'max'}});
-  if(model==='gpt-6.1-terra'){assert.equal(response.status,503);assert.equal(sent,undefined);}else{assert.equal(response.status,200);assert.equal(sent.model,model);}
+  if(model!=='gpt-6-luna'){assert.equal(response.status,503);assert.equal(sent,undefined);}else{assert.equal(response.status,200);assert.equal(sent.model,model);}
  }
 });

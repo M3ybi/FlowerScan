@@ -82,7 +82,7 @@
     "test:ai-prompts": "node --test tests/botanical-prompts.test.mjs tests/prompt-evaluation.test.mjs",
     "test:prompt-postgres": "node scripts/test-prompt-postgres.mjs",
     "test:ai-models": "node --test tests/ai-models.test.mjs tests/model-corpus.test.mjs",
-    "test:ai-luna": "node --test tests/ai-luna.test.mjs tests/household-profitability.test.mjs tests/edge-source-fixture.test.mjs",
+    "test:ai-luna": "node --test tests/ai-luna.test.mjs tests/ai-luna-final-runtime.test.mjs tests/household-profitability.test.mjs tests/edge-source-fixture.test.mjs",
     "test:luna-postgres": "node scripts/test-luna-postgres.mjs",
     "test:model-postgres": "node scripts/test-model-postgres.mjs",
     "test:provider-diagnostics": "node --test tests/ai-provider-diagnostics.test.mjs tests/model-review-package.test.mjs tests/model-recovery-campaign.test.mjs tests/model-review-evidence.test.mjs",

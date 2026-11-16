@@ -15,11 +15,13 @@ For matched diagnosis, historical GPT-4o mean was $0.004781250; the Luna none ge
 
 ## Decision and limits
 
-None is the initial candidate for identification/care, refresh and diagnosis. No meaningful botanical improvement from low has been established. Low is an explicitly qualified alternative for **new operations**, never an automatic second inference. Safety none is now proposed: both efforts matched all 22 fixed decisions, with zero observed false acceptances/rejections; none was cheaper with lower median latency. See the measured safety report. Owner risk acceptance and customer activation are still pending.
+None is selected for identification/care, refresh, diagnosis and safety at the approved 50% canaries. No meaningful botanical improvement from low has been established. Low is an explicitly qualified alternative for **new operations**, never an automatic second inference. Both safety efforts matched all 22 fixed decisions, with zero observed false acceptances/rejections; none was cheaper with lower median latency. See the measured safety report. Exact owner risk acceptance is recorded; final 100% cutover and production recovery remain unverified.
 
 Archived cases include public PlantVillage labels, app catalog references, partial/damaged leaves, misleading names, uncertain roots, contradictory notes and adversarial chemical instructions. Public class labels do not verify treatment or every visible symptom. A previously flagged Peperomia-versus-tomato label disagreement remains a known engineering concern, not a specialist-adjudicated error. Native-speaker semantic approval is absent.
 
-The migration must retain separate labels: deterministic schema/contract checks; public-reference support; engineering assessment; unreviewed botanical/treatment quality; unknown safety performance before measurement. Neither JSON validity nor language-marker coverage establishes diagnostic accuracy.
+Additional ordinary-stage engineering review found six of eight care identifications disagreeing with publisher crop labels: two outputs on an Apple healthy reference, two on an Apple scab reference and two on a Tomato spider-mite reference. Two full-plant Ficus outputs agreed with the app reference. This is a small, selected engineering sample, not an independently reviewed botanical accuracy estimate or a matched GPT-4o comparison. Four diagnoses used cautious uncertainty; treatment safety remains unreviewed. Do not describe these results as proven botanical correctness.
+
+The migration must retain separate labels: deterministic schema/contract checks; public-reference support; engineering assessment; unreviewed botanical/treatment quality; unknown generalization beyond measured safety fixtures. Neither JSON validity nor language-marker coverage establishes diagnostic accuracy.
 
 ## Additional campaign reporting
 

@@ -5,6 +5,13 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 
 const historicalManifest = JSON.parse(readFileSync(new URL('./ai-model-manifest.json',import.meta.url),'utf8'));
+const productionManifest = JSON.parse(readFileSync(new URL('./ai-luna-manifest.json',import.meta.url),'utf8'));
+export const productionTestBinding = (kind = 'initial_care') => {
+  const route = ['image_validation','upload_validation'].includes(kind) ? 'image_safety' : kind;
+  const config = productionManifest.find(c=>c.definition.route===route&&c.definition.reasoning==='none');
+  if (!config) throw Error('Unknown production fixture route');
+  return { effectiveConfiguration: config.id, configurationHash: config.hash };
+};
 export const historicalTestBinding = (kind = 'initial_care') => {
   const route = ['image_validation','upload_validation'].includes(kind) ? 'image_safety' : kind;
   const config = historicalManifest.find(c=>c.id===`${route}:gpt-4o:legacy:v1`);

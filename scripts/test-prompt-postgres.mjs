@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {randomUUID,createHash} from "node:crypto";
 import {mkdir,writeFile} from "node:fs/promises";
 import {build} from "esbuild";
+import {execFileSync} from "node:child_process";
 import {createAiTestDatabase,aiRpc} from "./lib/aiTestDatabase.mjs";
 import {aiEdgeHandler,syntheticCare,syntheticFacts,syntheticUsage} from "../tests/fixtures/aiEdgeHarness.mjs";
 const db=await createAiTestDatabase(),{owner}=db;
@@ -11,6 +12,9 @@ const rejects=async(promise,pattern)=>{await assert.rejects(promise,pattern);ass
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const bundle=await build({stdin:{resolveDir:process.cwd(),loader:"ts",contents:'export * from "./supabase/functions/_shared/botanicalPromptCandidates.ts";export * from "./tests/fixtures/imagePayload.ts";'},bundle:true,write:false,format:"esm"});
 const api=await import("data:text/javascript;base64,"+Buffer.from(bundle.outputFiles[0].text).toString("base64"));
+// Preserve concurrency/financial regression coverage for immutable historical
+// contracts. The current endpoint is retired and tested separately as 410.
+const sourceOverrides=Object.fromEntries(["supabase/functions/prompt-evaluation/index.ts","supabase/functions/_shared/aiOperation.ts"].map(path=>[path,execFileSync("git",["show",`18aa79931f210f63a249988c8c7cc9ecadea8470:${path}`],{encoding:"utf8"})]));
 try{
  const actor=randomUUID(),viewer=randomUUID(),stranger=randomUUID(),home=randomUUID(),plant=randomUUID();
  for(const id of [actor,viewer,stranger])await owner.query("insert into auth.users(id,email) values($1,$2)",[id,`synthetic-${id}@example.invalid`]);
@@ -37,7 +41,7 @@ try{
  let providerCalls=0,otherResponses=0,release;
  const gate=new Promise(resolve=>{release=resolve;});
  const handlers=[];
- for(const client of sessions)handlers.push(await aiEdgeHandler("prompt-evaluation",{actorId:actor,rpc:(name,args)=>aiRpc(client,name,args),fetch:async(_url,init)=>{
+ for(const client of sessions)handlers.push(await aiEdgeHandler("prompt-evaluation",{actorId:actor,sourceOverrides,rpc:(name,args)=>aiRpc(client,name,args),fetch:async(_url,init)=>{
   providerCalls++;const payload=JSON.parse(init.body);assert.equal(payload.model,"gpt-4o");assert.equal(payload.input[0].content[0].detail,"high");await gate;
   return Response.json({id:"resp_fixture",model:"gpt-4o-2024-08-06",service_tier:"default",status:"completed",usage:syntheticUsage,output_text:JSON.stringify(syntheticCare)});
  }}));

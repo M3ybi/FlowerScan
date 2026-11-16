@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
-import { aiEdgeHandler, syntheticCare, syntheticUsage, historicalTestBinding } from "./fixtures/aiEdgeHarness.mjs";
+import { aiEdgeHandler, syntheticCare, syntheticUsage, productionTestBinding } from "./fixtures/aiEdgeHarness.mjs";
 
 const actor = "11111111-1111-4111-8111-111111111111";
 const household = "22222222-2222-4222-8222-222222222222";
@@ -10,8 +10,8 @@ const { fixtureDataUrl } = await import(`data:text/javascript;base64,${Buffer.fr
 const clientBundle = await build({ entryPoints: ["src/lib/imageUploadErrors.ts"], bundle: true, write: false, format: "esm" });
 const clientErrors = await import(`data:text/javascript;base64,${Buffer.from(clientBundle.outputFiles[0].text).toString("base64")}`);
 const body = { householdId: household, plantName: "Synthetic", imageDataUrl: fixtureDataUrl(), language: "en" };
-const provider = () => Response.json({ model: "gpt-4o-2024-08-06", service_tier: "default", status: "completed", usage: syntheticUsage, output_text: JSON.stringify(syntheticCare) });
-const setup = async ({ claim = { decision: "RUN", operationId: actor, leaseId: actor, ...historicalTestBinding() }, failAt, fetch = async () => provider(), settlementState = "COMPLETED", signedIn = true } = {}) => {
+const provider = () => Response.json({ model: "gpt-6-luna", service_tier: "default", status: "completed", usage: syntheticUsage, output_text: JSON.stringify(syntheticCare) });
+const setup = async ({ claim = { decision: "RUN", operationId: actor, leaseId: actor, ...productionTestBinding() }, failAt, fetch = async () => provider(), settlementState = "COMPLETED", signedIn = true } = {}) => {
   const calls = [], facts = []; let providerCalls = 0;
   const invoke = await aiEdgeHandler("plant-care-ai", { actorId: actor, signedIn,
     rpc: async (name, args) => {
@@ -47,7 +47,7 @@ test("unauthenticated and malformed retry identities never initiate inference", 
 test("actor, fingerprint, model, image metadata and retry fallback are server-derived", async () => {
   const h = await setup({ fetch: async (_url, init) => {
     const request = JSON.parse(init.body);
-    assert.equal(request.model, "gpt-4o"); assert.equal(request.service_tier, "default"); assert.equal(request.store, false);
+    assert.equal(request.model, "gpt-6-luna"); assert.equal(request.service_tier, "default"); assert.equal(request.store, false);
     return provider();
   } });
   assert.equal((await h.invoke({ ...body, userId: household, model: "arbitrary-model", cost: 0, operationId: household })).status, 200);
@@ -111,14 +111,14 @@ test("incomplete/refused/invalid successful responses preserve reported financia
     { status: "failed" }, { status: "cancelled" }, { status: "completed", output: [{ content: [{ type: "refusal", refusal: "Synthetic refusal" }] }] },
     { status: "completed", output_text: JSON.stringify({ ...syntheticCare, careTips: [] }) },
   ]) {
-    const h = await setup({ fetch: async () => Response.json({ ...response, model: "gpt-4o-2024-08-06", service_tier: "default", usage: syntheticUsage }) });
+    const h = await setup({ fetch: async () => Response.json({ ...response, model: "gpt-6-luna", service_tier: "default", usage: syntheticUsage }) });
     assert.ok((await h.invoke(body)).status >= 500); assert.equal(h.facts.length, 1);
     assert.equal(h.facts[0].outcome, "FAILED"); assert.deepEqual(h.facts[0].facts.usage, syntheticUsage);
   }
 });
 
 test("unsuccessful provider HTTP responses still record usage; invalid-image classification is preserved", async () => {
-  const h = await setup({ fetch: async () => Response.json({ error: { code: "invalid_image" }, usage: syntheticUsage, model: "gpt-4o-2024-08-06", service_tier: "default" }, { status: 400 }) });
+  const h = await setup({ fetch: async () => Response.json({ error: { code: "invalid_image" }, usage: syntheticUsage, model: "gpt-6-luna", service_tier: "default" }, { status: 400 }) });
   assert.equal((await h.invoke(body)).status, 400); assert.equal(h.facts[0].outcome, "FAILED");
   assert.deepEqual(h.facts[0].facts.usage, syntheticUsage); assert.equal(h.facts[0].facts.httpStatus, 400);
 });

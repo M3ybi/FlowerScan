@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
 import { build } from "esbuild";
-import { historicalTestBinding } from "./fixtures/aiEdgeHarness.mjs";
+import { productionTestBinding } from "./fixtures/aiEdgeHarness.mjs";
 
-const providerJson = (body, options) => Response.json({ model: "gpt-4o", ...body }, options);
+const providerJson = (body, options) => Response.json({ model: "gpt-6-luna", ...body }, options);
 
 const householdId = "11111111-1111-4111-8111-111111111111";
 const imageId = "22222222-2222-4222-8222-222222222222";
@@ -40,8 +40,8 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
       calls.push(`service:${method}`);
       if (method === "ai_claim_image_operation" && admissionError) return Promise.resolve({ data: null, error: admissionError });
       let data = null;
-      if (method === "ai_claim_image_operation") data = { decision: "RUN", operationId: imageId, leaseId: imageId, ...historicalTestBinding(args.kind) };
-      if (method === "ai_resolve_safety_configuration") { const binding = historicalTestBinding('image_validation'); data = { id: binding.effectiveConfiguration, hash: binding.configurationHash }; }
+      if (method === "ai_claim_image_operation") data = { decision: "RUN", operationId: imageId, leaseId: imageId, ...productionTestBinding(args.kind) };
+      if (method === "ai_resolve_safety_configuration") { const binding = productionTestBinding('image_validation'); data = { id: binding.effectiveConfiguration, hash: binding.configurationHash }; }
       if (method === "ai_start_image_attempt") data = imageId;
       if (method === "ai_finish_attempt") { settlements.push(args); data = { state: args.outcome }; }
       // PostgREST builders are PromiseLike; they do not expose Promise.catch.
