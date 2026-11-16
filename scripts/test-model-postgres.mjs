@@ -83,10 +83,31 @@ try{
  const bound=(await owner.query('select o.reserved_usd::text,o.model_configuration_id,a.cost_usd::text,a.reasoning_tokens from ai_private.operations o join ai_private.attempts a on a.operation_id=o.id where o.model_campaign_id=$1',[campaign])).rows[0];
  equal(Number(bound.reserved_usd),2.6355);equal(Number(bound.cost_usd),.00131);equal(bound.reasoning_tokens,'10');equal(bound.model_configuration_id,terra.id);
 
+ // Account concurrency is checked before the campaign's aggregate budget.
+ await newCampaign({maxUsd:.4});for(const key of ['busy_first','busy_same','busy_other'])await register(luna,key);
+ const busyWinner=await modelClaim(luna,'busy_first');equal(busyWinner.decision,'RUN');
+ const quotaUsage=async()=>Number((await owner.query("select coalesce(sum(requests),0) n from public.image_operation_limits where user_id=any($1::uuid[]) and operation='care'",[actors])).rows[0].n);
+ const busyQuota=await quotaUsage();
+ await rejects(modelClaim(luna,'busy_same'),error=>error.code==='P0001'&&error.message==='AI_BUSY');
+ equal((await owner.query('select count(*)::int n from ai_private.operations where model_campaign_id=$1',[campaign])).rows[0].n,1,'account-concurrency denial creates no operation');
+ equal(await quotaUsage(),busyQuota,'account-concurrency denial consumes no product quota');
+ equal((await modelClaim(luna,'busy_other',{actor:actors[1]})).decision,'CAMPAIGN_STOP','another actor reaches the aggregate budget guard');
+ equal(await quotaUsage(),busyQuota,'budget denial rolls back product quota');
+ await owner.query("update ai_private.operations set lease_expires_at=now()-interval '1 second' where model_campaign_id=$1 and state='RESERVED'",[campaign]);await owner.query('select ai_private.reconcile()');
+
  // One aggregate run, even when many distinct actors/configurations compete.
  await newCampaign({maxUsd:.4});for(let i=0;i<100;i++)await register(luna,'race_'+i);
- const racing=await Promise.all(sessions.map(async(session,i)=>modelClaim(luna,'race_'+i,{actor:actors[i%actors.length]},session)));
- equal(racing.filter(r=>r.decision==='RUN').length,1);equal(racing.filter(r=>r.decision==='CAMPAIGN_STOP').length,99);
+ const raceQuota=await quotaUsage();
+ const racing=await Promise.all(sessions.map(async(session,i)=>{
+  try{return await modelClaim(luna,'race_'+i,{actor:actors[i%actors.length]},session);}
+  catch(error){if(error.code==='P0001'&&error.message==='AI_BUSY')return{decision:'AI_BUSY'};throw error;}
+ }));
+ equal(racing.filter(r=>r.decision==='RUN').length,1);
+ equal(racing.filter(r=>['CAMPAIGN_STOP','AI_BUSY'].includes(r.decision)).length,99,'all other claims are denied by campaign or account concurrency');
+ equal(racing.some(r=>r.decision==='CAMPAIGN_STOP'),true,'aggregate campaign stop must be reached');
+ equal((await owner.query('select count(*)::int n from ai_private.operations where model_campaign_id=$1',[campaign])).rows[0].n,1,'all 99 denied claims leave no operation');
+ equal(await quotaUsage(),raceQuota+1,'only the winning reservation consumes product quota');
+ equal((await owner.query('select count(*)::int n from ai_private.attempts a join ai_private.operations o on o.id=a.operation_id where o.model_campaign_id=$1',[campaign])).rows[0].n,0,'reservation races start no provider attempts');
  equal((await owner.query('select stopped_at is not null stopped from ai_private.model_evaluation_runs where id=$1',[campaign])).rows[0].stopped,true);
  const winner=racing.find(r=>r.decision==='RUN');await rejects(start(winner),/AI_EVALUATION_CLOSED/);
  await rejects(owner.query('update ai_private.model_evaluation_runs set stopped_at=null where id=$1',[campaign]),/IMMUTABLE/);

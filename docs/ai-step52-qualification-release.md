@@ -2,7 +2,7 @@
 
 The missing technical comparison is complete: **50/50 diagnosis and 25/25 care-refresh generations passed**, covering GPT-4o, Luna none/low and Terra none/low, all five locales, v1 strict contracts, 1600px/high, original caps, store:false and the existing default service tier. **No candidate is qualified for ordinary traffic:** independent botanical/treatment/language review and approved thresholds remain absent. Ordinary GPT-4o routing stays active; candidate rollout remains disabled.
 
-Starting clean local/remote main: `825a3a15497b02cc58a52d17d99ca127867f5128`. Preparation/execution revision: `67704a904414311ff098a79d1e8c6748d5881d84`. [Its required CI](https://github.com/M3ybi/FlowerScan/actions/runs/43820173488) passed application, PostgreSQL and full disposable Supabase verification before paid work. Changes comprise the six requested documentation files and failure-only navigation-test diagnostics. No application/Edge/schema/pricing/prompt/image/entitlement change or runtime redeployment was required. Final-head CI/Netlify results are bound to the exact final revision in the private final verification receipt after this evidence commit.
+Starting clean local/remote main: `825a3a15497b02cc58a52d17d99ca127867f5128`. Preparation/execution revision: `67704a904414311ff098a79d1e8c6748d5881d84`. [Its required CI](https://github.com/M3ybi/FlowerScan/actions/runs/43820173488) passed application, PostgreSQL and full disposable Supabase verification before paid work. Changes comprise the six requested documentation files, failure-only navigation-test diagnostics and a PostgreSQL reservation-race test correction. No application/Edge/schema/pricing/prompt/image/entitlement change or runtime redeployment was required. Final-head CI/Netlify results are bound to the exact final revision in the private final verification receipt after this evidence commit.
 
 ## Authorization, actual execution and accounting
 
@@ -69,12 +69,13 @@ Hashes prove artifact identity, not reviewer approval. The blocked artifact has 
 | npm run check | PASS | TypeScript, existing offline suites and build |
 | Edge images/accounting/prompts/vision/models/provider units | PASS | Targeted suites also executed;14 provider/review/campaign cases |
 | PostgreSQL base/migrations | PASS |39 migrations,11 fixtures, existing upgrades/grants/release checks |
-| AI/vision/prompt/model/provider PostgreSQL | PASS |100 independent sessions each;96/44/47/104/16 assertions |
+| AI/vision/prompt/model/provider PostgreSQL | PASS |100 independent sessions each;96/44/47/114/16 assertions; model test now explicitly covers account-concurrency denial before aggregate campaign stop |
 | Actual Deno graph/auth signature/RevenueCat mode | PASS |12 Edge entrypoints and existing deterministic Deno tests |
 | Chromium/WebKit images and application workflows | PASS |282 image checks each and application suites |
 | Client-secret/source graph | PASS |Existing scanners executed |
 | Pre-campaign current-revision CI | PASS |All three required verification jobs at `67704a904414311ff098a79d1e8c6748d5881d84`, including full disposable Supabase |
 | Results-revision CI (`117b6be`) | FAIL |Unchanged Chromium safe-area assertion:12px instead of46px;23/24 navigation checks; PostgreSQL and full Supabase PASS |
+| Diagnostics-revision CI (`0d004d6`) | FAIL |PostgreSQL `AI_BUSY` at the 100-session reservation race; incorrect test assumption reproduced deterministically; application and full Supabase PASS |
 | Actual paid paired contracts/accounting/replays | PASS |75/75 generations;93/93 measured; both replays zero additional attempts |
 | Synthetic ordinary save journeys | PASS |Exact private JPEG readback and safety reuse |
 | Source/JWT/security grants/data preservation | PASS |Seven bundles; original124 attempts/16-table checkpoint; targeted denials |
@@ -93,6 +94,12 @@ The [results revision's application job](https://github.com/M3ybi/FlowerScan/act
 
 `scripts/test-mobile-navigation-browser.mjs` now logs browser version and, only on geometry/computed-style mismatch, the initial/bounds-following bottom values, root/inherited variables and test browser user agent. Original viewport/computed-style/bounds measurement order, every assertion line, all expected values and timeout/wait counts are preserved and independently compared against `117b6be`. No CSS or navigation behavior changed. Diagnostics are separate from AI execution/qualification; they cannot turn a wrong12px result into a pass. A subsequent green run does not erase the failed evidence above.
 
+### PostgreSQL race-test correction
+
+The [diagnostics revision's PostgreSQL job](https://github.com/M3ybi/FlowerScan/actions/runs/43827413663/job/133164418850) failed with SQLSTATE `P0001`/`AI_BUSY` at the 100-session model reservation race. The installed `ai_claim_operation` checks account concurrency before the later aggregate campaign-budget check. If the next queued request uses the winning actor, its correct denial is `AI_BUSY`; another actor can reach the budget guard and persist `CAMPAIGN_STOP`. The test incorrectly expected all99 losers to return `CAMPAIGN_STOP`. An unchanged-source local reproduction deliberately ordered those two same-actor requests and reproduced the exact exception before correcting the test.
+
+Only `scripts/test-model-postgres.mjs` changes: explicitly verify that same-account denial leaves no operation or quota increment, then verify another actor reaches the budget stop. The original100-session race still requires exactly one `RUN`,99 denied claims, a persistent campaign stop, denial of starting the winner after closure and no reopening. It now accepts only the precise SQLSTATE/message pair for the earlier concurrency denial, rethrowing every other error. Additional independent database assertions require exactly one surviving operation, one quota increment and zero provider attempts. Local execution passed114 assertions/100 sessions. No runtime SQL, financial limit, reservation, migration, Edge source or production admission behavior changed. The failed hosted log and controlled reproduction remain in the private evidence directory; final current-revision CI must still pass separately.
+
 ## Recovery and disposition
 
 Fresh pre-campaign encrypted backup: SHA-256 `f67248359964f6911443c9ae938b749f2aae83c32f948e020f6e48e01df5c25b`. Final post-cleanup backup at 2026-11-16T07:33:19.194Z: SHA-256 `734f6310d0abe6b27657b8e22e0a80042783931c0ca3c8ad708e6c92cea6b6f9`, 918941 bytes before DPAPI encryption. Restricted ACL, disk decryption, catalog and full parse passed; no restore was performed. Storage object bytes/managed platform configuration remain outside the logical archive. Existing guarded bundles and financial rollback controls remain available.
@@ -102,7 +109,7 @@ No runtime rollback is required. Documentation can be reverted through ordinary 
 | Required field | Result |
 |---|---|
 | Implementation | PASS |
-| Automated tests | FAIL at `117b6be`; local/paid-execution verification PASS; exact final-head result recorded separately |
+| Automated tests | PASS for executed local/paid-execution suites; superseded CI failures at `117b6be` and `0d004d6` retained; exact final-head CI verdict recorded separately |
 | New paid campaign authorization | APPROVED |
 | Paid diagnosis benchmark | COMPLETED |
 | Luna compatibility | VERIFIED |
