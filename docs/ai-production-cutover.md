@@ -63,7 +63,9 @@ A fresh pre-cutover logical archive was captured at 2026-11-16T13:29:09.542Z: 1,
 | New Luna Free allowance regression | NOT EXECUTED | Disposable/CI quota tests passed; remaining bounded production check requires authorized completion spend |
 | Final 100% / post-cutover smoke / qualified recovery | NOT EXECUTED | Original campaign expired before these stages; four approved 100% grants remain unapplied |
 | Final runtime candidate local checks | PASS | Exact frozen patch: full npm check, Edge types, sixteen Luna tests including forty configuration/locale payload comparisons, PostgreSQL model 100 sessions/117 assertions and Luna 167 assertions |
-| Final runtime candidate current-revision CI / deployment | NOT EXECUTED | Prepared source is not the current production Edge runtime; strict deployment must follow 100% cutover gates |
+| Final runtime candidate initial CI | FAIL | 3780791 run 43877278358: disposable Supabase passed; PostgreSQL accounting fixture loaded the strict adapter while expecting legacy GPT-4o, so no provider call started |
+| Historical PostgreSQL fixture correction | PASS | Explicitly pinned original accounting/diagnostics adapters to immutable 18aa799; AI/vision/prompt/model/Luna/diagnostics PostgreSQL reruns passed, including 100-session regressions; current Luna runtime remains tested separately |
+| Corrected final runtime current-revision CI / deployment | NOT EXECUTED | Awaiting the corrected revision's CI; source is not the current production Edge runtime; strict deployment must follow 100% cutover gates |
 | Physical Android / iOS | NOT EXECUTED | No physical device validation claimed |
 | Independent botanical / native-speaker review | NOT EXECUTED | Zero independent reviews; engineering evidence is separately labelled |
 | Actual collected-revenue profitability | NOT EXECUTED | Net receipts/tax/fees/refund/infrastructure reconciliation unavailable; projections only |

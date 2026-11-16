@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { build } from "esbuild";
+import { execFileSync } from "node:child_process";
 import { createAiTestDatabase, aiRpc } from "./lib/aiTestDatabase.mjs";
 import { aiEdgeHandler, syntheticCare, syntheticFacts, syntheticUsage } from "../tests/fixtures/aiEdgeHarness.mjs";
 
 const db = await createAiTestDatabase();
+// Preserve the original GPT-4o accounting/replay regression against its exact
+// compatibility adapter. Current Luna workers are exercised by test:model-postgres.
+const historicalAdapter = { "supabase/functions/_shared/aiOperation.ts": execFileSync("git", ["show", "18aa79931f210f63a249988c8c7cc9ecadea8470:supabase/functions/_shared/aiOperation.ts"], { encoding: "utf8" }) };
 const { owner } = db;
 let assertions = 0;
 const checks = [];
@@ -57,6 +61,7 @@ try {
   const providerGate = new Promise(resolve => { releaseProvider = resolve; });
   const handlers = [];
   for (const client of sessions) handlers.push(await aiEdgeHandler("plant-care-ai", {
+    sourceOverrides: historicalAdapter,
     actorId: free.actor, rpc: async (name, args) => { try { return await aiRpc(client, name, args); } catch (error) { if (client === sessions[0]) console.error("Synthetic RPC failure", name, error.message); throw error; } },
     fetch: async (_url, init) => {
       providerCalls++;

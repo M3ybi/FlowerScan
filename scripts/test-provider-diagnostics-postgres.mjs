@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';import {randomUUID,createHash} from 'node:crypto';import {build} from 'esbuild';
+import {execFileSync} from 'node:child_process';
 import {createAiTestDatabase,aiRpc} from './lib/aiTestDatabase.mjs';import {aiEdgeHandler,syntheticFacts} from '../tests/fixtures/aiEdgeHarness.mjs';
 const db=await createAiTestDatabase();let checks=0;const equal=(a,b)=>{assert.deepEqual(a,b);checks++;};
+// This regression preserves historical GPT-4o exposure/reconciliation amounts.
+// The current Luna adapter's provider diagnostics are covered by its unit suite.
+const sourceOverrides={'supabase/functions/_shared/aiOperation.ts':execFileSync('git',['show','18aa79931f210f63a249988c8c7cc9ecadea8470:supabase/functions/_shared/aiOperation.ts'],{encoding:'utf8'})};
 try{
  const actor=randomUUID(),house=randomUUID(),plant=randomUUID(),owner=db.owner;
  await owner.query('insert into auth.users(id,email) values($1,$2)',[actor,'synthetic-diagnostics@example.invalid']);
@@ -10,7 +14,7 @@ try{
  const b=await build({entryPoints:['tests/fixtures/imagePayload.ts'],bundle:true,write:false,format:'esm'}),{fixtureDataUrl}=await import('data:text/javascript;base64,'+Buffer.from(b.outputFiles[0].text).toString('base64'));
  let providerCalls=0;const clients=await Promise.all(Array.from({length:100},()=>db.connect()));
  for(const c of clients)await c.query("select set_config('request.jwt.claim.role','service_role',false)");
- const handlers=await Promise.all(clients.map(c=>aiEdgeHandler('plant-care-ai',{actorId:actor,rpc:(name,args)=>aiRpc(c,name,args),fetch:async()=>{providerCalls++;return Response.json({error:{code:'invalid_value',type:'invalid_request_error',param:'service_tier',message:'PRIVATE user image and notes'}},{status:400,headers:{'x-request-id':'req_safe_diagnostic'}});}})));
+ const handlers=await Promise.all(clients.map(c=>aiEdgeHandler('plant-care-ai',{actorId:actor,sourceOverrides,rpc:(name,args)=>aiRpc(c,name,args),fetch:async()=>{providerCalls++;return Response.json({error:{code:'invalid_value',type:'invalid_request_error',param:'service_tier',message:'PRIVATE user image and notes'}},{status:400,headers:{'x-request-id':'req_safe_diagnostic'}});}})));
  const responses=await Promise.all(handlers.map(h=>h({householdId:house,plantId:plant,plantName:'Synthetic',language:'de',generationSource:'manual_refresh',imageDataUrl:fixtureDataUrl()})));
  equal(providerCalls,1);equal(responses.every(r=>[409,503].includes(r.status)),true);
  const a=(await owner.query('select * from ai_private.attempts')).rows[0],op=(await owner.query('select * from ai_private.operations where id=$1',[a.operation_id])).rows[0];
