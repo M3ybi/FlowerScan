@@ -36,6 +36,24 @@ try{
  equal(unknownFacts.accounting_status,'UNKNOWN_USAGE');equal(Number(unknownFacts.exposure_usd),.26355);equal(unknownFacts.cost_usd,null);
  equal((await owner.query('select stopped_at is not null stopped from ai_private.model_evaluation_runs where id=$1',[campaign])).rows[0].stopped,true);
  await owner.query("update ai_private.model_evaluation_runs set enabled=false,actor_ids='{}' where id=$1",[campaign]);
+ // An exact approved fixture may supply its hash without rewriting the signed
+ // proposal. Missing/wrong/rejected fixtures and explicit empty lists fail closed.
+ for(const [index,projection,allowed] of [
+  [0,{fixtures:[{sha256:base.image_sha256,expected:'ALLOW'}]},true],
+  [1,{fixtures:[{sha256:sha('different'),expected:'ALLOW'}]},false],
+  [2,{fixtures:[{sha256:base.image_sha256,expected:'REJECT'}]},false],
+  [3,{fixtures:[]},false],
+  [4,{imageHashes:[],fixtures:[{sha256:base.image_sha256,expected:'ALLOW'}]},false],
+  [5,{imageHashes:[base.image_sha256]},true],
+ ]){
+  const plan={configurationHashes:{[luna.id]:luna.hash},...projection},proposal=sha(JSON.stringify(plan));
+  await owner.query('insert into ai_private.luna_campaign_proposals(sha256,plan,max_attempts,max_usd,duration_seconds) values($1,$2,1,1,1800)',[proposal,plan]);
+  const approved=await aiRpc(owner,'ai_owner_approve_campaign',{actor,proposal_sha256:proposal});
+  const run=(await owner.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_attempts,max_usd,owner_campaign_approval_id) values($1,$2,true,now()+interval '30 minutes',1,1,$3) returning id",[randomUUID(),[actor],approved.id])).rows[0].id;
+  const register=()=>owner.query("insert into ai_private.model_evaluation_inputs(run_id,input_key,configuration_id,context_hash,language,household_id,plant_id,image_sha256,image_width,image_height,encoded_bytes) values($1,'format_probe',$2,$3,'en',$4,$5,$6,2,3,128)",[run,luna.id,sha('format'),household,plant,base.image_sha256]);
+  if(allowed){await register();assertions++;}else await rejects(register(),/AI_EVALUATION_FORBIDDEN/);
+  await owner.query("update ai_private.model_evaluation_runs set enabled=false,actor_ids='{}' where id=$1",[run]);
+ }
  const hashes=Object.fromEntries(registry.map(c=>[c.id,c.hash])),safety=registry.filter(c=>c.definition.route==='image_safety').map(c=>c.id),categories=['healthy_plant','damaged_plant','pests','non_plant','documents','faces','screenshots','mixed_sensitive','blurred','extremely_dark','small_restricted_details','multiple_plants','ambiguous','corrupted','oversized'];
  await owner.query("insert into ai_private.luna_evidence(sha256,release_revision,configurations,safety_configuration_ids,known_disallowed_cases,false_acceptances,safety_fixture_manifest_sha256,safety_categories,provider_attempts,measured_usd,new_unknown_exposure,engineering_checks_passed,limitations) values($1,$2,$3,$4,17,0,$5,$6,44,.01,0,true,'Disposable synthetic gate fixture; not production quality evidence')",[sha('evidence'),'a'.repeat(40),hashes,safety,sha('fixtures'),categories]);
  const primary=registry.filter(c=>c.definition.reasoning==='none').map(c=>c.id),recovery=registry.filter(c=>c.definition.reasoning==='low').map(c=>c.id);
