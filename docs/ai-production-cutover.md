@@ -24,7 +24,7 @@ Ledger checkpoint: 218 attempts, $0.66296874 measured, $0.26355 unknown at 2026-
 | New Luna owner/rollout PostgreSQL | PASS | 167 assertions, twenty staged operations, cutover/recovery/revocation, historical review-hash constraints and financial preservation; synthetic facts |
 | Clean/upgrade migration replay | PASS | All 42 migrations, 12 SQL fixtures/replay, zero schema difference; local Auth/Storage/Vault adapters |
 | Household profitability | PASS | Deterministic 56-scenario, unknown-cost, fee/FX and negative-stress cases |
-| Full disposable Supabase current-head CI | NOT EXECUTED | Required before deploying this implementation; PostgreSQL fixtures are not equivalent |
+| Full disposable Supabase CI | FAIL | Initial `bec11a4` run failed during stack startup with a missing-file error, before SQL checks. The fixture omitted the newly declared owner function; complete source-graph copying and a regression test are prepared. Current-revision rerun required; PostgreSQL fixtures are not equivalent. |
 | Application Chromium / WebKit | PASS | Executed existing application suites on the compatibility implementation |
 | Mobile Chromium / WebKit | PASS | 24 checks per engine; unchanged existing assertions |
 | Owner visual regression | NOT EXECUTED | Real owner UI and session still required |

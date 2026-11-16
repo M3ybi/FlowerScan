@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import { verifyDatabaseRelease } from "./lib/verifyDatabaseRelease.mjs";
 import { supabaseFailureSummary, supabaseFailureSignals } from "./lib/supabaseDiagnostics.mjs";
+import { copyEdgeSourceGraph } from "./lib/copyEdgeSourceGraph.mjs";
 
 // A dedicated, random local project. Never --linked, never copy .temp/.env or
 // start/reset/stop the workspace's configured Supabase project.
@@ -45,13 +46,12 @@ try {
     .replace('sql_paths = ["./seed.sql"]', "sql_paths = []")
     .replace('openai_api_key = "env(OPENAI_API_KEY)"', 'openai_api_key = ""');
   await writeFile(path.join(workspace, "supabase", "config.toml"), config);
-  // The copied config declares this function. Startup resolves its source even
-  // though the SQL fixture never calls it. Copy its module graph, never .env/.temp.
-  for (const source of ["send-auth-email/index.ts", "_shared/authEmail.ts", "_shared/householdInviteEmail.ts", "_shared/observability.ts", "_shared/cors.ts"]) {
-    const target = path.join(workspace, "supabase", "functions", source);
-    await mkdir(path.dirname(target), { recursive: true });
-    await copyFile(path.join("supabase", "functions", source), target);
-  }
+  // Startup resolves every explicitly declared function even though these SQL
+  // fixtures never invoke one. Keep both complete source graphs, without envs.
+  await copyEdgeSourceGraph(workspace, [
+    "supabase/functions/send-auth-email/index.ts",
+    "supabase/functions/ai-owner-control/index.ts",
+  ]);
   const migrations = (await readdir("supabase/migrations")).filter(name => /^\d{14}_.+\.sql$/.test(name)).sort();
   const baseline = migrations.filter(name => name < "20261018190000");
   for (const name of baseline) await copyFile(`supabase/migrations/${name}`, path.join(migrationDir, name));
