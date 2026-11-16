@@ -37,7 +37,7 @@ test('all sixteen immutable configurations match manifest; only exact requested 
   assert.ok(['gpt-4o','gpt-6-luna','gpt-6.1-terra'].includes(c.model));assert.ok([null,'none','low'].includes(c.reasoning));
   assert.equal(c.model==='gpt-4o',c.reasoning===null);assert.equal(c.model==='gpt-4o',c.cacheTtl===null);
  }
- assert.equal(api.getModelConfiguration('gpt-fake'),undefined);assert.throws(()=>api.buildModelEvaluationPayload(api.modelConfigurations[0],context,imageDataUrl),/separate qualification/);
+ assert.equal(api.getModelConfiguration('gpt-fake'),undefined);assert.throws(()=>api.buildModelEvaluationPayload(api.modelConfigurations[0],context,imageDataUrl),/not evaluation eligible/);
 });
 
 test('all care/diagnosis routes use exact v1 schema/prompt/image/ceiling across five languages',()=>{
@@ -51,7 +51,7 @@ test('all care/diagnosis routes use exact v1 schema/prompt/image/ceiling across 
 });
 
 test('protected evaluation meters each allowed model and reasoning mode without a second provider client or retry',async()=>{
- for(const config of api.modelConfigurations.filter(c=>c.route!=='image_safety')){
+ for(const config of api.lunaProductionConfigurations.filter(c=>c.route!=='image_safety')){
   const h=await setup({config});const response=await h.invoke();assert.equal(response.status,200);const value=await response.json();assert.equal(value.evaluation.botanicalQuality,'NOT VERIFIED');
   assert.equal(h.requests.length,1);assert.equal(h.requests[0].url,'https://api.openai.com/v1/responses');assert.equal(h.requests[0].payload.model,config.model);
   const claim=h.calls.find(c=>c.name==='ai_claim_model_operation').args;assert.equal(claim.model_name,config.model);assert.equal(claim.kind,config.route==='diagnosis'?'diagnosis':'care_refresh');assert.equal(claim.configuration_hash,h.hash);
@@ -83,7 +83,7 @@ test('refusal, incomplete, malformed schema, missing access and provider 429/5xx
  for(const [provider,status] of [
   [()=>Response.json({status:'completed',usage:syntheticUsage,output:[{content:[{type:'refusal',refusal:'No'}]}]}),503],
   [()=>Response.json({status:'incomplete',usage:syntheticUsage}),503],
-  [()=>Response.json({status:'completed',usage:syntheticUsage,output_text:'{"wateringIntervalDays":"7"}'}),502],
+  [config=>Response.json({model:config.model,status:'completed',usage:syntheticUsage,output_text:'{"wateringIntervalDays":"7"}'}),502],
   [()=>Response.json({error:{code:'model_not_found'}},{status:404}),503],
   [()=>Response.json({error:{code:'rate_limit_exceeded'}},{status:429}),503],
   [()=>Response.json({error:{code:'server_error'}},{status:500}),503],
@@ -116,6 +116,7 @@ test('ordinary per-purpose selection applies only a trusted bound configuration 
  for(const model of ['gpt-4o','gpt-6-luna','gpt-6.1-terra']){
   const c=api.modelConfigurations.find(c=>c.route==='initial_care'&&c.model===model&&(c.reasoning===null||c.reasoning==='none'));let sent;
   const invoke=await aiEdgeHandler('plant-care-ai',{actorId:actor,rpc:async(name)=>name==='ai_claim_image_operation'?{decision:'RUN',operationId:actor,leaseId:home,effectiveConfiguration:c.id,configurationHash:await api.modelConfigurationHash(c)}:name==='ai_start_image_attempt'?run:{state:'COMPLETED'},fetch:async(_url,init)=>{sent=JSON.parse(init.body);return Response.json({model,service_tier:'default',status:'completed',usage:syntheticUsage,output_text:JSON.stringify(syntheticCare)});}});
-  assert.equal((await invoke({householdId:home,plantName:'Ficus',imageDataUrl,language:'en',model:'forged',reasoning:{effort:'max'}})).status,200);assert.equal(sent.model,model);
+  const response=await invoke({householdId:home,plantName:'Ficus',imageDataUrl,language:'en',model:'forged',reasoning:{effort:'max'}});
+  if(model==='gpt-6.1-terra'){assert.equal(response.status,503);assert.equal(sent,undefined);}else{assert.equal(response.status,200);assert.equal(sent.model,model);}
  }
 });

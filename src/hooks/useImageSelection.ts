@@ -9,6 +9,7 @@ import type { PlantieLanguage } from "../lib/onboarding.js";
 type Options = {
   enabled: boolean;
   scopeKey: string;
+  householdId?: string;
   language: PlantieLanguage | null;
   onStatus: (status: string) => void;
   onReady?: () => void;
@@ -70,7 +71,7 @@ export const useImageSelection = (options: Options) => {
       if (!current()) return;
       stage = "safety-validation";
       reportStatus(latest.current.copy.validating);
-      await validatePlantImageForUpload(candidate.dataUrl, latest.current.language, controller.signal);
+      await validatePlantImageForUpload(candidate.dataUrl, latest.current.language, controller.signal, latest.current.householdId);
       if (!current()) return;
       if (ownedImage.current) releaseNormalizedImage(ownedImage.current);
       ownedImage.current = candidate;

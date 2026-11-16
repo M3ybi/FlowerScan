@@ -7,6 +7,9 @@ project_id = "Flowscan"
 [functions.send-auth-email]
 verify_jwt = false
 
+[functions.ai-owner-control]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

@@ -1,5 +1,5 @@
 import { observeOperation } from "../_shared/observability.ts";
-import { aiErrorResponse, imageHash } from "../_shared/aiOperation.ts";
+import { aiErrorResponse, imageHash, resolveSafetyConfiguration } from "../_shared/aiOperation.ts";
 import { requireImageAdmission } from "../_shared/imageAdmission.ts";
 import { readImageRequest, requireProcessedImage, imageErrorResponse, ImageUploadError, imageNetworkError } from "../_shared/imageUpload.ts";
 import { createServiceClient, requireUser } from "../_shared/auth.ts";
@@ -49,7 +49,10 @@ Deno.serve(observeOperation("image_upload", async (request) => {
 
   const receipt = body.imageValidationReceipt;
   const signingSecret = Deno.env.get("IMAGE_VALIDATION_SIGNING_SECRET");
-  if (receipt !== undefined && !await verifyImageValidationReceipt(receipt, parsedImage.bytes, auth.user.id, signingSecret)) {
+  let safetyConfiguration;
+  try { safetyConfiguration = await resolveSafetyConfiguration(auth.user.id, householdId); }
+  catch (error) { return aiErrorResponse(error, body.language); }
+  if (receipt !== undefined && !await verifyImageValidationReceipt(receipt, parsedImage.bytes, auth.user.id, signingSecret, Date.now(), safetyConfiguration)) {
     return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_REQUIRED", 422), body.language);
   }
   try { await requireImageAdmission(() => auth.client.rpc("reserve_image_upload", { target_household_id: householdId, image_kind: kind, image_id: imageId })); }
@@ -57,7 +60,7 @@ Deno.serve(observeOperation("image_upload", async (request) => {
 
   try {
     const validation = receipt === undefined ? await validateImageSafety(apiKey, imageDataUrl, body.language, {
-      actorId: auth.user.id, householdId, kind: "upload_validation", image: parsedImage, retryKey: body.operationKey,
+      actorId: auth.user.id, householdId, kind: "upload_validation", image: parsedImage, retryKey: body.operationKey, safetyConfiguration,
     }) : true;
     if (!validation) return imageErrorResponse(new ImageUploadError("IMAGE_VALIDATION_FAILED", 422), body.language);
   } catch (error) { return aiErrorResponse(error, body.language); }

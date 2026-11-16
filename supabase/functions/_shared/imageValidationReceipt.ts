@@ -1,4 +1,5 @@
 import { imageSafetyPolicyFingerprint } from "./imageSafetyPolicy.ts";
+import { getLunaConfiguration, type ModelConfiguration } from "./aiModelRegistry.ts";
 
 const encoder = new TextEncoder();
 const lifetimeSeconds = 300;
@@ -8,16 +9,16 @@ const key = (secret: string) => crypto.subtle.importKey("raw", encoder.encode(se
 
 // This capability proves only safety of these exact bytes. Upload authorization,
 // household membership and normalized JPEG validation are checked independently.
-export const issueImageValidationReceipt = async (bytes: Uint8Array, userId: string, secret?: string, now = Date.now()) => {
+export const issueImageValidationReceipt = async (bytes: Uint8Array, userId: string, secret?: string, now = Date.now(), configuration: ModelConfiguration = getLunaConfiguration("image_safety")) => {
   if (!secret || secret.length < 32) return undefined;
   const issuedAt = Math.floor(now / 1000);
   const expiresAt = issuedAt + lifetimeSeconds;
-  const claims = btoa(JSON.stringify({ version: 2, policy: await imageSafetyPolicyFingerprint(), action: "upload", userId, hash: await hash(bytes), issuedAt, expiresAt }));
+  const claims = btoa(JSON.stringify({ version: 3, policy: await imageSafetyPolicyFingerprint(configuration), action: "upload", userId, hash: await hash(bytes), issuedAt, expiresAt }));
   const signature = hex(await crypto.subtle.sign("HMAC", await key(secret), encoder.encode(claims)));
   return { token: `${claims}.${signature}`, expiresAt: expiresAt * 1000 };
 };
 
-export const verifyImageValidationReceipt = async (token: unknown, bytes: Uint8Array, userId: string, secret?: string, now = Date.now()) => {
+export const verifyImageValidationReceipt = async (token: unknown, bytes: Uint8Array, userId: string, secret?: string, now = Date.now(), configuration: ModelConfiguration = getLunaConfiguration("image_safety")) => {
   if (!secret || secret.length < 32 || typeof token !== "string" || token.length > 2048) return false;
   try {
     const parts = token.split(".");
@@ -26,7 +27,7 @@ export const verifyImageValidationReceipt = async (token: unknown, bytes: Uint8A
     if (!await crypto.subtle.verify("HMAC", await key(secret), signature, encoder.encode(parts[0]))) return false;
     const claims = JSON.parse(atob(parts[0]));
     const seconds = Math.floor(now / 1000);
-    return claims.version === 2 && claims.policy === await imageSafetyPolicyFingerprint() && claims.action === "upload" && claims.userId === userId
+    return claims.version === 3 && claims.policy === await imageSafetyPolicyFingerprint(configuration) && claims.action === "upload" && claims.userId === userId
       && Number.isSafeInteger(claims.issuedAt) && Number.isSafeInteger(claims.expiresAt)
       && claims.issuedAt <= seconds && claims.expiresAt > seconds
       && claims.expiresAt - claims.issuedAt === lifetimeSeconds && claims.hash === await hash(bytes);

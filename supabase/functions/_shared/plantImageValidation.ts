@@ -1,8 +1,8 @@
-import { runAiOperation, type SafetyOperationContext } from "./aiOperation.ts";
+import { runAiOperation, resolveSafetyConfiguration, type SafetyOperationContext } from "./aiOperation.ts";
 import { isImageUploadValidationPayload, isImageUploadAllowed } from "../../../src/lib/imageUploadValidationRules.ts";
 import { ImageUploadError } from "./imageUpload.ts";
-import { buildAiLanguageInstruction } from "../../../src/lib/onboarding.ts";
-import { imageSafetyPrompt, imageSafetyPromptVersion, imageSafetySchema } from "./imageSafetyPolicy.ts";
+import { buildImageSafetyPayload } from "./imageSafetyContract.ts";
+import { getModelConfiguration } from "./aiModelRegistry.ts";
 
 const extractOutputText = (response: unknown) => {
   const outputText = (response as { output_text?: unknown }).output_text;
@@ -21,26 +21,13 @@ const extractOutputText = (response: unknown) => {
 };
 
 export const validateImageSafety = async (apiKey: string, imageDataUrl: string, language: unknown, context: SafetyOperationContext) => {
+  const legacyEvaluation = Boolean(context.evaluationInputKey);
+  const config = legacyEvaluation ? getModelConfiguration("image_safety:gpt-4o:legacy:v1")!
+    : context.safetyConfiguration ?? await resolveSafetyConfiguration(context.actorId, context.householdId);
   const result = await runAiOperation(apiKey, {
-    ...context, promptVersion: context.evaluationInputKey ? `${imageSafetyPromptVersion}:evaluation-v1` : imageSafetyPromptVersion, timeoutMs: 15_000,
-    payload: {
-        instructions: buildAiLanguageInstruction(language),
-        input: [
-          {
-            content: [
-              {
-                text:
-                  imageSafetyPrompt,
-                type: "input_text",
-              },
-              { detail: "high", image_url: imageDataUrl, type: "input_image" },
-            ],
-            role: "user",
-          },
-        ],
-        max_output_tokens: 700,
-        text: { format: { name: "plant_image_upload_validation", schema: imageSafetySchema, strict: true, type: "json_schema" } },
-    },
+    ...context, ...(legacyEvaluation ? {} : { safetyConfiguration: config }),
+    promptVersion: config.promptVersion + (legacyEvaluation ? ":evaluation-v1" : ""), timeoutMs: config.timeoutMs,
+    payload: buildImageSafetyPayload(imageDataUrl, language, config.model === "gpt-6-luna"),
     parse: payload => {
       const parsed: unknown = JSON.parse(extractOutputText(payload));
       if (!isImageUploadValidationPayload(parsed)) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);

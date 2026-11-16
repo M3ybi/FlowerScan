@@ -2,7 +2,7 @@ import { createServiceClient } from "./auth.ts";
 import { ImageUploadError, imageErrorResponse, imageNetworkError, imageProviderFailure } from "./imageUpload.ts";
 import { aiOperationMessage, type AiOperationCode } from "../../../src/lib/imageUploadErrors.ts";
 import { json } from "./cors.ts";
-import { getModelConfiguration, modelConfigurationHash, applyModelConfiguration, routeForKind } from "./aiModelRegistry.ts";
+import { getModelConfiguration, getLunaConfiguration, isLunaConfiguration, modelConfigurationHash, applyModelConfiguration, routeForKind, type ModelConfiguration } from "./aiModelRegistry.ts";
 import { providerDiagnostics, providerHttpCategory, providerRequestId, type ProviderParseStatus, type ProviderFailureCategory } from "./aiProviderDiagnostics.ts";
 
 type Kind = "initial_care" | "care_refresh" | "diagnosis" | "image_validation" | "upload_validation";
@@ -13,7 +13,7 @@ type RpcCall = PromiseLike<RpcResult> & { abortSignal?: (signal: AbortSignal) =>
 type Rpc = { rpc: (name: string, args: JsonObject) => RpcCall };
 type Image = { bytes: Uint8Array; width: number; height: number };
 export type SafetyOperationContext = { actorId: string; householdId?: string; kind: "image_validation" | "upload_validation"; image: Image; retryKey?: unknown;
-  imageDetail?: "high" | "low"; preprocessingProfile?: string; evaluationInputKey?: string };
+  imageDetail?: "high" | "low"; preprocessingProfile?: string; evaluationInputKey?: string; safetyConfiguration?: ModelConfiguration };
 type Options<T extends JsonObject> = {
   actorId: string;
   householdId?: string;
@@ -27,6 +27,7 @@ type Options<T extends JsonObject> = {
   evaluationInputKey?: string;
   promptEvaluation?: { runId: string; inputKey: string; definitionHash: string; contextHash: string };
   modelEvaluation?: { runId: string; inputKey: string; configurationId: string; configurationHash: string; contextHash: string };
+  safetyConfiguration?: ModelConfiguration;
   payload: JsonObject;
   timeoutMs: number;
   parse: (payload: JsonObject) => T;
@@ -70,6 +71,13 @@ const rpc = async (client: Rpc, name: string, args: JsonObject) => {
   } finally { clearTimeout(timer); }
 };
 
+export const resolveSafetyConfiguration = async (actorId: string, householdId?: string) => {
+  const data = await rpc(createServiceClient(), "ai_resolve_safety_configuration", { actor: actorId, household: householdId ?? null }) as { id?: string; hash?: string } | null;
+  const config = getModelConfiguration(data?.id);
+  if (!config || config.route !== "image_safety" || await modelConfigurationHash(config) !== data?.hash) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+  return config;
+};
+
 export const imageHash = async (bytes: Uint8Array) => Array.from(new Uint8Array(
   await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>)), byte => byte.toString(16).padStart(2, "0")).join("");
 
@@ -110,9 +118,13 @@ const readProviderJson = async (response: Response): Promise<JsonObject> => {
 export const runAiOperation = async <T extends JsonObject>(apiKey: string, options: Options<T>): Promise<T> => {
   const client = createServiceClient();
   const evaluationConfiguration = options.modelEvaluation ? getModelConfiguration(options.modelEvaluation.configurationId) : undefined;
-  if (options.modelEvaluation && (!evaluationConfiguration || options.promptEvaluation || options.evaluationInputKey
+  if (options.modelEvaluation && (!evaluationConfiguration || !isLunaConfiguration(evaluationConfiguration) || options.promptEvaluation || options.evaluationInputKey
     || await modelConfigurationHash(evaluationConfiguration) !== options.modelEvaluation.configurationHash)) throw publicFailure("AI_EVALUATION_FORBIDDEN");
-  const model = evaluationConfiguration?.model ?? (Deno.env.get("OPENAI_MODEL") || "gpt-4o");
+  const defaultConfiguration = options.safetyConfiguration ?? getLunaConfiguration(routeForKind(options.kind));
+  // Closed historical evaluators retain their pre-cutover contracts. The SQL
+  // provider-start guard disables every legacy-model path at final cutover.
+  const legacyEvaluation = options.promptEvaluation || options.evaluationInputKey;
+  const model = evaluationConfiguration?.model ?? (legacyEvaluation ? "gpt-4o" : defaultConfiguration.model);
   // Explicit standard tier makes the versioned standard-price registry applicable.
   let payload: JsonObject = { ...options.payload, model, service_tier: "default", store: false };
   if (evaluationConfiguration) payload = applyModelConfiguration(payload, evaluationConfiguration);
@@ -124,11 +136,18 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
   // A registered campaign input remains the same operation across midnight.
   // Ordinary care refreshes retain the existing UTC-day product identity.
   const day = options.kind === "care_refresh" && !options.modelEvaluation ? new Date().toISOString().slice(0, 10) : "";
-  const fingerprint = await requestFingerprint(payload, hash, options.promptVersion, day);
+  // Preserve the historical logical identity of care/diagnosis. This marker is
+  // never a provider choice: the database returns the immutable actual binding.
+  // Changing a route, effort or OPENAI_MODEL must not charge a retry twice.
+  const identityPayload = !options.modelEvaluation && !options.safetyConfiguration ? { ...payload, model: "gpt-4o" } : payload;
+  const fingerprint = await requestFingerprint(identityPayload, hash, options.promptVersion, day);
   if (options.retryKey !== undefined && (typeof options.retryKey !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(options.retryKey))) {
     throw publicFailure("AI_INVALID_OPERATION");
   }
-  const retryKey = typeof options.retryKey === "string" ? `${options.retryKey}${day ? `:${day}` : ""}` : `legacy:${fingerprint}`;
+  const safetyNamespace = options.safetyConfiguration ? `:s:${await modelConfigurationHash(options.safetyConfiguration)}` : "";
+  const clientKey = typeof options.retryKey === "string" && safetyNamespace ? await imageHash(new TextEncoder().encode(options.retryKey)) : options.retryKey;
+  const retryKey = typeof clientKey === "string" ? `${clientKey}${day ? `:${day}` : ""}${safetyNamespace}` : `legacy:${fingerprint}`;
+  if (retryKey.length > 160) throw publicFailure("AI_INVALID_OPERATION");
   const claim = await rpc(client, options.modelEvaluation ? "ai_claim_model_operation" : options.promptEvaluation ? "ai_claim_prompt_operation" : "ai_claim_image_operation", {
     actor: options.actorId, household: options.householdId || null, plant: options.plantId || null, kind: options.kind,
     retry_key: retryKey, request_fingerprint: fingerprint, image_sha256: hash,
@@ -152,13 +171,13 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
   let timeoutMs = options.timeoutMs;
   if (claim.effectiveConfiguration) {
     const selected = getModelConfiguration(claim.effectiveConfiguration);
-    if (!selected || await modelConfigurationHash(selected) !== claim.configurationHash || selected.promptVersion !== options.promptVersion
+    if (!selected || !["gpt-4o", "gpt-6-luna"].includes(selected.model) || await modelConfigurationHash(selected) !== claim.configurationHash || selected.promptVersion !== options.promptVersion
       || selected.outputLimit !== payload.max_output_tokens || selected.detail !== detail
       || (options.modelEvaluation ? selected.id !== evaluationConfiguration?.id : selected.route !== routeForKind(options.kind))) {
       throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
     }
     payload = applyModelConfiguration(payload, selected); timeoutMs = selected.timeoutMs;
-  } else if (options.modelEvaluation) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
+  } else if (!legacyEvaluation) throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
   if (claim.warning) console.warn("plantie.ai_financial_warning", { code: "DAILY_AI_SPEND_WARNING" });
   const attemptId = await rpc(client, "ai_start_image_attempt", { operation: claim.operationId, lease: claim.leaseId });
   if (typeof attemptId !== "string") throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
@@ -183,10 +202,10 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
     if (!response.ok) facts.failureCategory = providerHttpCategory(response.status, null);
     const body = await readProviderJson(response);
     providerBody = body; parseStatus = "PARSED";
-    facts.model = typeof body.model === "string" ? body.model : null;
-    facts.serviceTier = typeof body.service_tier === "string" ? body.service_tier : null;
-    facts.responseId = typeof body.id === "string" ? body.id : null;
-    facts.providerStatus = typeof body.status === "string" ? body.status : null;
+    facts.model = typeof body.model === "string" && /^gpt-(?:4o|6-luna|6\.1-terra)(?:-\d{4}-\d{2}-\d{2})?$/.test(body.model) ? body.model : null;
+    facts.serviceTier = typeof body.service_tier === "string" && ["default", "flex", "priority", "scale"].includes(body.service_tier) ? body.service_tier : null;
+    facts.responseId = typeof body.id === "string" && /^resp_[A-Za-z0-9_-]{1,180}$/.test(body.id) ? body.id : null;
+    facts.providerStatus = typeof body.status === "string" && ["completed", "failed", "incomplete", "cancelled", "queued", "in_progress"].includes(body.status) ? body.status : null;
     // Whitelist token counts, never provider errors/input/output into cost facts.
     const usage = body.usage as { input_tokens?: unknown; output_tokens?: unknown; total_tokens?: unknown; input_tokens_details?: { cached_tokens?: unknown; cache_write_tokens?: unknown; cache_write_tokens_details?: { ttl_30m_tokens?: unknown; ttl_12h_tokens?: unknown } }; output_tokens_details?: { reasoning_tokens?: unknown } } | undefined;
     if (usage && typeof usage === "object") facts.usage = {
@@ -211,6 +230,14 @@ export const runAiOperation = async <T extends JsonObject>(apiKey: string, optio
       facts.providerStatus = typeof body.status === "string" && ["completed", "failed", "incomplete", "cancelled", "queued", "in_progress"].includes(body.status) ? body.status : null;
       const code = (facts.providerDiagnostics as { code: string | null }).code;
       throw await imageProviderFailure(Response.json({ error: { code } }, { status: response.status }));
+    }
+    // A valid schema from an unregistered/wrong model is not an authorized
+    // result. Settlement still records its usage or retains unknown exposure.
+    const matchesModel = facts.model === payload.model || (payload.model === "gpt-4o" && facts.model === "gpt-4o-2024-08-06");
+    if (!matchesModel || (payload.reasoning && typeof payload.reasoning === "object"
+      && facts.reasoningEffort !== undefined && facts.reasoningEffort !== (payload.reasoning as JsonObject).effort)) {
+      facts.failureCategory = "PROVIDER_RESULT_INVALID";
+      throw new ImageUploadError("IMAGE_SERVICE_UNAVAILABLE", 503);
     }
     if (body.status === "incomplete" || body.status === "failed" || body.status === "cancelled") {
       facts.failureCategory = body.status === "incomplete" ? "PROVIDER_INCOMPLETE" : body.status === "cancelled" ? "PROVIDER_CANCELLED" : "PROVIDER_FAILED";

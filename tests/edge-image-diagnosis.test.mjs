@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
 import { build } from "esbuild";
+import { historicalTestBinding } from "./fixtures/aiEdgeHarness.mjs";
+
+const providerJson = (body, options) => Response.json({ model: "gpt-4o", ...body }, options);
 
 const householdId = "11111111-1111-4111-8111-111111111111";
 const imageId = "22222222-2222-4222-8222-222222222222";
@@ -37,7 +40,8 @@ const loadHandler = async (name, { allowed = true, signedIn = true, fetch, uploa
       calls.push(`service:${method}`);
       if (method === "ai_claim_image_operation" && admissionError) return Promise.resolve({ data: null, error: admissionError });
       let data = null;
-      if (method === "ai_claim_image_operation") data = { decision: "RUN", operationId: imageId, leaseId: imageId };
+      if (method === "ai_claim_image_operation") data = { decision: "RUN", operationId: imageId, leaseId: imageId, ...historicalTestBinding(args.kind) };
+      if (method === "ai_resolve_safety_configuration") { const binding = historicalTestBinding('image_validation'); data = { id: binding.effectiveConfiguration, hash: binding.configurationHash }; }
       if (method === "ai_start_image_attempt") data = imageId;
       if (method === "ai_finish_attempt") { settlements.push(args); data = { state: args.outcome }; }
       // PostgREST builders are PromiseLike; they do not expose Promise.catch.
@@ -99,17 +103,17 @@ test("server admission rejects excess image requests before provider or storage 
 });
 test("active member upload uses a household path after server validation", async () => {
   const { invoke, calls } = await loadHandler("upload-validated-image", {
-    fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
+    fetch: async () => providerJson({ output_text: JSON.stringify(safeValidation) }),
   });
   const response = await invoke(uploadBody);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).path, `${householdId}/plants/${imageId}/original.jpg`);
-  assert.deepEqual(calls, ["user:can_manage_household_content", "user:admit_image_operation", "user:reserve_image_upload", "service:ai_claim_image_operation", "service:ai_start_image_attempt", "service:ai_finish_attempt", "storage:upload", "service:ai_bind_uploaded_image"]);
+  assert.deepEqual(calls, ["user:can_manage_household_content", "user:admit_image_operation", "service:ai_resolve_safety_configuration", "user:reserve_image_upload", "service:ai_claim_image_operation", "service:ai_start_image_attempt", "service:ai_finish_attempt", "storage:upload", "service:ai_bind_uploaded_image"]);
 });
 
 test("case variants of UUIDs use the canonical reservation and Storage namespace", async () => {
   const { invoke } = await loadHandler("upload-validated-image", {
-    fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
+    fetch: async () => providerJson({ output_text: JSON.stringify(safeValidation) }),
   });
   const householdId = "ABCDEF12-ABCD-4ABC-8ABC-ABCDEFABCDEF";
   const imageId = "FEDCBA12-ABCD-4ABC-8ABC-ABCDEFABCDEF";
@@ -121,7 +125,7 @@ test("case variants of UUIDs use the canonical reservation and Storage namespace
 test("a verified safety receipt avoids a second provider request while forged content fails closed", async () => {
   const signingSecret = "synthetic-test-signing-secret-over-32-characters";
   const validation = await loadHandler("validate-plant-image", {
-    signingSecret, fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
+    signingSecret, fetch: async () => providerJson({ output_text: JSON.stringify(safeValidation) }),
   });
   const result = await validation.invoke({ imageDataUrl });
   assert.equal(result.status, 200);
@@ -137,19 +141,19 @@ test("a verified safety receipt avoids a second provider request while forged co
 });
 test("storage failure and AI rejection return failures without a success path", async () => {
   const rejected = await loadHandler("upload-validated-image", {
-    fetch: async () => Response.json({ output_text: JSON.stringify({ ...safeValidation, containsPlant: false }) }),
+    fetch: async () => providerJson({ output_text: JSON.stringify({ ...safeValidation, containsPlant: false }) }),
   });
   assert.equal((await rejected.invoke(uploadBody)).status, 422);
   assert.equal(rejected.calls.includes("storage:upload"), false);
   const failed = await loadHandler("upload-validated-image", {
-    fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }), uploadError: new Error("Unavailable"),
+    fetch: async () => providerJson({ output_text: JSON.stringify(safeValidation) }), uploadError: new Error("Unavailable"),
   });
   assert.equal((await failed.invoke(uploadBody)).status, 502);
 });
 
 test("upload accepts 2 MiB decoded JPEG beyond the old base64 cap", async () => {
   const { invoke } = await loadHandler("upload-validated-image", {
-    fetch: async () => Response.json({ output_text: JSON.stringify(safeValidation) }),
+    fetch: async () => providerJson({ output_text: JSON.stringify(safeValidation) }),
   });
   const imageDataUrl = fixtureDataUrl(jpegFixtureAtSize(2 * 1024 * 1024));
   assert.ok(imageDataUrl.length > 1_600_000);
@@ -185,8 +189,8 @@ test("oversized request bodies are bounded before JSON/base64 processing", async
 test("provider timeout, outage and corrupt image remain distinct from safety rejection", async () => {
   for (const [fetch, status, code] of [
     [async () => { throw new DOMException("", "AbortError"); }, 504, "IMAGE_NETWORK_TIMEOUT"],
-    [async () => Response.json({ error: { code: "unavailable" } }, { status: 503 }), 503, "IMAGE_SERVICE_UNAVAILABLE"],
-    [async () => Response.json({ error: { code: "invalid_image" } }, { status: 400 }), 400, "INVALID_IMAGE"],
+    [async () => providerJson({ error: { code: "unavailable" } }, { status: 503 }), 503, "IMAGE_SERVICE_UNAVAILABLE"],
+    [async () => providerJson({ error: { code: "invalid_image" } }, { status: 400 }), 400, "INVALID_IMAGE"],
   ]) {
     const { invoke, calls } = await loadHandler("upload-validated-image", { fetch });
     const response = await invoke(uploadBody);
@@ -204,7 +208,7 @@ test("validation, care and diagnosis all accept the normalized 2 MiB transport c
   const diagnosis = { confidence:80,confidence_label:"high",risk_level:"low",diagnosis_title:"Fixture",disclaimer:"Estimate",
     reasoning_summary:"Fixture",observed_symptoms:["Leaf"],recommended_steps:["Check soil"] };
   for (const [name,payload] of [["validate-plant-image",safeValidation],["plant-care-ai",care],["plant-diagnosis-ai",diagnosis]]) {
-    const { invoke } = await loadHandler(name,{fetch:async()=>Response.json({output_text:JSON.stringify(payload)})});
+    const { invoke } = await loadHandler(name,{fetch:async()=>providerJson({output_text:JSON.stringify(payload)})});
     assert.equal((await invoke({householdId,plantName:"Fixture",imageDataUrl,language:"en",generationSource:"initial_plant_add"})).status,200,name);
   }
 });
@@ -212,7 +216,7 @@ test("validation, care and diagnosis all accept the normalized 2 MiB transport c
 const diagnosisBody = { householdId, plantName: "Fixture plant", imageDataUrl, language: "en" };
 test("malformed confidence values are rejected rather than promoted to a definitive diagnosis", async () => {
   for (const confidence of ["80", -1, 101, 0.5, null]) {
-    const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => Response.json({ output_text: JSON.stringify({
+    const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => providerJson({ output_text: JSON.stringify({
       confidence, confidence_label: "high", risk_level: "low", diagnosis_title: "Fixture", disclaimer: "Estimate",
       reasoning_summary: "Fixture", observed_symptoms: ["Leaf"], recommended_steps: ["Check soil"],
     }) }) });
@@ -223,7 +227,7 @@ test("malformed confidence values are rejected rather than promoted to a definit
   }
 });
 test("incomplete provider diagnoses release quota and return a safe service error", async () => {
-  const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => Response.json({
+  const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => providerJson({
     status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output_text: '{"diagnosis_title":',
   }) });
   const response = await invoke(diagnosisBody);
@@ -242,7 +246,7 @@ test("initial care provider failure returns an actionable failure", async () => 
   assert.equal((await invoke({ ...diagnosisBody, generationSource: "initial_plant_add" })).status, 502);
 });
 test("valid diagnosis commits quota once through the trusted service", async () => {
-  const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => Response.json({
+  const { invoke, calls, settlements } = await loadHandler("plant-diagnosis-ai", { fetch: async () => providerJson({
     output_text: JSON.stringify({ confidence: 80, confidence_label: "high", risk_level: "low", diagnosis_title: "Dry leaf",
       disclaimer: "Estimate", reasoning_summary: "Dry soil", observed_symptoms: ["Dry leaf"], recommended_steps: ["Check soil"] }),
   }) });

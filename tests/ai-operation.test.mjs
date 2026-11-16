@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
-import { aiEdgeHandler, syntheticCare, syntheticUsage } from "./fixtures/aiEdgeHarness.mjs";
+import { aiEdgeHandler, syntheticCare, syntheticUsage, historicalTestBinding } from "./fixtures/aiEdgeHarness.mjs";
 
 const actor = "11111111-1111-4111-8111-111111111111";
 const household = "22222222-2222-4222-8222-222222222222";
@@ -11,7 +11,7 @@ const clientBundle = await build({ entryPoints: ["src/lib/imageUploadErrors.ts"]
 const clientErrors = await import(`data:text/javascript;base64,${Buffer.from(clientBundle.outputFiles[0].text).toString("base64")}`);
 const body = { householdId: household, plantName: "Synthetic", imageDataUrl: fixtureDataUrl(), language: "en" };
 const provider = () => Response.json({ model: "gpt-4o-2024-08-06", service_tier: "default", status: "completed", usage: syntheticUsage, output_text: JSON.stringify(syntheticCare) });
-const setup = async ({ claim = { decision: "RUN", operationId: actor, leaseId: actor }, failAt, fetch = async () => provider(), settlementState = "COMPLETED", signedIn = true } = {}) => {
+const setup = async ({ claim = { decision: "RUN", operationId: actor, leaseId: actor, ...historicalTestBinding() }, failAt, fetch = async () => provider(), settlementState = "COMPLETED", signedIn = true } = {}) => {
   const calls = [], facts = []; let providerCalls = 0;
   const invoke = await aiEdgeHandler("plant-care-ai", { actorId: actor, signedIn,
     rpc: async (name, args) => {
@@ -53,7 +53,7 @@ test("actor, fingerprint, model, image metadata and retry fallback are server-de
   assert.equal((await h.invoke({ ...body, userId: household, model: "arbitrary-model", cost: 0, operationId: household })).status, 200);
   const args = h.calls[0].args;
   assert.equal(args.actor, actor); assert.equal(args.household, household); assert.match(args.request_fingerprint, /^[0-9a-f]{64}$/);
-  assert.equal(args.retry_key, `legacy:${args.request_fingerprint}`); assert.equal(args.model_name, "gpt-4o");
+  assert.equal(args.retry_key, `legacy:${args.request_fingerprint}`); assert.equal(args.model_name, "gpt-6-luna");
   const ledger = JSON.stringify(h.facts[0].facts);
   assert.equal(ledger.includes("data:image"), false); assert.equal(ledger.includes("Synthetic"), false);
   assert.deepEqual(h.facts[0].facts.usage, syntheticUsage);

@@ -1,5 +1,11 @@
 # Versioned multi-model pricing
 
+## Luna migration accounting — 2026-11-16
+
+The [Luna-only migration](ai-luna-financial-accounting.md) preserves original prices and the $0.26355 unknown record. No new Terra inference is permitted. The additional Luna safety output cap is 700, with a conservative $0.263025 reservation; care/refresh remain $0.26355 and diagnosis $0.2643. Do not replace these context-ceiling bounds with observed means. Final Luna safety/journey cost remains unknown until the authenticated bounded campaign actually measures it.
+
+Correction to prior planning text: the existing SQL campaign schema permits 240 attempts/$4/two hours; 100 was the previous campaign's chosen cap, not a schema-wide limit. The new immutable owner-approved Luna proposal is more restrictive: at most120 attempts/$4/60 minutes, one run and no reset/continuation. Old financial evidence and closed campaigns are unchanged.
+
 ## Step 5.2 measured accounting — 2026-11-16
 
 The explicitly authorized fresh $4 campaign completed 93 attempts, all measured: **$0.262243150000**, zero new unknown/pending exposure, then closed without reset or continuation. Five price rows, two model price rules, 16 configuration hashes, full-context reservations and all application controls remain unchanged. Independent integer/rational arithmetic matched each ledger charge using actual returned model/tier and token categories. [Current official pricing](https://developers.openai.com/api/docs/pricing) still matches the registered candidate rates.

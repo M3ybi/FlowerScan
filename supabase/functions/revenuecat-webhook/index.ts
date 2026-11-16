@@ -112,6 +112,7 @@ const mapStatus = (event: RevenueCatEvent) => {
 };
 
 const createSanitizedPayload = (event: RevenueCatEvent) => ({
+  environment: event.environment || null,
   currency: event.currency,
   entitlement_id: event.entitlementId,
   expiration_at_ms: event.expirationAtMs,

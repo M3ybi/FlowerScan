@@ -1,3 +1,4 @@
+import {historicalTestBinding} from './fixtures/aiEdgeHarness.mjs';
 import assert from 'node:assert/strict';import test from 'node:test';import {build} from 'esbuild';
 import {aiEdgeHandler,syntheticCare,syntheticUsage} from './fixtures/aiEdgeHarness.mjs';
 import {readFileSync} from 'node:fs';
@@ -10,7 +11,7 @@ test('additive diagnostics delegates an exact copy of the prior model settlement
  assert.ok(readFileSync('supabase/migrations/20261115195536_ai_provider_error_diagnostics.sql','utf8').replaceAll('\r\n','\n').includes(expected));
 });
 const setup=async(provider,settlementFailure=false)=>{const facts=[],logs=[];let calls=0;const handler=await aiEdgeHandler('plant-care-ai',{actorId:actor,logs,rpc:async(name,args)=>{
- if(name==='ai_claim_image_operation')return{decision:'RUN',operationId:actor,leaseId:home};if(name==='ai_start_image_attempt')return actor;
+ if(name==='ai_claim_image_operation')return{decision:'RUN',operationId:actor,leaseId:home,...historicalTestBinding()};if(name==='ai_start_image_attempt')return actor;
  if(name==='ai_finish_attempt'){facts.push(args);if(settlementFailure)throw Error('PRIVATE database error');return{state:'FAILED'};}throw Error('Unexpected RPC');
 },fetch:async(_url,init)=>{calls++;assert.equal(init.headers['X-Client-Request-Id'],actor);return provider();}});return{run:()=>handler(input),facts,logs,calls:()=>calls};};
 test('HTTP400 retains only allowlisted code/type/canonical parameter and no message',async()=>{
@@ -41,5 +42,5 @@ test('transport, timeout and malformed successful bodies have distinct diagnosti
  for(const[provider,category,status]of [[()=>{throw new TypeError('PRIVATE');},'PROVIDER_TRANSPORT',502],[()=>{throw new DOMException('PRIVATE','TimeoutError');},'PROVIDER_TIMEOUT',504],[()=>new Response('PRIVATE'),'PROVIDER_RESULT_INVALID',502]]){const h=await setup(provider);assert.equal((await h.run()).status,status);assert.equal(h.facts[0].facts.providerDiagnostics.category,category);assert.equal(h.facts[0].facts.usage,undefined);assert.ok(!JSON.stringify(h.logs).includes('PRIVATE'));}
 });
 test('valid output with missing usage is explicitly observable, not charged zero',async()=>{
- const h=await setup(()=>Response.json({status:'completed',output_text:JSON.stringify(syntheticCare)}));await h.run();assert.equal(h.facts[0].facts.providerDiagnostics.category,'PROVIDER_MISSING_USAGE');assert.equal(h.facts[0].facts.costUsd,undefined);assert.equal(h.facts[0].facts.usage,undefined);
+ const h=await setup(()=>Response.json({model:'gpt-4o',status:'completed',output_text:JSON.stringify(syntheticCare)}));await h.run();assert.equal(h.facts[0].facts.providerDiagnostics.category,'PROVIDER_MISSING_USAGE');assert.equal(h.facts[0].facts.costUsd,undefined);assert.equal(h.facts[0].facts.usage,undefined);
 });

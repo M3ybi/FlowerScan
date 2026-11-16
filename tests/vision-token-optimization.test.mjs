@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
 import { createHash } from "node:crypto";
 import { estimateGpt4oImageTokens as estimate, resizeDimensions, visionVariants } from "../scripts/lib/visionBenchmark.mjs";
-import { aiEdgeHandler, syntheticCare, syntheticUsage } from "./fixtures/aiEdgeHarness.mjs";
+import { aiEdgeHandler, syntheticCare, syntheticUsage, historicalTestBinding } from "./fixtures/aiEdgeHarness.mjs";
 const actor = "11111111-1111-4111-8111-111111111111", run = "22222222-2222-4222-8222-222222222222";
 const bundled = await build({ entryPoints:["tests/fixtures/imagePayload.ts"],bundle:true,write:false,format:"esm" });
 const { fixtureDataUrl } = await import("data:text/javascript;base64,"+Buffer.from(bundled.outputFiles[0].text).toString("base64"));
@@ -33,7 +33,7 @@ test("default provider payload and fingerprint match the immutable Step 2 releas
   const invoke = async sourceOverrides => {
     let payload,claim;
     const handler=await aiEdgeHandler("plant-care-ai",{actorId:actor,sourceOverrides,
-      rpc:async(name,args)=>{if(["ai_claim_operation","ai_claim_image_operation"].includes(name)){claim=args;return{decision:"RUN",operationId:actor,leaseId:actor};}
+      rpc:async(name,args)=>{if(["ai_claim_operation","ai_claim_image_operation"].includes(name)){claim=args;return{decision:"RUN",operationId:actor,leaseId:actor,...historicalTestBinding(args.kind)};}
         if(["ai_start_attempt","ai_start_image_attempt"].includes(name))return run;if(name==="ai_finish_attempt")return{state:"COMPLETED"};throw new Error("Unexpected RPC");},
       fetch:async(_url,init)=>{payload=JSON.parse(init.body);return provider(syntheticCare);},
     });
@@ -51,7 +51,7 @@ test("default provider payload and fingerprint match the immutable Step 2 releas
 test("cached safety data is checked against today's rules before acceptance", async () => {
   const invoke=async(sourceOverrides,validation)=>{
     let calls=0;const h=await aiEdgeHandler("validate-plant-image",{actorId:actor,sourceOverrides,
-      rpc:async name=>{assert.equal(name,"ai_claim_image_operation");return{decision:"REPLAY",result:{validation}};},
+      rpc:async name=>{if(name==='ai_resolve_safety_configuration'){const b=historicalTestBinding('image_validation');return{id:b.effectiveConfiguration,hash:b.configurationHash};}assert.equal(name,"ai_claim_image_operation");return{decision:"REPLAY",result:{validation}};},
       fetch:async()=>{calls++;throw new Error("No inference on replay");}});
     const result=await h({imageDataUrl,language:"en"});assert.equal(calls,0);return result.status;
   };
@@ -65,7 +65,7 @@ test("moved safety prompt/schema leave ordinary provider input byte-equivalent",
   const payloads=[];
   for(const sourceOverrides of [{"supabase/functions/_shared/plantImageValidation.ts":previous("supabase/functions/_shared/plantImageValidation.ts")},{}]){
     const h=await aiEdgeHandler("validate-plant-image",{actorId:actor,sourceOverrides,
-      rpc:async name=>name==="ai_claim_image_operation"?{decision:"RUN",operationId:actor,leaseId:actor}:name==="ai_start_image_attempt"?run:{state:"COMPLETED"},
+      rpc:async name=>{const binding=historicalTestBinding('image_validation');return name==='ai_resolve_safety_configuration'?{id:binding.effectiveConfiguration,hash:binding.configurationHash}:name==="ai_claim_image_operation"?{decision:"RUN",operationId:actor,leaseId:actor,...binding}:name==="ai_start_image_attempt"?run:{state:"COMPLETED"};},
       fetch:async(_url,init)=>{payloads.push(init.body);return provider(safe);}});
     assert.equal((await h({imageDataUrl,language:"sk"})).status,200);
   }

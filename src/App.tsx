@@ -295,20 +295,6 @@ export const App = () => {
   const [isSavingDiagnosis, setIsSavingDiagnosis] = useState(false);
   const [diagnosisSymptomNotes, setDiagnosisSymptomNotes] = useState("");
   const [diagnosisUpgradeReason, setDiagnosisUpgradeReason] = useState("");
-  const imageSelectionScope = `${householdOperationScope.userId}:${householdOperationScope.householdToken}:${householdOperationScope.generation}`;
-  const newImageSelection = useImageSelection({
-    enabled: isAddPlantModalOpen && !isAddingPlant, scopeKey: imageSelectionScope, language: selectedLanguage,
-    onStatus: setNewPlantStatus, copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("image.ready") },
-  });
-  const diagnosisImageSelection = useImageSelection({
-    enabled: isDiagnosisModalOpen && route.page === "detail" && !isDiagnosing, scopeKey: `${imageSelectionScope}:${route.page === "detail" ? route.flowerId : ""}`, language: selectedLanguage,
-    onStatus: setDiagnosisStatus, onReady: () => setDiagnosisDraft(null),
-    copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("diagnosis.imageReady") },
-  });
-  const newPlantImage = newImageSelection.image;
-  const diagnosisImageDataUrl = diagnosisImageSelection.image?.dataUrl ?? "";
-  const diagnosisImagePreviewUrl = diagnosisImageSelection.image?.previewUrl ?? "";
-  const isCapturingDiagnosisImage = diagnosisImageSelection.isProcessing;
   const [openDiagnosticId, setOpenDiagnosticId] = useState("");
   const [diagnosticHistoryStatus, setDiagnosticHistoryStatus] = useState("");
   const [pendingDiagnosticUpdateKey, setPendingDiagnosticUpdateKey] = useState("");
@@ -339,6 +325,20 @@ export const App = () => {
   const activeSupabaseHouseholdId =
     supabaseReadState?.household.id ??
     (!shouldUseSupabaseAccountData && activeHousehold && isUuid(activeHousehold.publicToken) ? activeHousehold.publicToken : "");
+  const imageSelectionScope = `${householdOperationScope.userId}:${householdOperationScope.householdToken}:${householdOperationScope.generation}`;
+  const newImageSelection = useImageSelection({
+    enabled: isAddPlantModalOpen && !isAddingPlant, scopeKey: imageSelectionScope, householdId: activeSupabaseHouseholdId || undefined, language: selectedLanguage,
+    onStatus: setNewPlantStatus, copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("image.ready") },
+  });
+  const diagnosisImageSelection = useImageSelection({
+    enabled: isDiagnosisModalOpen && route.page === "detail" && !isDiagnosing, scopeKey: `${imageSelectionScope}:${route.page === "detail" ? route.flowerId : ""}`, householdId: activeSupabaseHouseholdId || undefined, language: selectedLanguage,
+    onStatus: setDiagnosisStatus, onReady: () => setDiagnosisDraft(null),
+    copy: { processing: t("image.processing"), validating: t("image.validatingPlant"), ready: t("diagnosis.imageReady") },
+  });
+  const newPlantImage = newImageSelection.image;
+  const diagnosisImageDataUrl = diagnosisImageSelection.image?.dataUrl ?? "";
+  const diagnosisImagePreviewUrl = diagnosisImageSelection.image?.previewUrl ?? "";
+  const isCapturingDiagnosisImage = diagnosisImageSelection.isProcessing;
   const { subscription, refreshSubscriptionState } = useSubscriptionState(
     auth.user?.id ?? null,
     isSupabaseAuthIdentityTransition ? null : activeSupabaseHouseholdId || null,

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {build} from 'esbuild';
-import {createAiTestDatabase,aiRpc} from './lib/aiTestDatabase.mjs';
+import {createAiTestDatabase,aiRpc,createApprovedTestCampaign} from './lib/aiTestDatabase.mjs';
 import {aiEdgeHandler,syntheticCare,syntheticFacts,syntheticUsage} from '../tests/fixtures/aiEdgeHarness.mjs';
 const db=await createAiTestDatabase(),{owner}=db;let assertions=0;
 const equal=(a,b,message)=>{assert.deepEqual(a,b,message);assertions++;};
@@ -37,7 +37,7 @@ try{
  const firstOp=(await owner.query('select * from ai_private.operations where id=$1',[first.operationId])).rows[0];equal(firstOp.logical_fingerprint,base.request_fingerprint);
  equal(firstOp.fingerprint,sha(base.request_fingerprint+':'+first.configurationHash));equal(firstOp.requested_model,'gpt-4o');
  const cohort=(await owner.query("select ai_private.model_cohort($1,'care_refresh') n",[home])).rows[0].n;equal(cohort<500,true);
- await owner.query("update ai_private.model_routes set enabled=true,rollout_percent=5,quality_approval_sha256=$1,bounded_input_approval_sha256=$2 where route='care_refresh'",['a'.repeat(64),'b'.repeat(64)]);
+ await owner.query("update ai_private.model_routes set approval_mode='INDEPENDENTLY_REVIEWED',enabled=true,rollout_percent=5,quality_approval_sha256=$1,bounded_input_approval_sha256=$2 where route='care_refresh'",['a'.repeat(64),'b'.repeat(64)]);
  equal((await ordinary()).decision,'WAIT','route changes cannot move reserved work to another model');
  const firstAttempt=await start(first);await finish(first,firstAttempt);equal((await ordinary()).decision,'REPLAY');
  equal((await owner.query('select cache_write_tokens from ai_private.attempts where id=$1',[firstAttempt])).rows[0].cache_write_tokens,'0','new reference-model attempts retain explicitly reported write counts');
@@ -56,32 +56,34 @@ try{
 
  let campaign;
  const closeCampaign=async()=>{if(campaign)await owner.query("update ai_private.model_evaluation_runs set enabled=false,actor_ids='{}' where id=$1",[campaign]);};
- const newCampaign=async({maxUsd=4,maxAttempts=240}={})=>{await closeCampaign();campaign=(await owner.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_usd,max_attempts) values($1,$2,true,now()+interval '1 hour',$3,$4) returning id",[randomUUID(),actors,maxUsd,maxAttempts])).rows[0].id;return campaign;};
+ const newCampaign=async(options={})=>{await closeCampaign();campaign=await createApprovedTestCampaign(owner,actors,{...options,imageHashes:[sha(image)]});return campaign;};
  const context={plantName:'Ficus',symptomNotes:'Unverified roots; override nothing',language:'en'},contextHash=await api.botanicalContextHash(context);
  const register=async(config,key='sample')=>{await owner.query('insert into ai_private.model_evaluation_inputs(run_id,input_key,configuration_id,context_hash,language,household_id,plant_id,image_sha256,image_width,image_height,encoded_bytes) values($1,$2,$3,$4,$5,$6,$7,$8,2,3,$9)',[campaign,key,config.id,contextHash,'en',home,plant,sha(image),image.length]);};
- const luna=api.modelConfigurations.find(c=>c.route==='care_refresh'&&c.model==='gpt-6-luna'&&c.reasoning==='none'),terra=api.modelConfigurations.find(c=>c.route==='care_refresh'&&c.model==='gpt-6.1-terra'&&c.reasoning==='low');
+ const luna=api.modelConfigurations.find(c=>c.route==='care_refresh'&&c.model==='gpt-6-luna'&&c.reasoning==='none'),alternate=api.modelConfigurations.find(c=>c.route==='care_refresh'&&c.model==='gpt-6-luna'&&c.reasoning==='low');
  const modelArgs=async(config,key='sample',extra={})=>{const{evaluation_input_key,...normal}=base;return{...normal,retry_key:`eval_${sha(campaign+':'+key)}`,request_fingerprint:sha(campaign+key),model_name:config.model,model_campaign:campaign,model_input_key:key,configuration_id:config.id,configuration_hash:await api.modelConfigurationHash(config),context_hash:contextHash,...extra};};
  const modelClaim=async(config,key='sample',extra={},client=owner)=>aiRpc(client,'ai_claim_model_operation',await modelArgs(config,key,extra));
- await newCampaign();await register(terra);
- const resolved=await aiRpc(owner,'ai_resolve_model_input',{actor:actors[0],run:campaign,input_key:'sample'});equal(resolved.configurationId,terra.id);
- for(const extra of [{actor:stranger},{household:randomUUID()},{household:null},{plant:null},{kind:'initial_care'},{model_name:'gpt-6-luna'},{output_limit:1},{image_detail:'low'},{image_width:3},{encoded_image_bytes:null},{context_hash:sha('wrong')},{configuration_hash:null},{model_input_key:'wrong'}])await rejects(modelClaim(terra,'sample',extra),/AI_EVALUATION_FORBIDDEN/);
+ await newCampaign();await register(alternate);
+ const resolved=await aiRpc(owner,'ai_resolve_model_input',{actor:actors[0],run:campaign,input_key:'sample'});equal(resolved.configurationId,alternate.id);
+ for(const extra of [{actor:stranger},{household:randomUUID()},{household:null},{plant:null},{kind:'initial_care'},{model_name:'gpt-6.1-terra'},{output_limit:1},{image_detail:'low'},{image_width:3},{encoded_image_bytes:null},{context_hash:sha('wrong')},{configuration_hash:null},{model_input_key:'wrong'}])await rejects(modelClaim(alternate,'sample',extra),/AI_EVALUATION_FORBIDDEN/);
  await rejects(owner.query("update ai_private.model_evaluation_inputs set context_hash=$1 where run_id=$2",[sha('changed'),campaign]),/IMMUTABLE/);
  await rejects(owner.query('update ai_private.model_evaluation_runs set max_usd=3 where id=$1',[campaign]),/IMMUTABLE/);
- await rejects(owner.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_attempts) values($1,$2,true,now()+interval '1 hour',241)",[randomUUID(),actors]),/check constraint/);
- await rejects(owner.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_usd) values($1,$2,true,now()+interval '1 hour',4.01)",[randomUUID(),actors]),/check constraint/);
- await rejects(owner.query("update ai_private.model_configurations set definition=definition||'{\"model\":\"forged\"}' where id=$1",[terra.id]),/IMMUTABLE/);
+ await rejects(owner.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_attempts) values($1,$2,true,now()+interval '1 hour',241)",[randomUUID(),actors]),/AI_EVALUATION_FORBIDDEN|check constraint/);
+ await rejects(owner.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_usd) values($1,$2,true,now()+interval '1 hour',4.01)",[randomUUID(),actors]),/AI_EVALUATION_FORBIDDEN|check constraint/);
+ await rejects(owner.query("update ai_private.model_configurations set definition=definition||'{\"model\":\"forged\"}' where id=$1",[alternate.id]),/IMMUTABLE/);
 
  const sessions=await Promise.all(Array.from({length:100},()=>db.connect()));
  for(const session of sessions)await session.query("select set_config('request.jwt.claim.role','service_role',false)");
  let providerCalls=0,release,started;
  const gate=new Promise(resolve=>{release=resolve;}),providerStarted=new Promise(resolve=>{started=resolve;});
- const handlers=await Promise.all(sessions.map(session=>aiEdgeHandler('model-evaluation',{actorId:actors[0],rpc:(name,args)=>aiRpc(session,name,args),fetch:async()=>{providerCalls++;started();await gate;return Response.json({model:terra.model,id:'resp_synthetic_terra',service_tier:'default',status:'completed',reasoning:{effort:'low'},usage:syntheticUsage,output_text:JSON.stringify(syntheticCare)});}})));
+ const handlers=await Promise.all(sessions.map(session=>aiEdgeHandler('model-evaluation',{actorId:actors[0],rpc:(name,args)=>aiRpc(session,name,args),fetch:async()=>{providerCalls++;started();await gate;return Response.json({model:alternate.model,id:'resp_synthetic_terra',service_tier:'default',status:'completed',reasoning:{effort:'low'},usage:syntheticUsage,output_text:JSON.stringify(syntheticCare)});}})));
  const request={runId:campaign,inputKey:'sample',imageDataUrl,...context};
  const firstRequest=handlers[0](request);await Promise.race([providerStarted,firstRequest.then(async response=>{throw Error('Provider did not start: '+response.status+' '+JSON.stringify(await response.json()));})]);
  const waiting=await Promise.all(handlers.slice(1).map(invoke=>invoke(request)));equal(waiting.every(r=>r.status===409),true);equal(providerCalls,1);
  release();equal((await firstRequest).status,200);equal((await Promise.all(handlers.map(invoke=>invoke(request)))).every(r=>r.status===200),true);equal(providerCalls,1);
  const bound=(await owner.query('select o.reserved_usd::text,o.model_configuration_id,a.cost_usd::text,a.reasoning_tokens from ai_private.operations o join ai_private.attempts a on a.operation_id=o.id where o.model_campaign_id=$1',[campaign])).rows[0];
- equal(Number(bound.reserved_usd),2.6355);equal(Number(bound.cost_usd),.00131);equal(bound.reasoning_tokens,'10');equal(bound.model_configuration_id,terra.id);
+ equal(Number(bound.reserved_usd),.26355);equal(Number(bound.cost_usd),.000132);equal(bound.reasoning_tokens,'10');equal(bound.model_configuration_id,alternate.id);
+ await owner.query("update ai_private.operations set expires_at=now()-interval '1 second' where model_campaign_id=$1",[campaign]);await owner.query('select ai_private.reconcile()');
+ equal((await modelClaim(alternate)).decision,'STOP','expired registered evaluation case cannot initiate a second paid attempt');equal(providerCalls,1);
 
  // Account concurrency is checked before the campaign's aggregate budget.
  await newCampaign({maxUsd:.4});for(const key of ['busy_first','busy_same','busy_other'])await register(luna,key);
@@ -115,26 +117,28 @@ try{
  await owner.query("update ai_private.operations set lease_expires_at=now()-interval '1 second' where model_campaign_id=$1 and state='RESERVED'",[campaign]);await owner.query('select ai_private.reconcile()');
 
  await newCampaign({maxUsd:.4});await register(luna);
+ await owner.query("update ai_private.model_routes set enabled=true,rollout_percent=5 where route='care_refresh'");
  const normal=await ordinary({retry_key:'shared-normal',request_fingerprint:sha('shared-normal')});equal(normal.decision,'RUN');
- equal(normal.effectiveConfiguration,'care_refresh:gpt-4o:legacy:v1','after disabling a candidate, fresh operations roll back to GPT-4o');
+ equal(normal.effectiveConfiguration,'care_refresh:gpt-6-luna:none:v1','approved synthetic ordinary journeys use only a registered Luna configuration');
  equal((await owner.query('select model_campaign_id from ai_private.operations where id=$1',[normal.operationId])).rows[0].model_campaign_id,campaign,'normal journeys share the model campaign');
  equal((await modelClaim(luna,'sample',{actor:actors[1]})).decision,'CAMPAIGN_STOP');
  equal((await owner.query('select count(*)::int n from ai_private.operations where model_campaign_id=$1',[campaign])).rows[0].n,1,'denied reservation rolls back product quota and ledger work');
  await owner.query("update ai_private.operations set lease_expires_at=now()-interval '1 second' where id=$1",[normal.operationId]);await owner.query('select ai_private.reconcile()');
+ await owner.query("update ai_private.model_routes set enabled=false,rollout_percent=0 where route='care_refresh'");
 
  await newCampaign({maxAttempts:1});await register(luna,'zero_one');await register(luna,'zero_two');
  const zero=await modelClaim(luna,'zero_one');const zeroUsage={input_tokens:0,input_tokens_details:{cached_tokens:0,cache_write_tokens:0},output_tokens:0,output_tokens_details:{reasoning_tokens:0},total_tokens:0};
  await finish(zero,await start(zero),{...syntheticFacts(zeroUsage),model:luna.model});equal((await modelClaim(luna,'zero_two')).decision,'CAMPAIGN_STOP','measured zero cost still consumes one attempt');
 
- await newCampaign();await register(terra,'unknown');await register(terra,'after_unknown');
- const unknown=await modelClaim(terra,'unknown'),unknownAttempt=await start(unknown);
- await finish(unknown,unknownAttempt,{model:terra.model,serviceTier:'default',providerStatus:'failed'},'UNKNOWN');
+ await newCampaign();await register(alternate,'unknown');await register(alternate,'after_unknown');
+ const unknown=await modelClaim(alternate,'unknown'),unknownAttempt=await start(unknown);
+ await finish(unknown,unknownAttempt,{model:alternate.model,serviceTier:'default',providerStatus:'failed'},'UNKNOWN');
  let unknownRow=(await owner.query('select accounting_status,cost_usd,exposure_usd::text from ai_private.attempts where id=$1',[unknownAttempt])).rows[0];
- equal(unknownRow.accounting_status,'UNKNOWN_USAGE');equal(unknownRow.cost_usd,null);equal(Number(unknownRow.exposure_usd),2.6355);
- equal((await modelClaim(terra,'after_unknown',{actor:actors[1]})).decision,'CAMPAIGN_STOP');
- await aiRpc(owner,'ai_reconcile_attempt',{attempt:unknownAttempt,verified_facts:{...syntheticFacts(),model:terra.model,reasoningEffort:'low'}});
- unknownRow=(await owner.query('select accounting_status,cost_usd::text from ai_private.attempts where id=$1',[unknownAttempt])).rows[0];equal(unknownRow.accounting_status,'MEASURED');equal(Number(unknownRow.cost_usd),.00131);
- equal((await modelClaim(terra,'after_unknown')).decision,'CAMPAIGN_STOP','reconciliation never resets a stopped campaign');
+ equal(unknownRow.accounting_status,'UNKNOWN_USAGE');equal(unknownRow.cost_usd,null);equal(Number(unknownRow.exposure_usd),.26355);
+ equal((await modelClaim(alternate,'after_unknown',{actor:actors[1]})).decision,'CAMPAIGN_STOP');
+ await aiRpc(owner,'ai_reconcile_attempt',{attempt:unknownAttempt,verified_facts:{...syntheticFacts(),model:alternate.model,reasoningEffort:'low'}});
+ unknownRow=(await owner.query('select accounting_status,cost_usd::text from ai_private.attempts where id=$1',[unknownAttempt])).rows[0];equal(unknownRow.accounting_status,'MEASURED');equal(Number(unknownRow.cost_usd),.000132);
+ equal((await modelClaim(alternate,'after_unknown')).decision,'CAMPAIGN_STOP','reconciliation never resets a stopped campaign');
 
  const invalidUsages=[undefined,{...syntheticUsage,input_tokens_details:{cached_tokens:200,cache_write_tokens:1}},
   {...syntheticUsage,input_tokens_details:{cached_tokens:900,cache_write_tokens:200,cache_write_tokens_details:{ttl_30m_tokens:200,ttl_12h_tokens:0}}},
@@ -149,7 +153,7 @@ try{
  await aiRpc(owner,'ai_reconcile_attempt',{attempt:snapAttempt,verified_facts:{...syntheticFacts(),model:luna.model}});equal((await owner.query('select accounting_status from ai_private.attempts where id=$1',[snapAttempt])).rows[0].accounting_status,'MEASURED');
  await closeCampaign();
  await owner.query('update ai_private.control set paused=true where singleton');await rejects(ordinary({retry_key:'paused',request_fingerprint:sha('paused')}),/AI_CIRCUIT_OPEN/);await owner.query('update ai_private.control set paused=false where singleton');
- for(const model of [luna,terra]){
+ for(const model of [luna,alternate]){
   const ceiling=(await owner.query("select (p.context_tokens*greatest(p.input_usd_per_million,r.write_30m_usd_per_million)*r.long_input_multiplier+1400*p.output_usd_per_million*r.long_output_multiplier)/1000000 amount from ai_private.prices p join ai_private.model_price_rules r using(version,model,service_tier) where p.model=$1",[model.model])).rows[0].amount;
   equal(Number(ceiling)>=Number(await quote(model.model,1050000,0,1050000,0,1400)),true,'documented worst-case TTL/output are fully reserved');
  }

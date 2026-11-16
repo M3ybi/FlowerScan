@@ -27,6 +27,7 @@ import type { MenuInformationSection } from "../../../hooks/useMenuAccordion";
 import { LoggedOutMenu } from "../../../components/LoggedOutMenu";
 import { PricingPage } from "../../../components/PricingPage";
 import { SettingsSectionHeader } from "../../../components/SettingsSectionHeader";
+import { OwnerAiControls } from "./OwnerAiControls";
 import { useAuth } from "../../../hooks/useAuth";
 import { useSubscriptionState } from "../../../hooks/useSubscriptionState";
 import type { AuthMode } from "../../../lib/authRules";
@@ -262,6 +263,7 @@ export const SettingsPage = ({
             )}
           </section>
 
+          {auth.isAuthenticated && auth.user?.id ? <OwnerAiControls key={auth.user.id} userId={auth.user.id} /> : null}
           <details className="menu-section household-management" open={expandedSection === "household"} onToggle={(event) => {
             if (event.currentTarget.open) void refreshHouseholdPeople();
           }}>

@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
 import { readFile } from "node:fs/promises";
 import { qualityDimensions, summarizeBotanicalReview, validatePromptEvaluationCase } from "../scripts/lib/promptEvaluation.mjs";
-import { aiEdgeHandler, syntheticCare, syntheticUsage } from "./fixtures/aiEdgeHarness.mjs";
+import { aiEdgeHandler, syntheticCare, syntheticUsage, historicalTestBinding } from "./fixtures/aiEdgeHarness.mjs";
 
 const actor="11111111-1111-4111-8111-111111111111",home="22222222-2222-4222-8222-222222222222";
 const baseline="1682ddea7db67687d8ded7d8838b4ebff3812d7a";
@@ -24,7 +24,7 @@ test("centralized active v1 prompts, schemas, parsers and fingerprints match imm
      let claim,payload,settlement;
      const sourceOverrides=old?{[`supabase/functions/${name}/index.ts`]:execFileSync("git",["show",`${baseline}:supabase/functions/${name}/index.ts`],{encoding:"utf8"})}:{};
      const handler=await aiEdgeHandler(name,{actorId:actor,sourceOverrides,rpc:async(name,args)=>{
-      if(name==="ai_claim_image_operation"){claim=args;return{decision:"RUN",operationId:actor,leaseId:home};}
+      if(name==="ai_claim_image_operation"){claim=args;return{decision:"RUN",operationId:actor,leaseId:home,...historicalTestBinding(args.kind)};}
       if(name==="ai_start_image_attempt")return home;
       if(name==="ai_finish_attempt"){settlement=args;return{state:"COMPLETED"};}throw Error("Unexpected RPC");
      },fetch:async(_url,init)=>{payload=init.body;return Response.json({model:"gpt-4o-2024-08-06",service_tier:"default",status:"completed",usage:syntheticUsage,output_text:JSON.stringify(task==="care"?syntheticCare:syntheticDiagnosis)});}});

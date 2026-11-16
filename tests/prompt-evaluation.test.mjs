@@ -1,3 +1,4 @@
+import {historicalTestBinding} from './fixtures/aiEdgeHarness.mjs';
 import assert from "node:assert/strict";
 import test from "node:test";
 import {execFileSync} from "node:child_process";
@@ -67,7 +68,7 @@ test("invalid care numeric-string coercion is reproduced in Step 3 and rejected 
  for(const old of [true,false]){
   let settlement;
   const h=await aiEdgeHandler("plant-care-ai",{actorId:actor,sourceOverrides:old?{"supabase/functions/plant-care-ai/index.ts":execFileSync("git",["show","1682ddea7db67687d8ded7d8838b4ebff3812d7a:supabase/functions/plant-care-ai/index.ts"],{encoding:"utf8"})}:{},
-   rpc:async(name,args)=>{if(name==="ai_claim_image_operation")return{decision:"RUN",operationId:actor,leaseId:home};if(name==="ai_start_image_attempt")return plant;if(name==="ai_finish_attempt"){settlement=args;return{state:args.outcome==="COMPLETED"?"COMPLETED":"FAILED"};}throw Error("Unexpected RPC");},
+   rpc:async(name,args)=>{if(name==="ai_claim_image_operation")return{decision:"RUN",operationId:actor,leaseId:home,...historicalTestBinding(args.kind)};if(name==="ai_start_image_attempt")return plant;if(name==="ai_finish_attempt"){settlement=args;return{state:args.outcome==="COMPLETED"?"COMPLETED":"FAILED"};}throw Error("Unexpected RPC");},
    fetch:async()=>provider({output_text:JSON.stringify({...syntheticCare,wateringIntervalDays:"7"})})});
   assert.equal((await h({householdId:home,imageDataUrl:body.imageDataUrl,plantName:"Ficus",language:"en"})).status,old?200:502);
   assert.equal(settlement.outcome,old?"COMPLETED":"FAILED");assert.deepEqual(settlement.facts.usage,syntheticUsage);

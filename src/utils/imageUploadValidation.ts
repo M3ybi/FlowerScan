@@ -10,10 +10,10 @@ import {
 
 export { imageUploadRejectionMessage };
 
-export const validatePlantImageForUpload = async (imageDataUrl: string, language?: PlantieLanguage | null, signal?: AbortSignal) => {
+export const validatePlantImageForUpload = async (imageDataUrl: string, language?: PlantieLanguage | null, signal?: AbortSignal, householdId?: string) => {
   try {
     const data = await callBackendFunction<{ validation?: unknown; receipt?: unknown }>({
-      body: { imageDataUrl, language },
+      body: { imageDataUrl, language, ...(householdId ? { householdId } : {}) },
       functionName: "validate-plant-image",
       netlifyPath: "/.netlify/functions/validate-plant-image",
       signal,

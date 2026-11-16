@@ -1,5 +1,7 @@
 # Step 5.3 botanical quality assessment
 
+Subsequent release work is recorded separately in [the complete Luna migration](ai-luna-complete-migration.md). The owner-selected unreviewed pathway does not change this assessment's independent-review findings, historical financial evidence or specialist requirements. No new specialist review is implied.
+
 **PARTIAL: NO-GO for candidate activation.** Existing responses are integrity-checked, structurally inspected and prepared for independent review. No independent botanical, treatment or native-language approval was supplied. Step5.3 made **0 paid provider attempts/$0.000000000000**. Ordinary GPT-4o/v1/1600px-high and customer/billing rules remain unchanged.
 
 Starting local/remote main: `ce55ae10f59b7cd16f6a029b6c0004bcab55f22e`. Scope:offline review tooling, tests, proposed rubric/thresholds and documentation. No application/Edge source, migration, model, financial control, RevenueCat, entitlement or image-processing change is required. Exact final revision, CI and active-host readback are bound after commit in `%TEMP%/plantie-ai-step53-20261116/final-verification-receipt.json`.

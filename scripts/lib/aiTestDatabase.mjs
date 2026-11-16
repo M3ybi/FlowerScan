@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import pg from "pg";
 
@@ -56,4 +56,16 @@ export const aiRpc = async (client, name, args = {}) => {
   const entries = Object.entries(args);
   const sql = `select public.${name}(${entries.map(([key], index) => `${key} => $${index + 1}`).join(",")}) as data`;
   return (await client.query(sql, entries.map(([, value]) => value))).rows[0].data;
+};
+
+// Only used with the disposable loopback fixture above. Exercise the actual
+// owner approval RPC; never add a production test bypass or mint owner JWTs.
+export const createApprovedTestCampaign = async (client, actors, { maxUsd = 4, maxAttempts = 120, imageHashes = [] } = {}) => {
+  const taskKey = randomUUID(), hash = createHash('sha256').update(taskKey).digest('hex');
+  await client.query('update auth.users set email_confirmed_at=coalesce(email_confirmed_at,now()) where id=$1',[actors[0]]);
+  await client.query("insert into ai_private.owner_operators(user_id,authorization_reference) values($1,'Disposable fixture owner') on conflict do nothing",[actors[0]]);
+  const configurations=(await client.query("select jsonb_object_agg(id,configuration_hash) value from ai_private.model_configurations where definition->>'model'='gpt-6-luna'")).rows[0].value;
+  await client.query("insert into ai_private.luna_campaign_proposals(sha256,plan,max_attempts,max_usd,duration_seconds) values($1,$2,120,4,3600)",[hash,{configurationHashes:configurations,imageHashes}]);
+  const approval = await aiRpc(client,'ai_owner_approve_campaign',{actor:actors[0],proposal_sha256:hash});
+  return (await client.query("insert into ai_private.model_evaluation_runs(task_key,actor_ids,enabled,expires_at,max_usd,max_attempts,owner_campaign_approval_id) values($1,$2,true,now()+interval '1 hour',$3,$4,$5) returning id",[taskKey,actors,maxUsd,maxAttempts,approval.id])).rows[0].id;
 };

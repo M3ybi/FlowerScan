@@ -146,7 +146,7 @@ test("each AI request instruction prioritizes the current language over input an
 test("all AI provider endpoints use the shared selected-language instruction", () => {
   const endpoints = [
     "supabase/functions/_shared/productionBotanicalPrompts.ts",
-    "supabase/functions/_shared/plantImageValidation.ts",
+    "supabase/functions/_shared/imageSafetyContract.ts",
   ];
 
   for (const endpoint of endpoints) {
@@ -161,7 +161,7 @@ test("all AI provider endpoints use the shared selected-language instruction", (
   assert.match(readSource("supabase/functions/_shared/plantDiagnosisContract.ts"), /confidence_label: \{ enum: \["low", "medium", "high"\]/);
   assert.match(readSource("src/utils/customFlower.ts"), /language: options\.language/);
   assert.match(readSource("src/utils/diagnostics.ts"), /body: \{ householdId, imageDataUrl, language,/);
-  assert.match(readSource("src/utils/imageUploadValidation.ts"), /body: \{ imageDataUrl, language \}/);
+  assert.match(readSource("src/utils/imageUploadValidation.ts"), /body: \{ imageDataUrl, language, \.\.\.\(householdId \? \{ householdId \} : \{\}\) \}/);
   assert.match(readSource("src/lib/plantieRepository.ts"), /language: readStoredLanguage\(browserStorage\)/);
   for (const endpoint of ["validate-plant-image", "upload-validated-image"]) {
     assert.match(readSource(`supabase/functions/${endpoint}/index.ts`), /validateImageSafety\(apiKey, imageDataUrl, body\.language,/);

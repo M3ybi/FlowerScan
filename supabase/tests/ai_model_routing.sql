@@ -3,7 +3,7 @@ do $$ declare item record;begin
   if not item.relrowsecurity or has_table_privilege('anon',item.oid,'SELECT') or has_table_privilege('authenticated',item.oid,'SELECT')
    or has_table_privilege('service_role',item.oid,'INSERT') or has_table_privilege('service_role',item.oid,'UPDATE') then raise exception 'Model table access unsafe';end if;
  end loop;
- if (select count(*) from ai_private.model_configurations)<>16 or (select count(*) from ai_private.model_routes)<>4
+ if (select count(*) from ai_private.model_configurations)<>18 or (select count(*) from ai_private.model_configurations where definition->>'version'='model-config-v1')<>16 or (select count(*) from ai_private.model_routes)<>4
   or exists(select 1 from ai_private.model_routes where enabled or rollout_percent<>0 or active_configuration<>route||':gpt-4o:legacy:v1') then raise exception 'Model registry defaults unsafe';end if;
  for item in select p.oid,p.prosecdef,p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'
   and p.proname in ('ai_resolve_model_input','ai_claim_model_operation','ai_claim_image_operation_legacy','ai_start_image_attempt_legacy','ai_finish_attempt_legacy') loop

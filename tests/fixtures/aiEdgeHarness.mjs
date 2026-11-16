@@ -2,6 +2,15 @@ import { build } from "esbuild";
 import { webcrypto, createHash } from "node:crypto";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { readFileSync } from "node:fs";
+
+const historicalManifest = JSON.parse(readFileSync(new URL('./ai-model-manifest.json',import.meta.url),'utf8'));
+export const historicalTestBinding = (kind = 'initial_care') => {
+  const route = ['image_validation','upload_validation'].includes(kind) ? 'image_safety' : kind;
+  const config = historicalManifest.find(c=>c.id===`${route}:gpt-4o:legacy:v1`);
+  if (!config) throw Error('Unknown historical fixture route');
+  return { effectiveConfiguration: config.id, configurationHash: config.hash };
+};
 
 const bundles = new Map();
 export const aiEdgeHandler = async (name, { actorId, rpc, fetch, signedIn = true, sourceOverrides = {}, now, logs }) => {

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "initial_care:gpt-6-luna:none:v1",
+    "hash": "b59db590cc7c698388690e1c92d5fe9d18b356031a331d1e1505f6a47425ae0f",
+    "definition": {
+      "id": "initial_care:gpt-6-luna:none:v1",
+      "route": "initial_care",
+      "model": "gpt-6-luna",
+      "reasoning": "none",
+      "promptVersion": "plant-care-v1",
+      "outputLimit": 1400,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v1",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "initial_care:gpt-6-luna:low:v1",
+    "hash": "9fd5a7d7dc35be3d9bb2e9519e6a2c904a48bf5cdabb39fbb2a494be446ef24f",
+    "definition": {
+      "id": "initial_care:gpt-6-luna:low:v1",
+      "route": "initial_care",
+      "model": "gpt-6-luna",
+      "reasoning": "low",
+      "promptVersion": "plant-care-v1",
+      "outputLimit": 1400,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v1",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "care_refresh:gpt-6-luna:none:v1",
+    "hash": "87f437e90fdd05f0bb60324d3e92abbf013da118b7b62a474a780d46a3b6c334",
+    "definition": {
+      "id": "care_refresh:gpt-6-luna:none:v1",
+      "route": "care_refresh",
+      "model": "gpt-6-luna",
+      "reasoning": "none",
+      "promptVersion": "plant-care-v1",
+      "outputLimit": 1400,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v1",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "care_refresh:gpt-6-luna:low:v1",
+    "hash": "4fe0ea021debdb36bf4e04701715c7d26001dc30cb843816bc48600581d6545c",
+    "definition": {
+      "id": "care_refresh:gpt-6-luna:low:v1",
+      "route": "care_refresh",
+      "model": "gpt-6-luna",
+      "reasoning": "low",
+      "promptVersion": "plant-care-v1",
+      "outputLimit": 1400,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v1",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "diagnosis:gpt-6-luna:none:v1",
+    "hash": "ea2831490bc8e2a382636fa36148ea27612bdddfb2278d4342f91a5c200d5765",
+    "definition": {
+      "id": "diagnosis:gpt-6-luna:none:v1",
+      "route": "diagnosis",
+      "model": "gpt-6-luna",
+      "reasoning": "none",
+      "promptVersion": "plant-diagnosis-v1",
+      "outputLimit": 2400,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v1",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "diagnosis:gpt-6-luna:low:v1",
+    "hash": "66a0305c83cd30bb82f6303284deef80fc06eb69066502099e8173754ec55ae9",
+    "definition": {
+      "id": "diagnosis:gpt-6-luna:low:v1",
+      "route": "diagnosis",
+      "model": "gpt-6-luna",
+      "reasoning": "low",
+      "promptVersion": "plant-diagnosis-v1",
+      "outputLimit": 2400,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v1",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "image_safety:gpt-6-luna:none:v2",
+    "hash": "4c13602d582b5f8b30e33e8f732f1c53c6b0c831287f7c3a87a85b1d32883aad",
+    "definition": {
+      "id": "image_safety:gpt-6-luna:none:v2",
+      "route": "image_safety",
+      "model": "gpt-6-luna",
+      "reasoning": "none",
+      "promptVersion": "plant-image-safety-luna-none-v2",
+      "outputLimit": 700,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v2",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  },
+  {
+    "id": "image_safety:gpt-6-luna:low:v2",
+    "hash": "93f0d6f3c7a8301654ded336c9f4a5cad9337ca2a2c002b5ae1f5ba9c160c394",
+    "definition": {
+      "id": "image_safety:gpt-6-luna:low:v2",
+      "route": "image_safety",
+      "model": "gpt-6-luna",
+      "reasoning": "low",
+      "promptVersion": "plant-image-safety-luna-low-v2",
+      "outputLimit": 700,
+      "timeoutMs": 30000,
+      "priceVersion": "openai-multimodel-2026-11-15",
+      "detail": "high",
+      "profile": "normalized-jpeg-v1",
+      "maxAttempts": 1,
+      "cacheTtl": "30m",
+      "version": "model-config-v2",
+      "inputBoundPolicy": "provider-context-ceiling"
+    }
+  }
+]
