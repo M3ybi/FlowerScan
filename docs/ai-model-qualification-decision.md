@@ -1,4 +1,19 @@
-# Model qualification decision — Step 5.1
+# Model qualification decision
+
+## Step 5.2 decision — 2026-11-16
+
+**NO-GO remains in force.** The $4 sequential diagnosis-first proposal is financially feasible at initial readback but has no new operator spend approval. Both old campaigns stay closed. Ordinary GPT-4o and all four disabled candidate flags are unchanged; no route-activation artifact is issued.
+
+| Route | Technical compatibility evidence | Botanical / safety / language / acceptable cost | Decision |
+|---|---|---|---|
+| Image safety | Existing guarded GPT-4o path retained | Replacement qualification not attempted | Retain GPT-4o |
+| Initial identification/care | Historical v1 paired care successes; no new Step 5.2 paid response | NOT VERIFIED; supplied names cue identity and no independent approved review | NOT QUALIFIED |
+| Manual refresh | Historical partial matrix and unresolved Luna HTTP 400; new German/Spanish/mixed-input plan unexecuted | NOT VERIFIED; full compatibility, failure/cost and independent review incomplete | NOT QUALIFIED |
+| Diagnosis | No new five-configuration diagnosis comparison executed | NOT VERIFIED for every candidate; no measured diagnosis latency or acceptable-result denominator | NOT QUALIFIED |
+
+Deterministic provider faults, real PostgreSQL accounting/concurrency, source/JWT readback and unpaid production authorization smoke pass as documented in [the Step 5.2 release](ai-step52-qualification-release.md). They do not prove actual candidate Responses compatibility or botanical quality. Historical care failure rates, latency and exact measured costs stay scoped to the old [benchmark](ai-model-benchmark.md); none are transferred to diagnosis. The [expanded human-review workflow](ai-model-review-results.md) preserves source/rights information and empty score fields. All candidate route qualifications remain blocked until actual authorized engineering evidence and independent approved quality evidence exist.
+
+## Retained Step 5.1 decision
 
 **All candidate routes remain NOT QUALIFIED. Ordinary traffic and image safety retain GPT-4o.** Technical diagnostics and structured JSON cannot override absent independent botanical/localization review.
 

@@ -1,5 +1,11 @@
 # Model quality evidence and activation gates
 
+## Step 5.2 review readiness
+
+The expanded offline review material now includes all 76 reference cards and 62 original images alongside the existing 36 blinded care responses. Browser QA checks delivery and blinding only. The [reviewer workflow/results](ai-model-review-results.md) separates confirmed facts, unknowns, published crop labels, scenario assumptions and independent judgments. Model-generated confidence remains response content; human scores stay in a separate worksheet. All scores and reviewer approvals remain unset, with the operator mapping excluded from the shareable package.
+
+There are still zero fully independently reviewed qualification cases and no approved botanical minimums/non-inferiority margin. No new paid diagnosis output exists pending separate campaign authorization. Ten planned diagnosis contexts, even if technically successful, do not alone satisfy the existing 60-independent-case policy. No treatment-safety, language or botanical gate is passed, and no model judge or successful test substitutes for human approval. [Step 5.2 execution evidence](ai-step52-qualification-release.md) reports engineering verification separately.
+
 Step5.1 adds an offline blinded review package for36 existing care responses/eight contexts/five images and a diagnosis-first preparation plan. It adds no specialist scores or diagnosis outputs. Model/cost fields are withheld and the operator mapping is separate;previously published outputs can still be recognized. All botanical,treatment and localization gates remain unapproved. See [qualification decision](ai-model-qualification-decision.md).
 
 **No Luna or Terra route is qualified for ordinary users.** Published labels improve the available evidence, but no model output or model confidence is treated as independent ground truth.

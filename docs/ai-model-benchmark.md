@@ -1,5 +1,11 @@
 # Step 5 model benchmark
 
+## Step 5.2 preparation — 2026-11-16
+
+The [Step 5.2 release record](ai-step52-qualification-release.md) prepares a fresh, separately authorized maximum-100-attempt/$4/60-minute campaign. The exact primary matrix has 50 diagnosis generations, 25 care-refresh generations and at most 15 safety calls; optional ordinary GPT-4o journeys share the same cap. All image/context/configuration/provider-payload bindings were checked against current production source/rates. Terra is sequential. The historical runs remain closed and their measurements below are unchanged.
+
+New paid authorization is pending: **no Step 5.2 diagnosis or care response has executed**. Current global headroom makes a single $2.643 Terra diagnosis reservation financially admissible at readback, without reducing reservations; admission must be checked again before spend. No new token, latency, failure or quality values are fabricated. Complete comparison and cost per acceptable diagnosis remain blocked. The expanded [human-review material](ai-model-review-results.md) contains original reference images and unscored historical care responses, not approved diagnosis results.
+
 Step5.1 recovery: [root-cause evidence,paid-campaign preflight and release](ai-step5-recovery-release.md). No new inference is authorized by that preflight;historical measurements below remain unchanged.
 
 Starting revision: `7c7a474eeab3a5da028cce4da38b4540c3832131`, matching clean remote main. Existing ordinary GPT-4o/v1/1600px-high behavior is the reference. The exact requested candidates are `gpt-6-luna` and `gpt-6.1-terra`; no substitute model is selected.

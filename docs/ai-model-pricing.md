@@ -1,5 +1,13 @@
 # Versioned multi-model pricing
 
+## Step 5.2 financial preflight — 2026-11-16
+
+Fresh readback preserves all five price rows, two multi-model pricing rules and all 16 configuration hashes. Current [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Terra](https://developers.openai.com/api/docs/models/gpt-6.1-terra) and [standard pricing](https://developers.openai.com/api/docs/pricing) documentation matches the existing candidate rates below; no historical rate is changed. Token counts and complete diagnosis costs remain unmeasured until an authorized run executes.
+
+The new proposal raises its planning ceiling from the prior infeasible $2 proposal to **$4 for one fresh run**, with at most 100 attempts/60 minutes and one request in flight. This is not spend authorization or a modification of an old campaign. The unchanged Terra diagnosis reservation is $2.643. Initial application headroom was $4.73645 after the separately retained $0.26355 historical unknown; applicable daily/monthly headroom was $24.73645/$99.34273191. Current global SQL controls still apply on every admission. No lower reservation, token-count bypass, budget reset or continuation is introduced. See [exact proposal and accounting scope](ai-step52-qualification-release.md).
+
+Historical structural-result costs and six monthly scenarios remain in [the benchmark](ai-model-benchmark.md). Unknown-cost failed attempts remain in the relevant cost numerator, so Luna-none total cost per valid care result remains UNKNOWN. All candidate costs per independently acceptable result remain NOT VERIFIED; unreviewed outputs are not accepted results. The €0.20/€0.50 planning targets remain unproven for candidate diagnosis workloads.
+
 Step5.1 preserves all pricing rows and reservations. The old Luna cost remains null with$0.26355 exposure;organization usage access returned403 and no authoritative correction is available. A proposed$2 campaign cannot admit Terra's$2.6355/$2.643 full-context requests. No count-backed smaller bound,price change or new paid request is introduced. See [recovery evidence](ai-step5-recovery-release.md).
 
 Step 5 retains the three historical `openai-standard-2026-11-15` GPT-4o price rows. The additive registry version `openai-multimodel-2026-11-15` records the requested Luna and Terra aliases. An unknown returned snapshot or service tier remains UNKNOWN_PRICING with null cost and retained exposure; it is not silently assigned its parent's price.
