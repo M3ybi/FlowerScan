@@ -57,6 +57,14 @@ Manual deletion processing remains: inspect the existing request and its billing
 
 Initial full-check failure was the disposable source fixture omitting the new declared function; adding its actual source graph fixed it. All failures remain in tool/local logs; skipped production/device checks are not called passed.
 
+### Hosted safe-area diagnosis — 2026-11-17
+
+Diagnostic commit `b17d13d`, [CI run 44176339810](https://github.com/M3ybi/FlowerScan/actions/runs/44176339810), reproduced the original failure using the unchanged hosted Chromium 157.0.8103.50 executable. The first measurement read bottom/clearance 12px while both root and inherited safe-bottom were 34px and the derived offset was `calc(12px + 34px)`. After two animation frames, the same unmodified navigation read bottom/clearance 46px. Newly created equivalent elements also measured 46px. The document was complete, fonts loaded, position fixed, inline style absent and animation count zero.
+
+This establishes a fixture synchronization problem exposed by the hosted browser: the test sampled used layout before its injected CSS override had reached a render boundary. The correction awaits that boundary immediately after injecting the synthetic insets. It introduces no fixed-duration sleep, CSS/UI change, browser substitution, assertion change or skipped scenario. The expected 46px, geometric clearance, back-button coordinates and direct-link assertions remain intact. Hosted verification of the corrected release commit is required before deployment.
+
+An initial local parallel run lost its served fixture files because the registered QR suite clears the shared `.tmp-tests` directory. That run failed; it is not called passed. Rerunning the unchanged suites sequentially passed 24/24 in Chromium 157.0.4341.60 and 24/24 in WebKit 26.5. Full local Supabase remains unavailable without Docker; hosted full Supabase and PostgreSQL passed on the diagnostic commit. The final corrected-commit CI result is recorded separately below when available.
+
 ## Modified files and necessity
 
 | Files | Reason |

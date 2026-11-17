@@ -261,6 +261,9 @@ try {
     await go(page, '/flower/fixture-plant', '.detail-shell');
     await page.reload(); await page.locator('.detail-shell').waitFor();
     await page.addStyleTag({ content: ':root { --safe-area-top: 24px; --safe-area-bottom: 34px; --safe-area-left: 8px; --safe-area-right: 8px; }' });
+    // Hosted Chromium can expose the new variables before fixed-position layout uses them.
+    // Cross a render boundary after injecting the fixture, then measure the unchanged geometry.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const back = await page.locator('.floating-back-link').boundingBox();
     const safeArea = await page.locator('.mobile-bottom-nav').evaluate(node => {
       // Preserve measurement order; retain diagnostics if computed style and layout disagree.
@@ -277,31 +280,7 @@ try {
         userAgent: navigator.userAgent,
       };
     });
-    if (safeArea.bottom !== '46px' || safeArea.clearance < 46) {
-      safeArea.renderProbe = await page.locator('.mobile-bottom-nav').evaluate(async node => {
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const afterPaint = { bottom: getComputedStyle(node).bottom, clearance: innerHeight - node.getBoundingClientRect().bottom };
-        const probes = [];
-        try {
-          const clone = node.cloneNode(false);
-          clone.style.visibility = 'hidden';
-          probes.push(clone); node.parentElement.append(clone);
-          const values = { clonedNavigation: getComputedStyle(clone).bottom };
-          for (const [name, value] of [['inheritedVariable', 'var(--mobile-nav-bottom)'], ['directCalculation', 'calc(12px + var(--safe-area-bottom))']]) {
-            const probe = document.createElement('div');
-            probe.style.cssText = `position:fixed;visibility:hidden;pointer-events:none;bottom:${value}`;
-            probes.push(probe); node.parentElement.append(probe);
-            values[name] = getComputedStyle(probe).bottom;
-          }
-          return { afterPaint, values, documentReady: document.readyState, fonts: document.fonts.status,
-            position: getComputedStyle(node).position, inlineStyle: node.getAttribute('style'),
-            animations: node.getAnimations().length,
-            stylesheets: [...document.styleSheets].map(sheet => ({ href: sheet.href, rules: sheet.cssRules.length })),
-          };
-        } finally { for (const probe of probes) probe.remove(); }
-      });
-      console.error(`SAFE_AREA_DIAGNOSTICS: ${JSON.stringify(safeArea)}`);
-    }
+    if (safeArea.bottom !== '46px' || safeArea.clearance < 46) console.error(`SAFE_AREA_DIAGNOSTICS: ${JSON.stringify(safeArea)}`);
     assert.equal(back.y, 40); assert.equal(back.x, 24);
     assert.equal(safeArea.viewportHeight, 844);
     assert.equal(safeArea.bottom, '46px');
