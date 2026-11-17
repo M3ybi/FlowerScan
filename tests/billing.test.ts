@@ -8,6 +8,7 @@ import {
   BillingConfirmationPendingError,
   BillingProductUnavailableError,
   BillingPurchaseCancelledError,
+  BillingUnavailableError,
   createRevenueCatBillingService,
   createRevenueCatWebBillingService,
   normalizeBillingError,
@@ -508,6 +509,7 @@ const createMockWebBilling = (options: {
   resolveProviderUserId?: Parameters<typeof createRevenueCatWebBillingService>[0]["resolveProviderUserId"];
 } = {}) => {
   const calls: string[] = [];
+  const checkoutEmails: (string | undefined)[] = [];
   let userId: string | null = "user-id";
   let sdkUserId = "";
   let premium = options.activePremium ?? false;
@@ -550,7 +552,7 @@ const createMockWebBilling = (options: {
     },
     purchase: async ({ rcPackage, customerEmail }: { rcPackage: { product: { identifier: string } }; customerEmail?: string }) => {
       calls.push(`purchase:${rcPackage.product.identifier}`);
-      if (customerEmail) calls.push(`checkout-email:${customerEmail}`);
+      checkoutEmails.push(customerEmail);
       options.onPurchaseStarted?.();
       if (options.purchaseWait) await options.purchaseWait;
       if (options.purchaseError) throw options.purchaseError;
@@ -567,7 +569,7 @@ const createMockWebBilling = (options: {
     },
     getApiKey: () => options.apiKey ?? "test-public-key",
     getCurrentUserId: async () => userId,
-    getVerifiedEmail: async () => options.verifiedEmail ?? undefined,
+    getVerifiedEmail: async () => options.verifiedEmail === null ? undefined : options.verifiedEmail ?? "verified@example.invalid",
     resolveProviderUserId: options.resolveProviderUserId,
     refreshServerEntitlement: async () => {
       calls.push("refresh-entitlement");
@@ -576,6 +578,7 @@ const createMockWebBilling = (options: {
   };
   return {
     calls,
+    checkoutEmails,
     createService: () => createRevenueCatWebBillingService(deps),
     setUserId: (nextUserId: string | null) => { userId = nextUserId; },
   };
@@ -594,17 +597,23 @@ test("web initializes with the Supabase user and loads current offering", async 
 
 test("web checkout passes the verified account email for either billing period", async () => {
   for (const period of ["monthly", "yearly"] as const) {
-    const { calls, createService } = createMockWebBilling({ verifiedEmail: "verified@example.invalid" });
+    const { checkoutEmails, createService } = createMockWebBilling({ verifiedEmail: "verified@example.invalid" });
     const service = createService();
     await (period === "monthly" ? service.purchasePremiumMonthly() : service.purchasePremiumYearly());
-    assert.equal(calls.filter(call => call === "checkout-email:verified@example.invalid").length, 1);
+    assert.deepEqual(checkoutEmails, ["verified@example.invalid"]);
   }
 });
 
-test("web checkout leaves existing email collection intact without a verified email", async () => {
-  const { calls, createService } = createMockWebBilling({ verifiedEmail: null });
-  await createService().purchasePremiumMonthly();
-  assert.equal(calls.some(call => call.startsWith("checkout-email:")), false);
+test("web checkout blocks either period without a verified email", async () => {
+  for (const period of ["monthly", "yearly"] as const) {
+    for (const verifiedEmail of [null, "", "   "]) {
+      const { calls, createService } = createMockWebBilling({ verifiedEmail });
+      const service = createService();
+      await assert.rejects(period === "monthly" ? service.purchasePremiumMonthly() : service.purchasePremiumYearly(), BillingUnavailableError);
+      assert.equal(calls.some(call => call.startsWith("purchase:")), false);
+      assert.equal(calls.includes("refresh-entitlement"), false);
+    }
+  }
 });
 
 test("web checkout cannot reuse an email after the authenticated account changes", async () => {

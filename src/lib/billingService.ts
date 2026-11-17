@@ -643,7 +643,10 @@ export const createRevenueCatWebBillingService = (deps: WebBillingDependencies):
         }
         const customerEmail = await deps.getVerifiedEmail?.(userId);
         await assertCurrentUser(userId);
-        await purchases.purchase({ rcPackage, ...(customerEmail ? { customerEmail } : {}) });
+        if (typeof customerEmail !== "string" || !customerEmail.trim()) {
+          throw new BillingUnavailableError("Verify your account email before starting a purchase.");
+        }
+        await purchases.purchase({ rcPackage, customerEmail });
         await assertCurrentUser(userId);
         try {
           const customerInfo = await purchases.getCustomerInfo();
